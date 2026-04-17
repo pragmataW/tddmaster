@@ -1,4 +1,3 @@
-
 package cmd
 
 import (
@@ -170,11 +169,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		codingTools = pickCodingTools(detectedTools)
 	}
 
-	// Step 3b: Detect providers
-	providers := detect.DetectProviders()
-	availableProviders := detect.GetAvailableProviderNames(providers)
-	fmt.Fprintf(os.Stderr, "%d provider(s) detected\n", len(availableProviders))
-
 	// Step 4: Load default concerns
 	allConcerns := ctxpkg.LoadDefaultConcerns()
 
@@ -239,7 +233,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		CI:         project.CI,
 	}
 
-	config := state.CreateInitialManifest(selectedConcernIds, codingTools, availableProviders, projectTraits)
+	config := state.CreateInitialManifest(selectedConcernIds, codingTools, projectTraits)
 	config.Command = output.CmdPrefix()
 	config.Tdd = &state.Manifest{TddMode: tddMode}
 

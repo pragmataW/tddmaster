@@ -47,6 +47,16 @@ func TestToBulletList_DoesNotSplitOnFilePath(t *testing.T) {
 	assert.Contains(t, items[0], "endpoint.ts")
 }
 
+// Regression: long technical answers use semicolons as in-sentence
+// punctuation. Splitting on ";" fragmented Out-of-Scope / Edge Cases
+// rendering in specs such as claude-harici-provider-abstraction-tamamlama.
+func TestToBulletList_DoesNotSplitOnInSentenceSemicolon(t *testing.T) {
+	input := "SyncRules and SyncHooks remain unchanged; only Capabilities() expands for the new adapter surface"
+	items := toBulletList(input)
+	assert.Len(t, items, 1)
+	assert.Contains(t, items[0], "remain unchanged; only Capabilities")
+}
+
 // =============================================================================
 // DeriveTasks
 // =============================================================================
@@ -469,11 +479,10 @@ func TestRenderSpec_IncludesTransitionHistory(t *testing.T) {
 	assert.Contains(t, md, "user approved")
 }
 
-func TestDeriveEdgeCases_UsesDiscoveryAnswersAndPremiseRevisions(t *testing.T) {
+func TestDeriveEdgeCases_UsesExplicitEdgeCasesAnswerAndPremiseRevisions(t *testing.T) {
 	revision := "If the verifier rejects a test, ask the user before changing it."
 	answers := []state.DiscoveryAnswer{
-		{QuestionID: "verification", Answer: "- Cover timeout recovery\n- Happy path smoke test"},
-		{QuestionID: "user_impact", Answer: "Zero-result searches should still show a helpful CTA."},
+		{QuestionID: "edge_cases", Answer: "- Cover timeout recovery\n- Happy path smoke test"},
 	}
 	premises := []state.Premise{
 		{Text: "Tests can be rewritten automatically", Agreed: false, Revision: &revision},
@@ -483,9 +492,26 @@ func TestDeriveEdgeCases_UsesDiscoveryAnswersAndPremiseRevisions(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"Cover timeout recovery",
-		"Zero-result searches should still show a helpful CTA.",
+		"Happy path smoke test",
 		"If the verifier rejects a test, ask the user before changing it.",
 	}, edgeCases)
+}
+
+// Regression: edge cases must NOT be harvested from unrelated answers
+// just because they happen to contain keywords like "error", "fallback",
+// "nil", "race". A previous Pass 2 keyword harvester pulled whole
+// sentences from user_impact / status_quo / ambition / reversibility
+// into the Edge Cases list.
+func TestDeriveEdgeCases_IgnoresUnrelatedAnswersEvenWithKeywords(t *testing.T) {
+	answers := []state.DiscoveryAnswer{
+		{QuestionID: "status_quo", Answer: "Today the runner silently falls back to nil when the race between workers is lost."},
+		{QuestionID: "ambition", Answer: "Introduce a typed error path so callers can retry with a fallback provider."},
+	}
+
+	edgeCases := DeriveEdgeCases(answers, nil)
+
+	assert.Empty(t, edgeCases,
+		"unrelated discovery answers must not leak into edge cases via keyword harvesting")
 }
 
 func TestDeriveEdgeCases_FallsBackToDisagreedPremiseText(t *testing.T) {
@@ -501,7 +527,7 @@ func TestDeriveEdgeCases_FallsBackToDisagreedPremiseText(t *testing.T) {
 func TestRenderSpec_IncludesEdgeCasesSection(t *testing.T) {
 	revision := "If the verifier rejects a test, ask the user before changing it."
 	answers := []state.DiscoveryAnswer{
-		{QuestionID: "verification", Answer: "- Cover timeout recovery\n- Happy path smoke test"},
+		{QuestionID: "edge_cases", Answer: "- Cover timeout recovery\n- Happy path smoke test"},
 	}
 	premises := []state.Premise{
 		{Text: "Tests can be rewritten automatically", Agreed: false, Revision: &revision},

@@ -1,4 +1,3 @@
-
 // Package state provides types and state management for tddmaster.
 package state
 
@@ -70,7 +69,7 @@ type AttributedDiscoveryAnswer struct {
 	User       string  `json:"user"`
 	Email      string  `json:"email"`
 	Timestamp  string  `json:"timestamp"`
-	Type       string  `json:"type"` // "original" | "addition" | "revision"
+	Type       string  `json:"type"`                 // "original" | "addition" | "revision"
 	Confidence *int    `json:"confidence,omitempty"` // 1-10
 	Basis      *string `json:"basis,omitempty"`
 }
@@ -139,35 +138,35 @@ type FollowUp struct {
 }
 
 type Delegation struct {
-	QuestionID   string  `json:"questionId"`
-	DelegatedTo  string  `json:"delegatedTo"`
-	DelegatedBy  string  `json:"delegatedBy"`
-	Status       string  `json:"status"` // "pending" | "answered"
-	DelegatedAt  string  `json:"delegatedAt"`
-	Answer       *string `json:"answer,omitempty"`
-	AnsweredBy   *string `json:"answeredBy,omitempty"`
-	AnsweredAt   *string `json:"answeredAt,omitempty"`
+	QuestionID  string  `json:"questionId"`
+	DelegatedTo string  `json:"delegatedTo"`
+	DelegatedBy string  `json:"delegatedBy"`
+	Status      string  `json:"status"` // "pending" | "answered"
+	DelegatedAt string  `json:"delegatedAt"`
+	Answer      *string `json:"answer,omitempty"`
+	AnsweredBy  *string `json:"answeredBy,omitempty"`
+	AnsweredAt  *string `json:"answeredAt,omitempty"`
 }
 
 type DiscoveryState struct {
-	Answers               []DiscoveryAnswer      `json:"answers"`
-	Completed             bool                   `json:"completed"`
-	CurrentQuestion       int                    `json:"currentQuestion"`
-	Audience              string                 `json:"audience"` // "agent" | "human"
-	Approved              bool                   `json:"approved"`
-	PlanPath              *string                `json:"planPath"`
-	Mode                  *DiscoveryMode         `json:"mode,omitempty"`
-	Premises              []Premise              `json:"premises,omitempty"`
-	SelectedApproach      *SelectedApproach      `json:"selectedApproach,omitempty"`
-	PremisesCompleted     *bool                  `json:"premisesCompleted,omitempty"`
-	AlternativesPresented *bool                  `json:"alternativesPresented,omitempty"`
-	Contributors          []string               `json:"contributors,omitempty"`
-	Delegations           []Delegation           `json:"delegations,omitempty"`
-	FollowUps             []FollowUp             `json:"followUps,omitempty"`
-	UserContext           *string                `json:"userContext,omitempty"`
-	UserContextProcessed  *bool                  `json:"userContextProcessed,omitempty"`
+	Answers               []DiscoveryAnswer `json:"answers"`
+	Completed             bool              `json:"completed"`
+	CurrentQuestion       int               `json:"currentQuestion"`
+	Audience              string            `json:"audience"` // "agent" | "human"
+	Approved              bool              `json:"approved"`
+	PlanPath              *string           `json:"planPath"`
+	Mode                  *DiscoveryMode    `json:"mode,omitempty"`
+	Premises              []Premise         `json:"premises,omitempty"`
+	SelectedApproach      *SelectedApproach `json:"selectedApproach,omitempty"`
+	PremisesCompleted     *bool             `json:"premisesCompleted,omitempty"`
+	AlternativesPresented *bool             `json:"alternativesPresented,omitempty"`
+	Contributors          []string          `json:"contributors,omitempty"`
+	Delegations           []Delegation      `json:"delegations,omitempty"`
+	FollowUps             []FollowUp        `json:"followUps,omitempty"`
+	UserContext           *string           `json:"userContext,omitempty"`
+	UserContextProcessed  *bool             `json:"userContextProcessed,omitempty"`
 	// Jidoka C1: answers were batch-submitted by agent and need user confirmation.
-	BatchSubmitted        *bool                  `json:"batchSubmitted,omitempty"`
+	BatchSubmitted *bool `json:"batchSubmitted,omitempty"`
 }
 
 // =============================================================================
@@ -214,16 +213,16 @@ type DebtItem struct {
 }
 
 type DebtState struct {
-	Items                []DebtItem `json:"items"`
-	FromIteration        int        `json:"fromIteration"` // kept for backward compat
-	UnaddressedIterations int       `json:"unaddressedIterations"`
+	Items                 []DebtItem `json:"items"`
+	FromIteration         int        `json:"fromIteration"` // kept for backward compat
+	UnaddressedIterations int        `json:"unaddressedIterations"`
 }
 
 type SpecTask struct {
 	ID         string   `json:"id"`
 	Title      string   `json:"title"`
 	Completed  bool     `json:"completed"`
-	Covers     []string `json:"covers,omitempty"` // EC IDs this task covers, e.g. ["EC-1","EC-3"]
+	Covers     []string `json:"covers,omitempty"`     // EC IDs this task covers, e.g. ["EC-1","EC-3"]
 	TDDEnabled *bool    `json:"tddEnabled,omitempty"` // nil = fall back to spec-level TddMode
 }
 
@@ -236,19 +235,19 @@ type SpecClassification struct {
 }
 
 type ExecutionState struct {
-	Iteration              int                 `json:"iteration"`
-	LastProgress           *string             `json:"lastProgress"`
-	ModifiedFiles          []string            `json:"modifiedFiles"`
-	LastVerification       *VerificationResult `json:"lastVerification"`
-	AwaitingStatusReport   bool                `json:"awaitingStatusReport"`
-	Debt                   *DebtState          `json:"debt"`
-	CompletedTasks         []string            `json:"completedTasks"`
-	DebtCounter            int                 `json:"debtCounter"`
-	NaItems                []string            `json:"naItems"`
-	ConfidenceFindings     []ConfidenceFinding `json:"confidenceFindings,omitempty"`
-	TDDCycle               string              `json:"tddCycle,omitempty" yaml:"tddCycle,omitempty"`
-	RefactorRounds         int                 `json:"refactorRounds,omitempty"`
-	RefactorApplied        bool                `json:"refactorApplied,omitempty"`
+	Iteration            int                 `json:"iteration"`
+	LastProgress         *string             `json:"lastProgress"`
+	ModifiedFiles        []string            `json:"modifiedFiles"`
+	LastVerification     *VerificationResult `json:"lastVerification"`
+	AwaitingStatusReport bool                `json:"awaitingStatusReport"`
+	Debt                 *DebtState          `json:"debt"`
+	CompletedTasks       []string            `json:"completedTasks"`
+	DebtCounter          int                 `json:"debtCounter"`
+	NaItems              []string            `json:"naItems"`
+	ConfidenceFindings   []ConfidenceFinding `json:"confidenceFindings,omitempty"`
+	TDDCycle             string              `json:"tddCycle,omitempty" yaml:"tddCycle,omitempty"`
+	RefactorRounds       int                 `json:"refactorRounds,omitempty"`
+	RefactorApplied      bool                `json:"refactorApplied,omitempty"`
 }
 
 // =============================================================================
@@ -279,29 +278,29 @@ type RevisitEntry struct {
 // =============================================================================
 
 type StateFile struct {
-	Version           string              `json:"version"`
-	Phase             Phase               `json:"phase"`
-	Spec              *string             `json:"spec"`
-	SpecDescription   *string             `json:"specDescription"`
-	Branch            *string             `json:"branch"`
-	Discovery         DiscoveryState      `json:"discovery"`
-	SpecState         SpecState           `json:"specState"`
-	Execution         ExecutionState      `json:"execution"`
-	Decisions         []Decision          `json:"decisions"`
-	LastCalledAt      *string             `json:"lastCalledAt"`
-	Classification    *SpecClassification `json:"classification"`
-	CompletionReason  *CompletionReason   `json:"completionReason"`
-	CompletedAt       *string             `json:"completedAt"`
-	CompletionNote    *string             `json:"completionNote"`
-	ReopenedFrom      *string             `json:"reopenedFrom"`
-	RevisitHistory    []RevisitEntry      `json:"revisitHistory"`
-	TransitionHistory []PhaseTransition   `json:"transitionHistory,omitempty"`
-	CustomACs         []CustomAC          `json:"customACs,omitempty"`
-	SpecNotes         []SpecNote          `json:"specNotes,omitempty"`
-	OverrideTasks     []SpecTask          `json:"overrideTasks,omitempty"`
-	OverrideOutOfScope []string           `json:"overrideOutOfScope,omitempty"`
-	TaskTDDSelected   *bool               `json:"taskTDDSelected,omitempty"` // per-task TDD selection completed gate
-	LastAnswer        *AnswerFingerprint  `json:"lastAnswer,omitempty"`      // idempotency for --answer retries
+	Version            string              `json:"version"`
+	Phase              Phase               `json:"phase"`
+	Spec               *string             `json:"spec"`
+	SpecDescription    *string             `json:"specDescription"`
+	Branch             *string             `json:"branch"`
+	Discovery          DiscoveryState      `json:"discovery"`
+	SpecState          SpecState           `json:"specState"`
+	Execution          ExecutionState      `json:"execution"`
+	Decisions          []Decision          `json:"decisions"`
+	LastCalledAt       *string             `json:"lastCalledAt"`
+	Classification     *SpecClassification `json:"classification"`
+	CompletionReason   *CompletionReason   `json:"completionReason"`
+	CompletedAt        *string             `json:"completedAt"`
+	CompletionNote     *string             `json:"completionNote"`
+	ReopenedFrom       *string             `json:"reopenedFrom"`
+	RevisitHistory     []RevisitEntry      `json:"revisitHistory"`
+	TransitionHistory  []PhaseTransition   `json:"transitionHistory,omitempty"`
+	CustomACs          []CustomAC          `json:"customACs,omitempty"`
+	SpecNotes          []SpecNote          `json:"specNotes,omitempty"`
+	OverrideTasks      []SpecTask          `json:"overrideTasks,omitempty"`
+	OverrideOutOfScope []string            `json:"overrideOutOfScope,omitempty"`
+	TaskTDDSelected    *bool               `json:"taskTDDSelected,omitempty"` // per-task TDD selection completed gate
+	LastAnswer         *AnswerFingerprint  `json:"lastAnswer,omitempty"`      // idempotency for --answer retries
 }
 
 // AnswerFingerprint records the last successfully processed answer so that
@@ -357,9 +356,6 @@ func CreateInitialState() StateFile {
 // Config (tddmaster section in .tddmaster/manifest.yml)
 // =============================================================================
 
-// ToolId is an AI provider ID.
-type ToolId = string
-
 type ProjectTraits struct {
 	Languages  []string `json:"languages"  yaml:"languages"`
 	Frameworks []string `json:"frameworks" yaml:"frameworks"`
@@ -381,16 +377,16 @@ type UserConfig struct {
 }
 
 type NosManifest struct {
-	Concerns                   []string            `json:"concerns"                   yaml:"concerns"`
-	Tools                      []CodingToolId      `json:"tools"                      yaml:"tools"`
-	Providers                  []ToolId            `json:"providers"                  yaml:"providers"`
-	Project                    ProjectTraits       `json:"project"                    yaml:"project"`
-	MaxIterationsBeforeRestart int                 `json:"maxIterationsBeforeRestart" yaml:"maxIterationsBeforeRestart"`
-	Tdd                        *Manifest           `json:"tdd,omitempty"              yaml:"tdd,omitempty"`
-	VerifyCommand               *string             `json:"verifyCommand"               yaml:"verifyCommand"`
-	AllowGit                   bool                `json:"allowGit"                   yaml:"allowGit"`
-	Command                    string              `json:"command"                    yaml:"command"`
-	User                       *UserConfig `json:"user,omitempty"             yaml:"user,omitempty"`
+	Concerns                   []string       `json:"concerns"                   yaml:"concerns"`
+	Tools                      []CodingToolId `json:"tools"                      yaml:"tools"`
+	DefaultRunner              string         `json:"defaultRunner,omitempty"    yaml:"defaultRunner,omitempty"`
+	Project                    ProjectTraits  `json:"project"                    yaml:"project"`
+	MaxIterationsBeforeRestart int            `json:"maxIterationsBeforeRestart" yaml:"maxIterationsBeforeRestart"`
+	Tdd                        *Manifest      `json:"tdd,omitempty"              yaml:"tdd,omitempty"`
+	VerifyCommand              *string        `json:"verifyCommand"              yaml:"verifyCommand"`
+	AllowGit                   bool           `json:"allowGit"                   yaml:"allowGit"`
+	Command                    string         `json:"command"                    yaml:"command"`
+	User                       *UserConfig    `json:"user,omitempty"             yaml:"user,omitempty"`
 }
 
 // IsTDDEnabled returns true when the TDD workflow is enabled in this manifest.
@@ -403,19 +399,17 @@ func (m NosManifest) IsTDDEnabled() bool {
 func CreateInitialManifest(
 	concerns []string,
 	tools []CodingToolId,
-	providers []ToolId,
 	project ProjectTraits,
 ) NosManifest {
 	return NosManifest{
-		Concerns:                  concerns,
-		Tools:                     tools,
-		Providers:                 providers,
-		Project:                   project,
+		Concerns:                   concerns,
+		Tools:                      tools,
+		Project:                    project,
 		MaxIterationsBeforeRestart: 15,
-		Tdd:                       &Manifest{TddMode: true, MaxVerificationRetries: 3, MaxRefactorRounds: 3},
-		VerifyCommand:             nil,
-		AllowGit:                  false,
-		Command:                   "tddmaster",
+		Tdd:                        &Manifest{TddMode: true, MaxVerificationRetries: 3, MaxRefactorRounds: 3},
+		VerifyCommand:              nil,
+		AllowGit:                   false,
+		Command:                    "tddmaster",
 	}
 }
 
@@ -501,16 +495,16 @@ type ReviewDimension struct {
 }
 
 type ConcernDefinition struct {
-	ID                string            `json:"id"`
-	Name              string            `json:"name"`
-	Description       string            `json:"description"`
-	Extras            []ConcernExtra    `json:"extras"`
-	SpecSections      []string          `json:"specSections"`
-	Reminders         []string          `json:"reminders"`
-	AcceptanceCriteria []string         `json:"acceptanceCriteria"`
-	ReviewDimensions  []ReviewDimension `json:"reviewDimensions,omitempty"`
-	Registries        []string          `json:"registries,omitempty"`
-	DreamStatePrompt  *string           `json:"dreamStatePrompt,omitempty"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Description        string            `json:"description"`
+	Extras             []ConcernExtra    `json:"extras"`
+	SpecSections       []string          `json:"specSections"`
+	Reminders          []string          `json:"reminders"`
+	AcceptanceCriteria []string          `json:"acceptanceCriteria"`
+	ReviewDimensions   []ReviewDimension `json:"reviewDimensions,omitempty"`
+	Registries         []string          `json:"registries,omitempty"`
+	DreamStatePrompt   *string           `json:"dreamStatePrompt,omitempty"`
 }
 
 // UnmarshalJSON handles backward-compatible migration of OverrideTasks from

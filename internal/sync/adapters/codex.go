@@ -1,4 +1,3 @@
-
 package adapters
 
 import (
@@ -7,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/state"
 	statesync "github.com/pragmataW/tddmaster/internal/sync"
 	"github.com/pragmataW/tddmaster/internal/sync/adapters/shared"
-	"github.com/pragmataW/tddmaster/internal/state"
 )
 
 // =============================================================================
@@ -44,6 +43,7 @@ func (a *CodexAdapter) Capabilities() statesync.ToolCapabilities {
 			OptionPresentation:    "prose",
 			HasSubAgentDelegation: true,
 			SubAgentMethod:        "spawn",
+			AskUserStrategy:       "tddmaster_block",
 		},
 	}
 }

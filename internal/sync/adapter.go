@@ -1,4 +1,3 @@
-
 // Package sync provides rule loading and tool syncing utilities for tddmaster.
 package sync
 
@@ -21,6 +20,8 @@ type InteractionHints struct {
 	HasSubAgentDelegation bool `json:"hasSubAgentDelegation"`
 	// SubAgentMethod is the mechanism for spawning sub-agents.
 	SubAgentMethod string `json:"subAgentMethod"`
+	// AskUserStrategy is the strategy used to ask the user a question.
+	AskUserStrategy string `json:"askUserStrategy"`
 }
 
 // ToolCapabilities describes what a tool adapter can generate.

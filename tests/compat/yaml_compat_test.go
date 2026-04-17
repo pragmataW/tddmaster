@@ -1,4 +1,3 @@
-
 // Package compat contains compatibility tests for YAML manifest round-trips.
 package compat
 
@@ -25,7 +24,6 @@ func TestManifestRoundTrip(t *testing.T) {
 	original := state.CreateInitialManifest(
 		[]string{"security", "performance"},
 		[]state.CodingToolId{state.CodingToolClaudeCode, state.CodingToolCodex},
-		[]string{"openai"},
 		state.ProjectTraits{
 			Languages:  []string{"go", "typescript"},
 			Frameworks: []string{"cobra", "react"},
@@ -54,7 +52,6 @@ func TestManifestRoundTrip(t *testing.T) {
 
 	assert.Equal(t, original.Concerns, loaded.Concerns)
 	assert.Equal(t, original.Tools, loaded.Tools)
-	assert.Equal(t, original.Providers, loaded.Providers)
 	assert.Equal(t, original.Project.Languages, loaded.Project.Languages)
 	assert.Equal(t, original.Project.Frameworks, loaded.Project.Frameworks)
 	assert.Equal(t, original.Project.CI, loaded.Project.CI)
@@ -77,7 +74,6 @@ func TestManifestYAMLStructure(t *testing.T) {
 	original := state.CreateInitialManifest(
 		[]string{"accessibility"},
 		[]state.CodingToolId{state.CodingToolClaudeCode},
-		[]string{},
 		state.ProjectTraits{
 			Languages:  []string{"go"},
 			Frameworks: []string{},
@@ -104,7 +100,6 @@ func TestManifestYAMLStructure(t *testing.T) {
 	// Required keys in tddmaster section
 	assert.Contains(t, nos, "concerns")
 	assert.Contains(t, nos, "tools")
-	assert.Contains(t, nos, "providers")
 	assert.Contains(t, nos, "project")
 	assert.Contains(t, nos, "maxIterationsBeforeRestart")
 	assert.Contains(t, nos, "allowGit")
@@ -139,7 +134,6 @@ custom_key: custom_value
 	manifest := state.CreateInitialManifest(
 		[]string{},
 		[]state.CodingToolId{},
-		[]string{},
 		state.ProjectTraits{Languages: []string{"go"}, Frameworks: []string{}, CI: []string{}},
 	)
 	err := state.WriteManifest(dir, manifest)
@@ -173,7 +167,6 @@ func TestManifestDefaultValues(t *testing.T) {
 	manifest := state.CreateInitialManifest(
 		[]string{},
 		[]state.CodingToolId{},
-		[]string{},
 		state.ProjectTraits{Languages: []string{}, Frameworks: []string{}, CI: []string{}},
 	)
 
@@ -193,7 +186,6 @@ func TestManifestTSCompatibleFieldNames(t *testing.T) {
 	manifest := state.CreateInitialManifest(
 		[]string{"security"},
 		[]state.CodingToolId{state.CodingToolCodex},
-		[]string{"openai"},
 		state.ProjectTraits{
 			Languages:  []string{"typescript"},
 			Frameworks: []string{"next"},

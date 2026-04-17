@@ -1,4 +1,3 @@
-
 // Package adapters provides coding-tool adapter implementations for tddmaster sync.
 package adapters
 
@@ -35,6 +34,7 @@ func (a *ClaudeCodeAdapter) Capabilities() statesync.ToolCapabilities {
 			OptionPresentation:    "tool",
 			HasSubAgentDelegation: true,
 			SubAgentMethod:        "task",
+			AskUserStrategy:       "ask_user_question",
 		},
 	}
 }

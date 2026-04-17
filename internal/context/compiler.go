@@ -22,7 +22,8 @@ type InteractionHints struct {
 	HasAskUserTool        bool   `json:"hasAskUserTool"`
 	OptionPresentation    string `json:"optionPresentation"` // "tool" | "prose"
 	HasSubAgentDelegation bool   `json:"hasSubAgentDelegation"`
-	SubAgentMethod        string `json:"subAgentMethod"` // "task" | "delegation" | "spawn" | "fleet" | "none"
+	SubAgentMethod        string `json:"subAgentMethod"`  // "task" | "delegation" | "spawn" | "fleet" | "none"
+	AskUserStrategy       string `json:"askUserStrategy"` // "ask_user_question" | "tddmaster_block"
 }
 
 // DefaultHints are the default interaction hints (Claude Code behavior).
@@ -31,6 +32,7 @@ var DefaultHints = InteractionHints{
 	OptionPresentation:    "tool",
 	HasSubAgentDelegation: true,
 	SubAgentMethod:        "task",
+	AskUserStrategy:       "ask_user_question",
 }
 
 // =============================================================================
@@ -452,21 +454,21 @@ type ExecutionOutput struct {
 		OnBlocked  string `json:"onBlocked"`
 		Iteration  int    `json:"iteration"`
 	} `json:"transition"`
-	ConcernTensions       []ConcernTension     `json:"concernTensions,omitempty"`
-	RestartRecommended    *bool                `json:"restartRecommended,omitempty"`
-	RestartInstruction    *string              `json:"restartInstruction,omitempty"`
-	VerificationFailed    *bool                `json:"verificationFailed,omitempty"`
-	VerificationOutput    *string              `json:"verificationOutput,omitempty"`
-	StatusReportRequired  *bool                `json:"statusReportRequired,omitempty"`
-	StatusReport          *StatusReportRequest `json:"statusReport,omitempty"`
-	PreviousIterationDebt *DebtCarryForward    `json:"previousIterationDebt,omitempty"`
-	PromotePrompt         *PromotePrompt       `json:"promotePrompt,omitempty"`
-	TaskRejected          *bool                `json:"taskRejected,omitempty"`
-	RejectionReason       *string              `json:"rejectionReason,omitempty"`
-	RejectionRemaining    []string             `json:"rejectionRemaining,omitempty"`
-	DesignChecklist       *DesignChecklist     `json:"designChecklist,omitempty"`
-	PreExecutionReview    *PreExecutionReview  `json:"preExecutionReview,omitempty"`
-	TDDPhase              *string              `json:"tddPhase,omitempty"`
+	ConcernTensions        []ConcernTension        `json:"concernTensions,omitempty"`
+	RestartRecommended     *bool                   `json:"restartRecommended,omitempty"`
+	RestartInstruction     *string                 `json:"restartInstruction,omitempty"`
+	VerificationFailed     *bool                   `json:"verificationFailed,omitempty"`
+	VerificationOutput     *string                 `json:"verificationOutput,omitempty"`
+	StatusReportRequired   *bool                   `json:"statusReportRequired,omitempty"`
+	StatusReport           *StatusReportRequest    `json:"statusReport,omitempty"`
+	PreviousIterationDebt  *DebtCarryForward       `json:"previousIterationDebt,omitempty"`
+	PromotePrompt          *PromotePrompt          `json:"promotePrompt,omitempty"`
+	TaskRejected           *bool                   `json:"taskRejected,omitempty"`
+	RejectionReason        *string                 `json:"rejectionReason,omitempty"`
+	RejectionRemaining     []string                `json:"rejectionRemaining,omitempty"`
+	DesignChecklist        *DesignChecklist        `json:"designChecklist,omitempty"`
+	PreExecutionReview     *PreExecutionReview     `json:"preExecutionReview,omitempty"`
+	TDDPhase               *string                 `json:"tddPhase,omitempty"`
 	TDDVerificationContext *TDDVerificationContext `json:"tddVerificationContext,omitempty"`
 	TDDFailureReport       *TDDFailureReport       `json:"tddFailureReport,omitempty"`
 	RefactorInstructions   *RefactorInstructions   `json:"refactorInstructions,omitempty"`
@@ -586,9 +588,14 @@ func buildBehavioral(
 ) BehavioralBlock {
 	stale := st.Execution.Iteration >= maxIterationsBeforeRestart
 
-	askMethod := "Use AskUserQuestion for all decision points."
-	if !hints.HasAskUserTool {
+	var askMethod string
+	switch {
+	case hints.AskUserStrategy == "tddmaster_block":
+		askMethod = "Do not ask the user inline. Instead, use `tddmaster block \"question\"` at every decision point — the orchestrator will pause for human input."
+	case !hints.HasAskUserTool:
 		askMethod = "Present options as a numbered list at every decision point."
+	default:
+		askMethod = "Use AskUserQuestion for all decision points."
 	}
 
 	var mandatoryRules []string
@@ -633,9 +640,14 @@ func buildBehavioral(
 		}
 
 	case state.PhaseDiscovery:
-		questionMethod := "Ask each question via AskUserQuestion. One question per call."
-		if !hints.HasAskUserTool {
+		var questionMethod string
+		switch {
+		case hints.AskUserStrategy == "tddmaster_block":
+			questionMethod = "Ask one question at a time via `tddmaster block \"question\"`. One question per interaction."
+		case !hints.HasAskUserTool:
 			questionMethod = "Ask one question at a time as text."
+		default:
+			questionMethod = "Ask each question via AskUserQuestion. One question per call."
 		}
 
 		dreamPrompts := GetDreamStatePrompts(activeConcerns)
@@ -663,9 +675,14 @@ func buildBehavioral(
 		}
 
 	case state.PhaseDiscoveryRefinement:
-		confirmQ := "Use AskUserQuestion to ask: 'Are these answers correct, or would you like to revise any?'"
-		if !hints.HasAskUserTool {
+		var confirmQ string
+		switch {
+		case hints.AskUserStrategy == "tddmaster_block":
+			confirmQ = "Use `tddmaster block \"Are these answers correct, or would you like to revise any?\"` to pause for user review."
+		case !hints.HasAskUserTool:
 			confirmQ = "Ask the user: 'Are these answers correct, or would you like to revise any?' Present approval and revision as numbered options."
+		default:
+			confirmQ = "Use AskUserQuestion to ask: 'Are these answers correct, or would you like to revise any?'"
 		}
 		return BehavioralBlock{
 			ModeOverride: strPtr("You are in plan mode. Do not create, edit, or write any files. Present the discovery answers to the user for review and confirmation."),
@@ -705,9 +722,14 @@ func buildBehavioral(
 			delegationRules = append(delegationRules, "DELEGATION STATUS:\n"+strings.Join(lines, "\n")+suffix)
 		}
 
-		classifyQ := "When presenting classification options, use AskUserQuestion with multiSelect:true. Do NOT infer classification yourself."
-		if !hints.HasAskUserTool {
+		var classifyQ string
+		switch {
+		case hints.AskUserStrategy == "tddmaster_block":
+			classifyQ = "When presenting classification options, present them as a numbered list. Use `tddmaster block` if you need the user to pick. Do NOT infer classification yourself."
+		case !hints.HasAskUserTool:
 			classifyQ = "When presenting classification options, present them as a numbered list with multiselect (user picks multiple numbers). Do NOT infer classification yourself."
+		default:
+			classifyQ = "When presenting classification options, use AskUserQuestion with multiSelect:true. Do NOT infer classification yourself."
 		}
 
 		return BehavioralBlock{
@@ -729,9 +751,14 @@ func buildBehavioral(
 		}
 
 	case state.PhaseSpecApproved:
-		confirmQ := "Before starting execution, show the spec summary to the user and ask for final confirmation via AskUserQuestion."
-		if !hints.HasAskUserTool {
+		var confirmQ string
+		switch {
+		case hints.AskUserStrategy == "tddmaster_block":
+			confirmQ = "Before starting execution, show the spec summary and use `tddmaster block \"Confirm execution?\"` to pause for user go-ahead."
+		case !hints.HasAskUserTool:
 			confirmQ = "Before starting execution, show the spec summary to the user and ask for final confirmation. Present 'Start execution' and 'Not yet' as numbered options."
+		default:
+			confirmQ = "Before starting execution, show the spec summary to the user and ask for final confirmation via AskUserQuestion."
 		}
 		return BehavioralBlock{
 			Rules: append(mandatoryRules,
@@ -2161,9 +2188,9 @@ func compileSpecApproved(st state.StateFile, config *state.NosManifest, parsedSp
 
 	out.Instruction = "Select TDD scope for this spec before starting execution. Some tasks (infrastructure setup, module downloads) often do not benefit from red/green/refactor."
 	out.TaskTDDSelection = &TaskTDDSelectionOutput{
-		Required: true,
+		Required:    true,
 		Instruction: "Choose which tasks run with TDD. 'All' keeps current behavior; 'None' skips red/green/refactor for every task; 'Custom' lets you pick task-by-task.",
-		Tasks:    entries,
+		Tasks:       entries,
 		Answers: TaskTDDSelectionAnswers{
 			All:    "tdd-all",
 			None:   "tdd-none",

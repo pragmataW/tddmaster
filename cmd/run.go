@@ -1,19 +1,24 @@
-
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"strconv"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
 	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
 	"github.com/pragmataW/tddmaster/internal/output"
+	"github.com/pragmataW/tddmaster/internal/runner"
 	"github.com/pragmataW/tddmaster/internal/state"
 )
+
+// runnerSelect is the package-level seam that tests can swap via swapRunnerSelect.
+var runnerSelect = runner.Select
 
 func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -26,6 +31,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().Int("max-turns", 10, "Max turns per agent process")
 	cmd.Flags().Int("max-iterations", 50, "Max loop iterations")
 	cmd.Flags().String("spec", "", "Spec name")
+	cmd.Flags().String("tool", "", "Coding tool to use (claude-code|codex|opencode). Empty = auto-select from manifest.")
 	return cmd
 }
 
@@ -39,6 +45,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	maxTurns, _ := cmd.Flags().GetInt("max-turns")
 	maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 	specFlag, _ := cmd.Flags().GetString("spec")
+	toolFlag, _ := cmd.Flags().GetString("tool")
 
 	// Also parse from args
 	for _, arg := range args {
@@ -62,7 +69,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if initialState.Phase != state.PhaseExecuting && initialState.Phase != state.PhaseSpecApproved {
+	if initialState.Phase != state.PhaseExecuting && initialState.Phase != state.PhaseSpecApproved && initialState.Phase != state.PhaseBlocked {
 		return fmt.Errorf("cannot run from phase: %s. Must be in SPEC_APPROVED or EXECUTING to start", initialState.Phase)
 	}
 
@@ -80,6 +87,37 @@ func runRun(cmd *cobra.Command, args []string) error {
 	config, _ := state.ReadManifest(root)
 	if config == nil {
 		return fmt.Errorf("config not found")
+	}
+
+	// Set up a cancelable context for this run; install SIGINT/SIGTERM handler.
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if cmd.Context() != nil {
+		ctx, cancel = context.WithCancel(cmd.Context())
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case <-sigCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	// Select runner once before the loop.
+	selectedRunner, err := runnerSelect(config, toolFlag)
+	if err != nil {
+		if errors.Is(err, runner.ErrRunnerNotFound) {
+			// List registered runners would go here; for now surface the error with context.
+			return fmt.Errorf("runner not found — check registered runners or install the tool: %w", err)
+		}
+		return fmt.Errorf("failed to select runner: %w", err)
 	}
 
 	printErr(fmt.Sprintf("%s run", output.CmdPrefix()))
@@ -106,6 +144,8 @@ func runRun(cmd *cobra.Command, args []string) error {
 			printErr("Spec completed!")
 			printErr(fmt.Sprintf("  Iterations: %d", st.Execution.Iteration))
 			printErr(fmt.Sprintf("  Decisions:  %d", len(st.Decisions)))
+			// Mark that we did NOT exhaust iterations — we completed cleanly.
+			loopIteration = 0
 			break
 		}
 
@@ -121,6 +161,8 @@ func runRun(cmd *cobra.Command, args []string) error {
 				_ = logBlockedFile(root, reason, loopIteration)
 				printErr("Logged to .tddmaster/.state/blocked.log. Resolve and re-run.")
 				exitCode = 1
+				// Mark that we did NOT exhaust iterations.
+				loopIteration = 0
 				break
 			}
 
@@ -130,6 +172,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 			_, _ = fmt.Scanln(&resolution)
 			if strings.TrimSpace(resolution) == "" {
 				printErr("Stopped by user.")
+				loopIteration = 0
 				break
 			}
 
@@ -148,6 +191,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		if st.Phase != state.PhaseExecuting {
 			printErr(fmt.Sprintf("Unexpected phase: %s. Stopping.", st.Phase))
 			exitCode = 1
+			loopIteration = 0
 			break
 		}
 
@@ -170,17 +214,28 @@ func runRun(cmd *cobra.Command, args []string) error {
 			printErr(fmt.Sprintf("  Last: %s", *st.Execution.LastProgress))
 		}
 
-		// Spawn claude process
-		printErr("  Spawning agent...")
-		claudeCmd := exec.Command("claude", "-p", prompt,
-			"--max-turns", strconv.Itoa(maxTurns),
-			"--output-format", "json")
-		claudeCmd.Stdout = os.Stdout
-		claudeCmd.Stderr = os.Stderr
-		if err := claudeCmd.Run(); err != nil {
-			printErr("  Failed to spawn claude CLI. Is it installed?")
-			exitCode = 1
-			break
+		// Invoke runner
+		printErr("  Invoking runner...")
+		result, invokeErr := selectedRunner.Invoke(ctx, runner.RunRequest{
+			Prompt:       prompt,
+			MaxTurns:     maxTurns,
+			OutputFormat: "json",
+			Stdout:       os.Stdout,
+			Stderr:       os.Stderr,
+		})
+
+		if invokeErr != nil {
+			if errors.Is(invokeErr, runner.ErrBinaryNotFound) {
+				return fmt.Errorf("runner binary not found — install the CLI tool: %w", invokeErr)
+			}
+			if errors.Is(invokeErr, runner.ErrContextCanceled) || errors.Is(invokeErr, context.Canceled) {
+				return fmt.Errorf("run canceled: %w", invokeErr)
+			}
+			// Non-fatal: log and continue; tddmaster state file has the real truth.
+			printErr(fmt.Sprintf("  Runner error (non-fatal): %v", invokeErr))
+		} else if result != nil && result.ExitCode != 0 {
+			// Non-zero exit is non-fatal; continue loop.
+			printErr(fmt.Sprintf("  Runner exited with code %d (continuing)", result.ExitCode))
 		}
 
 		printErr("  Agent exited. Stop hook captured state.")

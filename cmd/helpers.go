@@ -1,4 +1,3 @@
-
 package cmd
 
 import (
@@ -7,8 +6,8 @@ import (
 	"os"
 
 	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
-	statesync "github.com/pragmataW/tddmaster/internal/sync"
 	"github.com/pragmataW/tddmaster/internal/state"
+	statesync "github.com/pragmataW/tddmaster/internal/sync"
 )
 
 // writeJSON writes any value as indented JSON to stdout.
@@ -53,6 +52,7 @@ func loadRulesAndHints(root string, st state.StateFile, config *state.NosManifes
 				OptionPresentation:    h.OptionPresentation,
 				HasSubAgentDelegation: h.HasSubAgentDelegation,
 				SubAgentMethod:        h.SubAgentMethod,
+				AskUserStrategy:       h.AskUserStrategy,
 			}
 		}
 	}

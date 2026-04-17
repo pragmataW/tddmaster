@@ -1,4 +1,3 @@
-
 package state
 
 import (
@@ -136,10 +135,10 @@ func TestVerificationResult_ZeroValues(t *testing.T) {
 
 func TestVerificationResult_JSONRoundTrip(t *testing.T) {
 	v := VerificationResult{
-		Passed:               false,
-		Output:               "test output",
-		Timestamp:            "2026-01-01T00:00:00Z",
-		UncoveredEdgeCases:   []string{"EC-1", "EC-2"},
+		Passed:                false,
+		Output:                "test output",
+		Timestamp:             "2026-01-01T00:00:00Z",
+		UncoveredEdgeCases:    []string{"EC-1", "EC-2"},
 		VerificationFailCount: 3,
 	}
 
@@ -191,7 +190,6 @@ func TestIsTDDEnabled_TddModeTrue_ReturnsTrue(t *testing.T) {
 func TestCreateInitialManifest(t *testing.T) {
 	concerns := []string{"security"}
 	tools := []CodingToolId{CodingToolClaudeCode}
-	providers := []ToolId{"openai"}
 	project := ProjectTraits{
 		Languages:  []string{"go"},
 		Frameworks: []string{},
@@ -199,11 +197,10 @@ func TestCreateInitialManifest(t *testing.T) {
 		TestRunner: nil,
 	}
 
-	m := CreateInitialManifest(concerns, tools, providers, project)
+	m := CreateInitialManifest(concerns, tools, project)
 
 	assert.Equal(t, concerns, m.Concerns)
 	assert.Equal(t, tools, m.Tools)
-	assert.Equal(t, providers, m.Providers)
 	assert.Equal(t, project, m.Project)
 	assert.Equal(t, 15, m.MaxIterationsBeforeRestart)
 	assert.Nil(t, m.VerifyCommand)
@@ -212,7 +209,7 @@ func TestCreateInitialManifest(t *testing.T) {
 }
 
 func TestCreateInitialManifest_TDDEnabled(t *testing.T) {
-	m := CreateInitialManifest(nil, nil, nil, ProjectTraits{})
+	m := CreateInitialManifest(nil, nil, ProjectTraits{})
 	require.NotNil(t, m.Tdd, "CreateInitialManifest must set Tdd field")
 	assert.True(t, m.Tdd.TddMode, "TddMode must be true by default")
 	assert.Equal(t, 3, m.Tdd.MaxVerificationRetries, "MaxVerificationRetries must be 3 by default")
@@ -345,7 +342,7 @@ func TestExecutionState_RefactorRoundFields_OmittedWhenZero(t *testing.T) {
 // =============================================================================
 
 func TestCreateInitialManifest_MaxRefactorRoundsDefault(t *testing.T) {
-	m := CreateInitialManifest(nil, nil, nil, ProjectTraits{})
+	m := CreateInitialManifest(nil, nil, ProjectTraits{})
 	require.NotNil(t, m.Tdd)
 	assert.Equal(t, 3, m.Tdd.MaxRefactorRounds, "MaxRefactorRounds must default to 3")
 }

@@ -12,13 +12,15 @@ import (
 // Helpers
 // =============================================================================
 
-// sentenceSplitRe matches sentence-ending periods followed by space+uppercase, or semicolons.
+// sentenceSplitRe matches sentence-ending periods followed by space+uppercase.
 // It does NOT match periods inside filenames, extensions, version numbers, or URLs.
-var sentenceSplitRe = regexp.MustCompile(`\.(?:\s+[A-Z])|;\s+`)
+// Semicolons are NOT split points — they're legitimate punctuation in long
+// technical answers and splitting on them fragmented content mid-sentence.
+var sentenceSplitRe = regexp.MustCompile(`\.(?:\s+[A-Z])`)
 
 // toBulletList splits text into list items by line breaks or sentence boundaries.
 // Does NOT split on dots inside filenames, extensions, abbreviations,
-// version numbers, or URLs.
+// version numbers, or URLs, nor on semicolons within a sentence.
 func toBulletList(text string) []string {
 	// Split on line breaks first
 	rawLines := strings.Split(text, "\n")
@@ -34,7 +36,7 @@ func toBulletList(text string) []string {
 		return lines
 	}
 
-	// Single block — split on sentence-ending periods or semicolons.
+	// Single block — split on sentence-ending periods (". A").
 	// We use FindAllStringIndex to locate split points, then slice manually
 	// so we preserve the character after the dot (uppercase letter of next sentence).
 	idxs := sentenceSplitRe.FindAllStringIndex(text, -1)
@@ -49,22 +51,10 @@ func toBulletList(text string) []string {
 	var parts []string
 	prev := 0
 	for _, loc := range idxs {
-		// loc[0] is start of match. The period is at loc[0], space+upper after.
-		// We want to keep the period with the first part, split before the space.
-		// Match is e.g. ". A" (len 3) or "; " (len 2).
-		// For ". A": split after the period (prev..loc[0]+1), next starts at loc[0]+2
-		// For "; ": split at loc[0], next starts at loc[1]
-		matchStr := text[loc[0]:loc[1]]
-		if strings.HasPrefix(matchStr, ".") {
-			// ". A" — keep period with first part
-			parts = append(parts, strings.TrimSpace(text[prev:loc[0]+1]))
-			// next sentence starts at loc[0]+2 (skip ". ")
-			prev = loc[0] + 2
-		} else {
-			// "; " — split at semicolon, skip "; "
-			parts = append(parts, strings.TrimSpace(text[prev:loc[0]]))
-			prev = loc[1]
-		}
+		// Match is ". A" (len 3). Keep the period with the first part; next
+		// sentence starts at loc[0]+2 (skip ". ").
+		parts = append(parts, strings.TrimSpace(text[prev:loc[0]+1]))
+		prev = loc[0] + 2
 	}
 	if prev < len(text) {
 		parts = append(parts, strings.TrimSpace(text[prev:]))
@@ -241,10 +231,14 @@ func isEdgeCaseCandidate(text string) bool {
 		strings.HasPrefix(lower, "without ")
 }
 
-// DeriveEdgeCases extracts concrete edge cases from discovery answers and premise review.
-// Answers to the explicit "edge_cases" question are parsed literally (no keyword filter)
-// and placed first. Cases derived from other answers via keyword matching follow.
-// The resulting list is de-duplicated and preserves first-seen order within each group.
+// DeriveEdgeCases extracts concrete edge cases from two intentional sources:
+// (1) the explicit "edge_cases" answer (parsed literally, no keyword filter),
+// and (2) disagreed/revised premises. Keyword harvesting from unrelated
+// discovery answers was removed because it bled sentences containing
+// incidental words like "error", "fallback", "nil", "race" from other
+// sections into the Edge Cases list.
+// The resulting list is de-duplicated and preserves first-seen order
+// within each group.
 func DeriveEdgeCases(answers []state.DiscoveryAnswer, premises []state.Premise) []string {
 	var literalECs []string
 	var derivedECs []string
@@ -285,17 +279,9 @@ func DeriveEdgeCases(answers []state.DiscoveryAnswer, premises []state.Premise) 
 		}
 	}
 
-	// Pass 2: derive from all other answers via keyword matching.
-	for _, answer := range answers {
-		if answer.QuestionID == "edge_cases" {
-			continue
-		}
-		for _, item := range toBulletList(answer.Answer) {
-			appendDerived(item)
-		}
-	}
-
-	// Pass 3: derive from premise revisions.
+	// Pass 2: derive from premise revisions and disagreed premises only.
+	// (Keyword harvesting from unrelated answers was removed — it caused
+	// unrelated sentences to leak into Edge Cases.)
 	for _, premise := range premises {
 		if premise.Revision != nil && strings.TrimSpace(*premise.Revision) != "" {
 			appendDerived(*premise.Revision)
@@ -306,7 +292,7 @@ func DeriveEdgeCases(answers []state.DiscoveryAnswer, premises []state.Premise) 
 		}
 	}
 
-	// Literal (explicit) first, keyword-derived after.
+	// Literal (explicit) first, premise-derived after.
 	return append(literalECs, derivedECs...)
 }
 

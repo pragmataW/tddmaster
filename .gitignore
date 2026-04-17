@@ -6,3 +6,5 @@ CLAUDE.md
 .claude
 .codex
 .venv
+
+docs/research/**

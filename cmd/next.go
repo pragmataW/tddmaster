@@ -686,6 +686,23 @@ func handleSpecProposalAnswer(
 		return st, fmt.Errorf("refinement: %w", err)
 	}
 
+	// Guard: notes must not carry structured task content (task-N: …).
+	// Self-review instructions tell the agent never to put a task list in
+	// notes, but if a payload sneaks through any upstream routing path we
+	// recover here — otherwise a pipe-separated task blob gets persisted
+	// to SpecNotes and leaks into spec.md as an unreadable single bullet.
+	if verbs.Notes != "" && taskHeaderSearchRe.MatchString(verbs.Notes) {
+		if titles := parseTextualTaskList(verbs.Notes); len(titles) > 0 {
+			// Recover: treat as full-replace tasks override.
+			verbs.Add = titles
+			verbs.Remove = []string{legacyReplaceAllSentinel}
+			verbs.Update = nil
+			verbs.Notes = ""
+		} else {
+			return st, fmt.Errorf("refinement: notes cannot contain task markers (task-N:); use add/update verbs or send a pipe-separated task list as {\"tasks\":[...]}")
+		}
+	}
+
 	newState := st
 
 	// Persist free-form notes to SpecNotes.
@@ -730,6 +747,14 @@ var listMarkerRe = regexp.MustCompile(`^(?:\d+[.)]\s+|[-*]\s+)`)
 // directivePrefixRe matches a leading directive like "REPLACE all tasks with:"
 // or "Update tasks:" — the prefix is stripped before parsing the rest.
 var directivePrefixRe = regexp.MustCompile(`(?i)^\s*(?:replace|update|set|new|change)\s+(?:all\s+)?tasks?\s*(?:with|to)?\s*[:.]\s*`)
+
+// refactorHintRe matches verifier narrative output that describes a refactor
+// opportunity. Used by applyVerifierReport to catch submit-loss cases where
+// the orchestrator drops the structured refactorNotes array but the free-form
+// output clearly calls for a refactor.
+var refactorHintRe = regexp.MustCompile(
+	`(?i)\b(refactor\w*|extract\w*|dedupe\w*|duplicat\w*|cleanup\w*|renam\w*|simplif\w*|improv\w*|DRY)\b`,
+)
 
 // parseTextualTaskList interprets s as a structured task list. It handles:
 //
@@ -1290,6 +1315,27 @@ func extractVerifierPayload(report map[string]interface{}) (map[string]interface
 // sub-agent: it appends completed task IDs, flips RefactorApplied when the
 // executor signals it, and advances the iteration counter.
 func applyExecutorReport(st state.StateFile, config *state.NosManifest, report map[string]interface{}) (state.StateFile, error) {
+	// Refactor-bypass guard: while the cycle is parked in REFACTOR with pending
+	// notes from the GREEN scan, the executor must either apply the notes
+	// (reporting refactorApplied:true) or defer to the verifier. Allowing a
+	// bare `completed` submit here would silently skip the refactor round and
+	// re-seed the next task's RED, which is exactly the regression we saw.
+	if st.Execution.TDDCycle == state.TDDCycleRefactor &&
+		!st.Execution.RefactorApplied &&
+		!getBoolField(report, "refactorApplied") {
+		completedLen := 0
+		if c, ok := report["completed"].([]interface{}); ok {
+			completedLen = len(c)
+		}
+		if completedLen > 0 && hasPendingRefactorNotes(st) {
+			return st, fmt.Errorf(
+				"cannot complete task while in REFACTOR phase with pending notes; " +
+					"apply the refactor notes first and report `refactorApplied: true`, " +
+					"or submit a verifier report (not an executor report) to advance the cycle",
+			)
+		}
+	}
+
 	newState := st
 	newState.Execution.AwaitingStatusReport = false
 	newState.Execution.Iteration++
@@ -1355,6 +1401,21 @@ func applyVerifierReport(st state.StateFile, config *state.NosManifest, report m
 	uncoveredEdgeCases := readStringSlice(report, "uncoveredEdgeCases")
 	refactorNotes := readRefactorNotes(report)
 
+	// Submit-loss guard: a GREEN PASS whose narrative hints at a refactor but
+	// omits the refactorNotes field entirely almost always means the orchestrator
+	// dropped the verifier's structured notes. Reject so the caller can resubmit
+	// with explicit notes (or an explicit empty array to confirm "nothing to do").
+	if st.Execution.TDDCycle == state.TDDCycleGreen && passed {
+		if _, refactorNotesPresent := report["refactorNotes"]; !refactorNotesPresent &&
+			refactorHintRe.MatchString(output) {
+			return st, fmt.Errorf(
+				"verifier output suggests refactor notes but `refactorNotes` field is empty. " +
+					"Include them explicitly as `refactorNotes: [{file, suggestion, rationale}]`, " +
+					"or return an empty array only if truly no improvements apply",
+			)
+		}
+	}
+
 	maxRetries := 0
 	maxRefactorRounds := 0
 	if config != nil && config.Tdd != nil {
@@ -1396,6 +1457,16 @@ func readStringSlice(m map[string]interface{}, key string) []string {
 		return nil
 	}
 	return out
+}
+
+// hasPendingRefactorNotes returns true when LastVerification holds refactor
+// notes that the executor has not yet consumed. Used by the REFACTOR-phase
+// guard in applyExecutorReport.
+func hasPendingRefactorNotes(st state.StateFile) bool {
+	if st.Execution.LastVerification == nil {
+		return false
+	}
+	return len(st.Execution.LastVerification.RefactorNotes) > 0
 }
 
 func readRefactorNotes(m map[string]interface{}) []state.RefactorNote {

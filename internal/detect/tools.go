@@ -1,4 +1,3 @@
-
 package detect
 
 import (
@@ -19,6 +18,7 @@ type toolSignal struct {
 var toolSignals = []toolSignal{
 	{id: state.CodingToolClaudeCode, paths: []string{"CLAUDE.md", ".claude"}},
 	{id: state.CodingToolCodex, paths: []string{".codex", ".codex/config.toml"}},
+	{id: state.CodingToolOpencode, paths: []string{".opencode", "opencode.json"}},
 }
 
 // DetectCodingTools detects available coding tools by checking for their

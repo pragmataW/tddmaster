@@ -289,7 +289,28 @@ Useful supporting commands:
 - `tddmaster status`
 - `tddmaster watch`
 - `tddmaster run --spec=<name>`
+- `tddmaster run --spec=<name> --tool=codex` (override the default runner)
 - `tddmaster rule add "..."` 
+
+### Choosing a coding CLI
+
+`tddmaster` supports multiple coding CLIs (Claude Code, Codex CLI, OpenCode). Selection priority:
+
+1. `--tool` flag on `tddmaster run`
+2. `defaultRunner` field in `.tddmaster/manifest.yml`
+3. First entry in `manifest.tools`
+4. Fallback: `claude-code`
+
+Example manifest snippet:
+
+```yaml
+defaultRunner: codex
+tools:
+  - codex
+  - claude-code
+```
+
+See `docs/RUNNERS.md` for the full invocation matrix and per-CLI flag differences.
 
 ## Repository artifacts
 

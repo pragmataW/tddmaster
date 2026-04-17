@@ -650,3 +650,64 @@ func TestOpenCodeAdapter_SyncAgents_NoTestWriterWhenManifestNil(t *testing.T) {
 	_, err := os.Stat(filepath.Join(agentsDir, "test-writer.md"))
 	assert.True(t, os.IsNotExist(err), "test-writer.md should NOT be created when Manifest is nil")
 }
+
+// =============================================================================
+// AskUserStrategy tests (AC-3 through AC-8)
+// These tests intentionally reference the not-yet-existing AskUserStrategy
+// field on InteractionHints. The build will fail until the field is added
+// (RED phase). Do NOT add the field here — the executor does that.
+// =============================================================================
+
+// AC-3: ClaudeCodeAdapter must report AskUserStrategy == "ask_user_question".
+func TestClaudeCodeAdapter_Capabilities_AskUserStrategy(t *testing.T) {
+	a := &adapters.ClaudeCodeAdapter{}
+	caps := a.Capabilities()
+	assert.Equal(t, "ask_user_question", caps.Interaction.AskUserStrategy,
+		"ClaudeCode has native AskUserQuestion tool so strategy must be ask_user_question")
+}
+
+// AC-4: ClaudeCodeAdapter invariant — HasAskUserTool==true implies AskUserStrategy=="ask_user_question".
+func TestClaudeCodeAdapter_Capabilities_AskUserStrategyConsistency(t *testing.T) {
+	a := &adapters.ClaudeCodeAdapter{}
+	caps := a.Capabilities()
+	if caps.Interaction.HasAskUserTool {
+		assert.Equal(t, "ask_user_question", caps.Interaction.AskUserStrategy,
+			"when HasAskUserTool is true, AskUserStrategy must be ask_user_question")
+	}
+}
+
+// AC-5: CodexAdapter must report AskUserStrategy == "tddmaster_block".
+func TestCodexAdapter_Capabilities_AskUserStrategy(t *testing.T) {
+	a := &adapters.CodexAdapter{}
+	caps := a.Capabilities()
+	assert.Equal(t, "tddmaster_block", caps.Interaction.AskUserStrategy,
+		"Codex has no native ask-user tool; must use tddmaster block transition")
+}
+
+// AC-6: CodexAdapter invariant — HasAskUserTool==false implies AskUserStrategy=="tddmaster_block".
+func TestCodexAdapter_Capabilities_AskUserStrategyConsistency(t *testing.T) {
+	a := &adapters.CodexAdapter{}
+	caps := a.Capabilities()
+	if !caps.Interaction.HasAskUserTool {
+		assert.Equal(t, "tddmaster_block", caps.Interaction.AskUserStrategy,
+			"when HasAskUserTool is false, AskUserStrategy must be tddmaster_block")
+	}
+}
+
+// AC-7: OpenCodeAdapter must report AskUserStrategy == "tddmaster_block".
+func TestOpenCodeAdapter_Capabilities_AskUserStrategy(t *testing.T) {
+	a := &adapters.OpenCodeAdapter{}
+	caps := a.Capabilities()
+	assert.Equal(t, "tddmaster_block", caps.Interaction.AskUserStrategy,
+		"OpenCode has no native ask-user tool; must use tddmaster block transition")
+}
+
+// AC-8: OpenCodeAdapter invariant — HasAskUserTool==false implies AskUserStrategy=="tddmaster_block".
+func TestOpenCodeAdapter_Capabilities_AskUserStrategyConsistency(t *testing.T) {
+	a := &adapters.OpenCodeAdapter{}
+	caps := a.Capabilities()
+	if !caps.Interaction.HasAskUserTool {
+		assert.Equal(t, "tddmaster_block", caps.Interaction.AskUserStrategy,
+			"when HasAskUserTool is false, AskUserStrategy must be tddmaster_block")
+	}
+}

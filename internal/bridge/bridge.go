@@ -1,4 +1,3 @@
-
 // Package bridge orchestrates AI calls for validation and spec generation.
 //
 // Tries claude CLI first (equivalent to @eser/ai registry with claude-code
@@ -6,10 +5,21 @@
 package bridge
 
 import (
-	"bytes"
-	"encoding/json"
-	"os/exec"
+	"context"
 	"strings"
+
+	"github.com/pragmataW/tddmaster/internal/runner"
+	"github.com/pragmataW/tddmaster/internal/state"
+)
+
+// =============================================================================
+// Package-level seam variables (swappable in tests)
+// =============================================================================
+
+var (
+	bridgeRunnerSelect = runner.Select
+	bridgeReadManifest = state.ReadManifest
+	bridgeResolveRoot  = state.ResolveProjectRoot
 )
 
 // =============================================================================
@@ -29,74 +39,77 @@ type BridgeResult struct {
 // CallAgent tries available AI providers in order and returns the first
 // successful result. The fallback chain mirrors the TS implementation:
 //
-//  1. claude CLI (covers both the @eser/ai registry and raw CLI paths)
-//  2. Returns nil — caller handles manual fallback.
+//  1. Resolve project root — graceful on error.
+//  2. Load manifest — graceful on error.
+//  3. Select runner via registry — graceful on ErrRunnerNotFound.
+//  4. Invoke runner — graceful on any error.
+//  5. Returns nil — caller handles manual fallback.
 func CallAgent(prompt string, system string) (*BridgeResult, error) {
-	// Try claude CLI (covers @eser/ai claude-code + raw claude CLI paths)
-	result, err := callViaClaude(prompt, system)
-	if err == nil && result != nil {
-		return result, nil
-	}
-
-	// Manual — return nil, caller handles
-	return nil, nil
-}
-
-// =============================================================================
-// Claude CLI Spawn
-// =============================================================================
-
-// claudeOutput is used to parse JSON output from `claude -p`.
-type claudeOutput struct {
-	Result  string `json:"result"`
-	Message *struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	} `json:"message"`
-}
-
-// callViaClaude spawns the `claude` CLI and captures its output.
-// It mirrors the TS callViaClaude function: runs
-//
-//	claude -p <prompt> --output-format json --max-turns 1
-//
-// and attempts JSON parsing, falling back to raw text.
-func callViaClaude(prompt string, system string) (*BridgeResult, error) {
-	args := []string{"-p", prompt, "--output-format", "json", "--max-turns", "1"}
-	if system != "" {
-		args = append(args, "--system-prompt", system)
-	}
-
-	cmd := exec.Command("claude", args...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-
-	raw := strings.TrimSpace(stdout.String())
-	if raw == "" {
+	// 1. Resolve project root — if error, return (nil, nil) gracefully.
+	rootResult, err := bridgeResolveRoot()
+	if err != nil || rootResult.Root == "" {
 		return nil, nil
 	}
 
-	// Attempt JSON parse — mirrors TS try/catch around JSON.parse
-	var parsed claudeOutput
-	if jsonErr := json.Unmarshal([]byte(raw), &parsed); jsonErr == nil {
-		text := parsed.Result
-		if text == "" && parsed.Message != nil && len(parsed.Message.Content) > 0 {
-			text = parsed.Message.Content[0].Text
-		}
-		if text == "" {
-			text = raw
-		}
-		return &BridgeResult{Text: text, Provider: "claude-cli"}, nil
+	// 2. Load manifest — if error, return (nil, nil) gracefully.
+	manifest, err := bridgeReadManifest(rootResult.Root)
+	if err != nil || manifest == nil {
+		return nil, nil
 	}
 
-	// JSON parse failed — return raw text (same as TS fallback)
-	return &BridgeResult{Text: raw, Provider: "claude-cli"}, nil
+	// 3. Select runner — graceful on ErrRunnerNotFound (return nil, nil).
+	selectedRunner, err := bridgeRunnerSelect(manifest, "")
+	if err != nil || selectedRunner == nil {
+		return nil, nil
+	}
+
+	// 4. Build RunRequest.
+	req := runner.RunRequest{
+		Prompt:       prompt,
+		SystemPrompt: system,
+		MaxTurns:     1,
+		OutputFormat: "json",
+	}
+
+	// 5. Invoke with cancelable context.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result, err := selectedRunner.Invoke(ctx, req)
+	if err != nil {
+		// All errors (binary not found, generic) → graceful fallback.
+		return nil, nil
+	}
+	if result == nil {
+		return nil, nil
+	}
+
+	// 6. Parse result.
+	text := extractTextFromResult(result)
+	if text == "" {
+		return nil, nil
+	}
+	return &BridgeResult{Text: text, Provider: selectedRunner.Name()}, nil
+}
+
+// extractTextFromResult extracts the text content from a RunResult.
+// Prefers ParsedJSON.result; then ParsedJSON.message.content[0].text; then raw Stdout.
+func extractTextFromResult(result *runner.RunResult) string {
+	if result.ParsedJSON != nil {
+		if v, ok := result.ParsedJSON["result"].(string); ok && v != "" {
+			return v
+		}
+		// message.content[0].text
+		if msg, ok := result.ParsedJSON["message"].(map[string]any); ok {
+			if content, ok := msg["content"].([]any); ok && len(content) > 0 {
+				if first, ok := content[0].(map[string]any); ok {
+					if t, ok := first["text"].(string); ok && t != "" {
+						return t
+					}
+				}
+			}
+		}
+	}
+	// Raw Stdout fallback (EC-4).
+	raw := strings.TrimSpace(string(result.Stdout))
+	return raw
 }

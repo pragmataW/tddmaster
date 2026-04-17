@@ -1,4 +1,3 @@
-
 package state
 
 import (
@@ -316,7 +315,6 @@ func TestReadWriteManifest(t *testing.T) {
 		manifest := CreateInitialManifest(
 			[]string{"security"},
 			[]CodingToolId{CodingToolClaudeCode},
-			[]ToolId{"openai"},
 			ProjectTraits{
 				Languages:  []string{"go"},
 				Frameworks: []string{},
@@ -381,7 +379,6 @@ func TestIsInitialized(t *testing.T) {
 		manifest := CreateInitialManifest(
 			[]string{},
 			[]CodingToolId{},
-			[]ToolId{},
 			ProjectTraits{Languages: []string{}, Frameworks: []string{}, CI: []string{}},
 		)
 		err := WriteManifest(dir, manifest)
