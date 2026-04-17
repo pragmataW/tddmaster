@@ -65,3 +65,66 @@ func TestVerifierRefactorPhaseBlock_MentionsNotesContract(t *testing.T) {
 	assert.Contains(t, out, "empty", "empty notes array must be described as valid")
 	assert.Contains(t, out, "deno test", "REFACTOR must include test command")
 }
+
+// rubricKeywords are the concept markers every GREEN/REFACTOR block must
+// surface so the verifier cannot "forget" a quality dimension. Keep this list
+// conceptual (SOLID / DRY / magic literals / cohesion) — not language-specific.
+var rubricKeywords = []string{
+	"Quality rubric",
+	"Magic values",
+	"Duplication",
+	"DRY",
+	"Single responsibility",
+	"Naming clarity",
+	"Coupling",
+	"Cohesion",
+	"Open",
+	"Dead code",
+}
+
+func TestVerifierGreenPhaseBlock_ContainsQualityRubric(t *testing.T) {
+	out := VerifierGreenPhaseBlock("deno check", "deno test")
+	for _, kw := range rubricKeywords {
+		assert.Contains(t, out, kw, "GREEN block must surface rubric concept %q", kw)
+	}
+}
+
+func TestVerifierRefactorPhaseBlock_ContainsQualityRubric(t *testing.T) {
+	out := VerifierRefactorPhaseBlock("deno check", "deno test")
+	for _, kw := range rubricKeywords {
+		assert.Contains(t, out, kw, "REFACTOR block must surface rubric concept %q", kw)
+	}
+}
+
+func TestVerifierRedPhaseBlock_DoesNotContainQualityRubric(t *testing.T) {
+	out := VerifierRedPhaseBlock()
+	assert.NotContains(t, out, "Quality rubric",
+		"RED phase is read-only and must not emit quality guidance")
+	assert.NotContains(t, strings.ToLower(out), "magic values",
+		"RED phase must not inherit GREEN/REFACTOR rubric content")
+}
+
+func TestRefactorQualityRubric_IsLanguageAgnostic(t *testing.T) {
+	green := strings.ToLower(VerifierGreenPhaseBlock("deno check", "deno test"))
+	refactor := strings.ToLower(VerifierRefactorPhaseBlock("deno check", "deno test"))
+
+	languageTokens := []string{
+		" const ",
+		" enum ",
+		" final ",
+		" var ",
+		" let ",
+		"package-level",
+		"module-level",
+		"golang",
+		"typescript",
+		"python",
+		"javascript",
+	}
+	for _, tok := range languageTokens {
+		assert.NotContains(t, green, tok,
+			"GREEN rubric must stay language-agnostic; leaked token %q", tok)
+		assert.NotContains(t, refactor, tok,
+			"REFACTOR rubric must stay language-agnostic; leaked token %q", tok)
+	}
+}

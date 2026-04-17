@@ -30,7 +30,8 @@ func VerifierGreenPhaseInstruction(typeCheckCmd, testCmd string) string {
 	lines = append(lines,
 		"Exit code MUST be zero and all tests MUST pass.",
 		"If any test fails, set `passed=false` and report `reason='expected-pass-but-failed'` plus failing test names in `failedACs`. Set `refactorNotes=[]`.",
-		"If tests pass, scan the modified files and produce `refactorNotes` — a JSON array of {file, suggestion, rationale} describing concrete improvements (dead code, duplication, naming, structure).",
+		"If tests pass, scan the modified files and produce `refactorNotes` — a JSON array of {file, suggestion, rationale} describing concrete improvements.",
+		"Apply a language-agnostic quality rubric: repeated magic literals that should become a named single-source symbol, duplication/DRY, single responsibility, naming clarity, oversized functions and parameter lists, coupling and dependency direction, open-closed dispatch hints, cohesion, error and result shaping, dead code and obsolete guards. Phrase each suggestion using the identifiers of the code under review — do not prescribe language-specific constructs.",
 		"An empty array is valid and means the code is already clean.",
 		`Return JSON: {"passed": true|false, "phase": "green", "output": "<summary>", "failedACs": [...], "refactorNotes": [...]}.`,
 	)
@@ -51,7 +52,8 @@ func VerifierRefactorPhaseInstruction(typeCheckCmd, testCmd string) string {
 	}
 	lines = append(lines,
 		"If red, reason='behavior-changed' (treated like GREEN regression).",
-		"If green, produce refactorNotes — a JSON array of {file, suggestion, rationale} describing concrete improvements (dead code, duplication, naming, structure).",
+		"If green, produce refactorNotes — a JSON array of {file, suggestion, rationale} describing concrete improvements.",
+		"Apply the same language-agnostic quality rubric as GREEN: repeated magic literals needing a named single-source symbol, duplication/DRY, single responsibility, naming clarity, oversized functions and parameter lists, coupling and dependency direction, open-closed dispatch hints, cohesion, error and result shaping, dead code and obsolete guards. Phrase each suggestion using the identifiers of the code under review — do not prescribe language-specific constructs.",
 		"An empty array is valid and means the task is clean.",
 		`Return JSON: {"passed": true|false, "phase": "refactor", "output": "<summary>", "refactorNotes": [...]}.`,
 	)
