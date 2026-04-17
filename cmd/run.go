@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
 	"github.com/pragmataW/tddmaster/internal/output"
 	"github.com/pragmataW/tddmaster/internal/runner"
+	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
 )
 
@@ -69,24 +71,32 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	config, _ := state.ReadManifest(root)
+	if config == nil {
+		return fmt.Errorf("config not found")
+	}
+
 	if initialState.Phase != state.PhaseExecuting && initialState.Phase != state.PhaseSpecApproved && initialState.Phase != state.PhaseBlocked {
 		return fmt.Errorf("cannot run from phase: %s. Must be in SPEC_APPROVED or EXECUTING to start", initialState.Phase)
 	}
 
 	if initialState.Phase == state.PhaseSpecApproved {
+		if specApprovedTDDSelectionPending(initialState, config) {
+			return fmt.Errorf("spec is approved but TDD task selection is still required; use %s, %s, or %s before running",
+				output.Cmd(`next --answer="tdd-all"`),
+				output.Cmd(`next --answer="tdd-none"`),
+				output.Cmd(`next --answer='{"tddTasks":["task-1"]}'`),
+			)
+		}
+
 		printErr("Starting execution from approved spec...")
-		newState, err := state.StartExecution(initialState)
+		newState, err := startExecutionFromApproved(initialState, config)
 		if err != nil {
 			return err
 		}
-		if err := state.WriteState(root, newState); err != nil {
+		if err := state.WriteStateAndSpec(root, newState); err != nil {
 			return err
 		}
-	}
-
-	config, _ := state.ReadManifest(root)
-	if config == nil {
-		return fmt.Errorf("config not found")
 	}
 
 	// Set up a cancelable context for this run; install SIGINT/SIGTERM handler.
@@ -199,9 +209,19 @@ func runRun(cmd *cobra.Command, args []string) error {
 		allConcerns, _ := state.ListConcerns(root)
 		activeConcerns := filterConcerns(allConcerns, config.Concerns)
 		tier1, hints, tier2Count, _ := loadRulesAndHints(root, st, config)
+		parsedSpec, err := loadExecutionSpec(root, st)
+		if err != nil {
+			return err
+		}
 
-		compiled := ctxpkg.Compile(st, activeConcerns, tier1, config, nil, nil, nil, hints, nil, tier2Count)
-		prompt := buildAgentPrompt(compiled)
+		compiled := ctxpkg.Compile(st, activeConcerns, tier1, config, parsedSpec, nil, nil, hints, nil, tier2Count)
+		prompt, err := buildAgentPrompt(compiled)
+		if err != nil {
+			if st.Spec != nil {
+				return fmt.Errorf("cannot build execution prompt for spec %q: %w", *st.Spec, err)
+			}
+			return fmt.Errorf("cannot build execution prompt: %w", err)
+		}
 
 		// Log iteration
 		debtLen := 0
@@ -254,31 +274,285 @@ func runRun(cmd *cobra.Command, args []string) error {
 }
 
 // buildAgentPrompt constructs a prompt string from compiled output.
-func buildAgentPrompt(compiled ctxpkg.NextOutput) string {
+func buildAgentPrompt(compiled ctxpkg.NextOutput) (string, error) {
+	if compiled.ExecutionData == nil {
+		return "", fmt.Errorf("executionData missing from compiled output")
+	}
+	exec := compiled.ExecutionData
+
+	payload, err := json.MarshalIndent(exec, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal executionData: %w", err)
+	}
+	reportShape, err := buildExpectedReportShape(exec)
+	if err != nil {
+		return "", fmt.Errorf("marshal expected report shape: %w", err)
+	}
+
 	var lines []string
 
-	lines = append(lines, compiled.Meta.ResumeHint)
-	lines = append(lines, "")
+	lines = append(lines, "You are executing the active tddmaster iteration.")
+	lines = append(lines, "Read the ordered execution summary first. The raw `executionData` payload later in this prompt is the source of truth.")
 
-	if compiled.Meta.Spec != nil {
-		lines = append(lines, fmt.Sprintf("Working on spec: %s", *compiled.Meta.Spec))
-		lines = append(lines, "")
+	lines = append(lines, "", "Current phase:")
+	lines = append(lines, fmt.Sprintf("- %s", compiled.Phase))
+
+	lines = append(lines, "", "Current task:")
+	lines = append(lines, formatCurrentTaskSummary(exec))
+
+	lines = append(lines, "", "Files touched or suggested:")
+	for _, file := range collectSuggestedFiles(exec) {
+		lines = append(lines, "- "+file)
 	}
 
-	if compiled.Behavioral.Rules != nil {
-		lines = append(lines, "Rules:")
+	lines = append(lines, "", "Edge cases:")
+	if len(exec.EdgeCases) == 0 {
+		lines = append(lines, "- None listed for this iteration.")
+	} else {
+		for _, edgeCase := range exec.EdgeCases {
+			lines = append(lines, "- "+edgeCase)
+		}
+	}
+
+	if exec.TDDPhase != nil && strings.TrimSpace(*exec.TDDPhase) != "" {
+		lines = append(lines, "", "TDD phase:")
+		lines = append(lines, "- "+*exec.TDDPhase)
+	}
+
+	if instructions := collectVerifierInstructions(exec); len(instructions) > 0 {
+		lines = append(lines, "", "Verifier / refactor instructions:")
+		for _, instruction := range instructions {
+			lines = append(lines, "- "+instruction)
+		}
+	}
+
+	lines = append(lines, "", "Exact report JSON expected back:")
+	lines = append(lines, "```json")
+	lines = append(lines, reportShape)
+	lines = append(lines, "```")
+
+	if compiled.Behavioral.Tone != "" || compiled.Behavioral.Urgency != nil || len(compiled.Behavioral.Rules) > 0 || len(compiled.Behavioral.OutOfScope) > 0 {
+		lines = append(lines, "", "Behavioral guidance:")
+		if compiled.Behavioral.Tone != "" {
+			lines = append(lines, "- Tone: "+compiled.Behavioral.Tone)
+		}
+		if compiled.Behavioral.Urgency != nil {
+			lines = append(lines, "- Urgency: "+*compiled.Behavioral.Urgency)
+		}
 		for _, r := range compiled.Behavioral.Rules {
+			if strings.ContainsRune(r, '\n') {
+				lines = append(lines, r)
+				continue
+			}
 			lines = append(lines, "- "+r)
 		}
-		lines = append(lines, "")
+		if len(compiled.Behavioral.OutOfScope) > 0 {
+			lines = append(lines, "Out of scope:")
+			for _, item := range compiled.Behavioral.OutOfScope {
+				lines = append(lines, "- "+item)
+			}
+		}
 	}
 
-	prefix := output.CmdPrefix()
-	lines = append(lines, fmt.Sprintf(`When done, report progress: %s next --answer="your progress"`, prefix))
-	lines = append(lines, fmt.Sprintf(`If blocked, run: %s block "reason"`, prefix))
-	lines = append(lines, fmt.Sprintf("When all tasks are complete: %s done", prefix))
+	lines = append(lines, "", "Execution contract (`executionData`):")
+	lines = append(lines, "```json")
+	lines = append(lines, string(payload))
+	lines = append(lines, "```")
 
-	return strings.Join(lines, "\n")
+	if compiled.Meta.Spec != nil || compiled.Meta.LastProgress != nil || compiled.Meta.ResumeHint != "" {
+		lines = append(lines, "", "Resume context:")
+		lines = append(lines, fmt.Sprintf("- Phase: %s", compiled.Phase))
+		if compiled.Meta.Spec != nil {
+			lines = append(lines, fmt.Sprintf("- Spec: %s", *compiled.Meta.Spec))
+		}
+		lines = append(lines, fmt.Sprintf("- Iteration: %d", compiled.Meta.Iteration))
+		if compiled.Meta.LastProgress != nil {
+			lines = append(lines, fmt.Sprintf("- Last progress: %s", *compiled.Meta.LastProgress))
+		}
+		if compiled.Meta.ResumeHint != "" {
+			lines = append(lines, fmt.Sprintf("- Resume hint: %s", compiled.Meta.ResumeHint))
+		}
+	}
+
+	lines = append(lines, "", "Transition commands:")
+	lines = append(lines, fmt.Sprintf("- On complete: `%s`", exec.Transition.OnComplete))
+	lines = append(lines, fmt.Sprintf("- On blocked: `%s`", exec.Transition.OnBlocked))
+	if exec.StatusReportRequired != nil && *exec.StatusReportRequired {
+		lines = append(lines, "- Submit a structured status report that matches `executionData.statusReport.reportFormat`.")
+	}
+
+	return strings.Join(lines, "\n"), nil
+}
+
+func formatCurrentTaskSummary(exec *ctxpkg.ExecutionOutput) string {
+	if exec.Task != nil {
+		return fmt.Sprintf("- %s: %s", exec.Task.ID, exec.Task.Title)
+	}
+	if len(exec.BatchTasks) > 0 {
+		return fmt.Sprintf("- Batch status review for %s", strings.Join(exec.BatchTasks, ", "))
+	}
+	if exec.StatusReportRequired != nil && *exec.StatusReportRequired {
+		return "- Acceptance/status review for the current iteration."
+	}
+	return "- No explicit task block provided; follow executionData."
+}
+
+func collectSuggestedFiles(exec *ctxpkg.ExecutionOutput) []string {
+	seen := make(map[string]bool)
+	files := make([]string, 0)
+	appendFile := func(path string) {
+		path = strings.TrimSpace(path)
+		if path == "" || seen[path] {
+			return
+		}
+		seen[path] = true
+		files = append(files, path)
+	}
+
+	if exec.Task != nil {
+		for _, file := range exec.Task.Files {
+			appendFile(file)
+		}
+	}
+	if exec.RefactorInstructions != nil {
+		for _, note := range exec.RefactorInstructions.Notes {
+			appendFile(note.File)
+		}
+	}
+	if len(files) == 0 {
+		return []string{"No task-scoped files listed in this iteration."}
+	}
+	return files
+}
+
+func collectVerifierInstructions(exec *ctxpkg.ExecutionOutput) []string {
+	items := make([]string, 0, 2)
+	if exec.TDDVerificationContext != nil && strings.TrimSpace(exec.TDDVerificationContext.Instruction) != "" {
+		items = append(items, "Verifier expectation: "+exec.TDDVerificationContext.Instruction)
+	}
+	if exec.RefactorInstructions != nil {
+		round := fmt.Sprintf("Refactor round %d", exec.RefactorInstructions.Round)
+		if exec.RefactorInstructions.MaxRounds > 0 {
+			round = fmt.Sprintf("%s of %d", round, exec.RefactorInstructions.MaxRounds)
+		}
+		items = append(items, round+". "+exec.RefactorInstructions.Instruction)
+		for _, note := range exec.RefactorInstructions.Notes {
+			noteSummary := note.Suggestion
+			if strings.TrimSpace(note.Rationale) != "" {
+				noteSummary = fmt.Sprintf("%s (%s)", note.Suggestion, note.Rationale)
+			}
+			if strings.TrimSpace(note.File) != "" {
+				items = append(items, fmt.Sprintf("%s: %s", note.File, noteSummary))
+				continue
+			}
+			items = append(items, noteSummary)
+		}
+	}
+	return items
+}
+
+func buildExpectedReportShape(exec *ctxpkg.ExecutionOutput) (string, error) {
+	var shape interface{}
+
+	switch {
+	case exec.StatusReportRequired != nil && *exec.StatusReportRequired:
+		completedID, remainingID := sampleStatusCriterionIDs(exec.StatusReport)
+		shape = map[string]interface{}{
+			"completed": []string{completedID},
+			"remaining": []string{remainingID},
+			"blocked":   []string{},
+			"na":        []string{},
+			"newIssues": []string{},
+		}
+	case exec.RefactorInstructions != nil:
+		shape = map[string]interface{}{
+			"refactorApplied": true,
+		}
+	case exec.TDDPhase != nil && strings.TrimSpace(*exec.TDDPhase) != "":
+		shape = sampleTDDVerifierReport(*exec.TDDPhase)
+	default:
+		completed := []string{}
+		if exec.Task != nil && strings.TrimSpace(exec.Task.ID) != "" {
+			completed = append(completed, exec.Task.ID)
+		}
+		shape = map[string]interface{}{
+			"completed": completed,
+			"remaining": []string{},
+			"blocked":   []string{},
+		}
+	}
+
+	bytes, err := json.MarshalIndent(shape, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func sampleStatusCriterionIDs(status *ctxpkg.StatusReportRequest) (string, string) {
+	completedID := "ac-1"
+	remainingID := "ac-2"
+	if status == nil || len(status.Criteria) == 0 {
+		return completedID, remainingID
+	}
+	completedID = status.Criteria[0].ID
+	if len(status.Criteria) > 1 {
+		remainingID = status.Criteria[1].ID
+	} else {
+		remainingID = status.Criteria[0].ID
+	}
+	return completedID, remainingID
+}
+
+func sampleTDDVerifierReport(phase string) map[string]interface{} {
+	switch phase {
+	case state.TDDCycleRed:
+		return map[string]interface{}{
+			"passed":   true,
+			"phase":    "red",
+			"readOnly": true,
+			"output":   "<summary>",
+			"results": []map[string]string{
+				{"id": "ac-1", "status": "PASS", "evidence": "..."},
+			},
+		}
+	case state.TDDCycleGreen:
+		return map[string]interface{}{
+			"passed":        true,
+			"phase":         "green",
+			"output":        "<summary>",
+			"failedACs":     []string{},
+			"refactorNotes": []map[string]string{},
+		}
+	case state.TDDCycleRefactor:
+		return map[string]interface{}{
+			"passed":        true,
+			"phase":         "refactor",
+			"output":        "<summary>",
+			"refactorNotes": []map[string]string{},
+		}
+	default:
+		return map[string]interface{}{
+			"completed": []string{},
+			"remaining": []string{},
+			"blocked":   []string{},
+		}
+	}
+}
+
+func loadExecutionSpec(root string, st state.StateFile) (*spec.ParsedSpec, error) {
+	if st.Spec == nil || strings.TrimSpace(*st.Spec) == "" {
+		return nil, fmt.Errorf("execution state has no active spec; cannot build execution contract")
+	}
+
+	parsed, err := spec.ParseSpec(root, *st.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("parse spec %q: %w", *st.Spec, err)
+	}
+	if parsed == nil {
+		return nil, fmt.Errorf("parse spec %q: empty parsed spec", *st.Spec)
+	}
+	return parsed, nil
 }
 
 // logBlockedFile writes a blocked log entry.

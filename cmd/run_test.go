@@ -19,7 +19,9 @@ import (
 	"strings"
 	"testing"
 
+	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
 	"github.com/pragmataW/tddmaster/internal/runner"
+	specpkg "github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
 )
 
@@ -69,8 +71,29 @@ func seedMinimalState(t *testing.T, root string, phase state.Phase, tools []stat
 	// Write state.json with the requested phase.
 	st := state.CreateInitialState()
 	st.Phase = phase
-	if err := state.WriteState(root, st); err != nil {
-		t.Fatalf("WriteState: %v", err)
+
+	if phase == state.PhaseExecuting {
+		specName := "run-smoke"
+		specPath := filepath.Join(state.TddmasterDir, "specs", specName, "spec.md")
+		specDir := filepath.Join(root, state.TddmasterDir, "specs", specName)
+		if err := os.MkdirAll(specDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll(spec dir): %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(renderRunSpecContent([]state.SpecTask{
+			{ID: "task-1", Title: "Default run task"},
+		})), 0o644); err != nil {
+			t.Fatalf("WriteFile(spec.md): %v", err)
+		}
+		st.Spec = &specName
+		st.SpecState.Path = &specPath
+		st.SpecState.Status = "approved"
+		if err := state.WriteStateAndSpec(root, st); err != nil {
+			t.Fatalf("WriteStateAndSpec: %v", err)
+		}
+	} else {
+		if err := state.WriteState(root, st); err != nil {
+			t.Fatalf("WriteState: %v", err)
+		}
 	}
 
 	// Write manifest.yml — the tddmaster section must exist so IsInitialized passes.
@@ -85,6 +108,31 @@ func seedMinimalState(t *testing.T, root string, phase state.Phase, tools []stat
 
 	// Also create the .state/blocked.log parent dir (needed if block path is exercised).
 	_ = os.MkdirAll(filepath.Join(root, state.TddmasterDir, ".state"), 0o755)
+}
+
+func renderRunSpecContent(tasks []state.SpecTask) string {
+	if len(tasks) == 0 {
+		tasks = []state.SpecTask{{ID: "task-1", Title: "Default run task"}}
+	}
+
+	var lines []string
+	lines = append(lines, "# Spec: run-test", "", "## Tasks", "")
+	for _, task := range tasks {
+		check := " "
+		if task.Completed {
+			check = "x"
+		}
+		title := task.Title
+		if strings.TrimSpace(title) == "" {
+			title = "Untitled task"
+		}
+		lines = append(lines, fmt.Sprintf("- [%s] %s: %s", check, task.ID, title))
+		if len(task.Covers) > 0 {
+			lines = append(lines, "  Covers: "+strings.Join(task.Covers, ", "))
+		}
+	}
+	lines = append(lines, "", "## Verification", "", "- go test ./...")
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // seedCompletedState seeds a state that is already COMPLETED so the loop exits
@@ -125,6 +173,128 @@ func seedBlockedState(t *testing.T, root string, reason string) {
 	if err := state.WriteManifest(root, manifest); err != nil {
 		t.Fatalf("WriteManifest: %v", err)
 	}
+}
+
+func seedSpecApprovedRunState(t *testing.T, root, specName string, taskTDDSelected *bool, overrideTasks []state.SpecTask) {
+	t.Helper()
+
+	if err := state.ScaffoldDir(root); err != nil {
+		t.Fatalf("ScaffoldDir: %v", err)
+	}
+
+	specDir := filepath.Join(root, state.TddmasterDir, "specs", specName)
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(spec dir): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(renderRunSpecContent(overrideTasks)), 0o644); err != nil {
+		t.Fatalf("WriteFile(spec.md): %v", err)
+	}
+
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseSpecApproved
+	st.Spec = &specName
+	specPath := filepath.Join(state.TddmasterDir, "specs", specName, "spec.md")
+	st.SpecState.Path = &specPath
+	st.SpecState.Status = "approved"
+	st.TaskTDDSelected = taskTDDSelected
+	st.OverrideTasks = append([]state.SpecTask(nil), overrideTasks...)
+
+	if err := state.WriteStateAndSpec(root, st); err != nil {
+		t.Fatalf("WriteStateAndSpec: %v", err)
+	}
+
+	manifest := state.CreateInitialManifest([]string{}, []state.CodingToolId{"claude-code"}, state.ProjectTraits{})
+	if err := state.WriteManifest(root, manifest); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+}
+
+func seedExecutingSpecRunState(
+	t *testing.T,
+	root, specName, specContent string,
+	manifest state.NosManifest,
+	mutate func(*state.StateFile),
+) {
+	t.Helper()
+
+	if err := state.ScaffoldDir(root); err != nil {
+		t.Fatalf("ScaffoldDir: %v", err)
+	}
+
+	specDir := filepath.Join(root, state.TddmasterDir, "specs", specName)
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(spec dir): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(specDir, "spec.md"), []byte(specContent), 0o644); err != nil {
+		t.Fatalf("WriteFile(spec.md): %v", err)
+	}
+
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseExecuting
+	st.Spec = &specName
+	specPath := filepath.Join(state.TddmasterDir, "specs", specName, "spec.md")
+	st.SpecState.Path = &specPath
+	st.SpecState.Status = "approved"
+	if mutate != nil {
+		mutate(&st)
+	}
+
+	if err := state.WriteStateAndSpec(root, st); err != nil {
+		t.Fatalf("WriteStateAndSpec: %v", err)
+	}
+	if err := state.WriteManifest(root, manifest); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+	_ = os.MkdirAll(filepath.Join(root, state.TddmasterDir, ".state"), 0o755)
+}
+
+func seedExecutingStateWithoutSpec(t *testing.T, root string, manifest state.NosManifest) {
+	t.Helper()
+
+	if err := state.ScaffoldDir(root); err != nil {
+		t.Fatalf("ScaffoldDir: %v", err)
+	}
+
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseExecuting
+	if err := state.WriteState(root, st); err != nil {
+		t.Fatalf("WriteState: %v", err)
+	}
+	if err := state.WriteManifest(root, manifest); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+}
+
+func seedExecutingStateWithMissingSpecFile(t *testing.T, root, specName string, manifest state.NosManifest) {
+	t.Helper()
+
+	if err := state.ScaffoldDir(root); err != nil {
+		t.Fatalf("ScaffoldDir: %v", err)
+	}
+
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseExecuting
+	st.Spec = &specName
+	specPath := filepath.Join(state.TddmasterDir, "specs", specName, "spec.md")
+	st.SpecState.Path = &specPath
+	st.SpecState.Status = "approved"
+	if err := state.WriteStateAndSpec(root, st); err != nil {
+		t.Fatalf("WriteStateAndSpec: %v", err)
+	}
+	if err := state.WriteManifest(root, manifest); err != nil {
+		t.Fatalf("WriteManifest: %v", err)
+	}
+}
+
+func makeRunManifest(tddMode bool) state.NosManifest {
+	manifest := state.CreateInitialManifest([]string{}, []state.CodingToolId{"claude-code"}, state.ProjectTraits{})
+	if manifest.Tdd == nil {
+		manifest.Tdd = &state.Manifest{}
+	}
+	manifest.Tdd.TddMode = tddMode
+	manifest.Tdd.MaxVerificationRetries = 3
+	manifest.Tdd.MaxRefactorRounds = 3
+	return manifest
 }
 
 // setProjectRoot sets the TDDMASTER_PROJECT_ROOT env var and returns a cleanup
@@ -172,6 +342,112 @@ func executeRunCmd(args []string) error {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 	return cmd.Execute()
+}
+
+func TestRunCmd_SpecApproved_RefusesWhenTDDSelectionPending(t *testing.T) {
+	root := t.TempDir()
+	specName := "demo-spec"
+	seedSpecApprovedRunState(t, root, specName, nil, []state.SpecTask{
+		{ID: "task-1", Title: "Implement login"},
+	})
+	setProjectRoot(t, root)
+
+	selected := false
+	swapRunnerSelect(t, func(_ *state.NosManifest, _ string) (runner.Runner, error) {
+		selected = true
+		return &fakeRunner{name: "claude-code"}, nil
+	})
+
+	err := executeRunCmd([]string{"--spec", specName, "--tool", "claude-code", "--max-iterations", "1"})
+	if err == nil {
+		t.Fatal("want error when TDD selection is still pending, got nil")
+	}
+	if !strings.Contains(err.Error(), "tdd-all") || !strings.Contains(err.Error(), "tdd-none") {
+		t.Errorf("error should point user to TDD selection commands; got %q", err.Error())
+	}
+	if selected {
+		t.Error("runnerSelect must not be called when SPEC_APPROVED is still gated on TDD selection")
+	}
+
+	mainState, readErr := state.ReadState(root)
+	if readErr != nil {
+		t.Fatalf("ReadState: %v", readErr)
+	}
+	if mainState.Phase != state.PhaseSpecApproved {
+		t.Errorf("main state phase: want %s, got %s", state.PhaseSpecApproved, mainState.Phase)
+	}
+
+	specState, readErr := state.ReadSpecState(root, specName)
+	if readErr != nil {
+		t.Fatalf("ReadSpecState: %v", readErr)
+	}
+	if specState.Phase != state.PhaseSpecApproved {
+		t.Errorf("spec state phase: want %s, got %s", state.PhaseSpecApproved, specState.Phase)
+	}
+
+	resolvedState, resolveErr := state.ResolveState(root, &specName)
+	if resolveErr != nil {
+		t.Fatalf("ResolveState: %v", resolveErr)
+	}
+	if resolvedState.Phase != state.PhaseSpecApproved {
+		t.Errorf("resolved spec phase: want %s, got %s", state.PhaseSpecApproved, resolvedState.Phase)
+	}
+}
+
+func TestRunCmd_SpecApproved_StartsExecutionAfterTDDSelectionAndSyncsSpecState(t *testing.T) {
+	root := t.TempDir()
+	specName := "demo-spec"
+	truth := true
+	seedSpecApprovedRunState(t, root, specName, &truth, []state.SpecTask{
+		{ID: "task-1", Title: "Implement login", TDDEnabled: &truth},
+	})
+	setProjectRoot(t, root)
+
+	fake := &fakeRunner{name: "claude-code"}
+	swapRunnerSelect(t, func(_ *state.NosManifest, _ string) (runner.Runner, error) {
+		return fake, nil
+	})
+
+	err := executeRunCmd([]string{"--spec", specName, "--tool", "claude-code", "--max-iterations", "1"})
+	if err == nil {
+		t.Fatal("want non-nil error when max iterations are exhausted, got nil")
+	}
+	if !strings.Contains(err.Error(), "2") {
+		t.Errorf("error should mention exit code 2 after one iteration; got %q", err.Error())
+	}
+	if !fake.invoked {
+		t.Fatal("runner should be invoked after the SPEC_APPROVED gate is satisfied")
+	}
+
+	mainState, readErr := state.ReadState(root)
+	if readErr != nil {
+		t.Fatalf("ReadState: %v", readErr)
+	}
+	if mainState.Phase != state.PhaseExecuting {
+		t.Errorf("main state phase: want %s, got %s", state.PhaseExecuting, mainState.Phase)
+	}
+	if mainState.Execution.TDDCycle != state.TDDCycleRed {
+		t.Errorf("main state TDD cycle: want %q, got %q", state.TDDCycleRed, mainState.Execution.TDDCycle)
+	}
+
+	specState, readErr := state.ReadSpecState(root, specName)
+	if readErr != nil {
+		t.Fatalf("ReadSpecState: %v", readErr)
+	}
+	if specState.Phase != state.PhaseExecuting {
+		t.Errorf("spec state phase: want %s, got %s", state.PhaseExecuting, specState.Phase)
+	}
+	if specState.Execution.TDDCycle != state.TDDCycleRed {
+		t.Errorf("spec state TDD cycle: want %q, got %q", state.TDDCycleRed, specState.Execution.TDDCycle)
+	}
+
+	resolvedState, resolveErr := state.ResolveState(root, &specName)
+	if resolveErr != nil {
+		t.Fatalf("ResolveState: %v", resolveErr)
+	}
+	if resolvedState.Phase != state.PhaseExecuting {
+		t.Errorf("resolved spec phase: want %s, got %s", state.PhaseExecuting, resolvedState.Phase)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -617,6 +893,286 @@ func TestRunCmd_RunRequestPrompt_MatchesBuildAgentPrompt(t *testing.T) {
 	// We assert the prompt contains the canonical tddmaster progress reporting instruction.
 	if !strings.Contains(capturedPrompt, "next") {
 		t.Errorf("prompt should contain 'next' (progress reporting instruction); got: %q", capturedPrompt)
+	}
+}
+
+func TestRunCmd_RunRequestPrompt_UsesParsedExecutionContract(t *testing.T) {
+	root := t.TempDir()
+	specName := "execution-contract"
+	specContent := `# Spec: execution-contract
+
+## Tasks
+
+- [ ] task-1: Implement execution contract
+  Files: ` + "`cmd/run.go`" + `, ` + "`internal/context/compiler.go`" + `
+  Covers: EC-1
+- [ ] task-2: Write docs
+
+## Verification
+
+- go test ./...
+`
+	revision := "If the verifier rejects a test, ask the user before changing it."
+	manifest := makeRunManifest(false)
+	seedExecutingSpecRunState(t, root, specName, specContent, manifest, func(st *state.StateFile) {
+		st.Discovery.Answers = []state.DiscoveryAnswer{
+			{QuestionID: "verification", Answer: "- Cover timeout recovery\n- Happy path smoke test"},
+		}
+		st.Discovery.Premises = []state.Premise{
+			{Text: "Tests can be rewritten automatically", Agreed: false, Revision: &revision},
+		}
+	})
+	setProjectRoot(t, root)
+
+	var capturedPrompt string
+	fake := &fakeRunner{
+		name: "claude-code",
+		invokeFn: func(_ context.Context, req runner.RunRequest) (*runner.RunResult, error) {
+			capturedPrompt = req.Prompt
+			st := state.CreateInitialState()
+			st.Phase = state.PhaseCompleted
+			_ = state.WriteState(root, st)
+			return &runner.RunResult{ExitCode: 0}, nil
+		},
+	}
+
+	swapRunnerSelect(t, func(_ *state.NosManifest, _ string) (runner.Runner, error) {
+		return fake, nil
+	})
+
+	err := executeRunCmd([]string{"--tool", "claude-code", "--max-iterations", "2"})
+	if err != nil {
+		t.Fatalf("executeRunCmd: %v", err)
+	}
+
+	for _, want := range []string{
+		"executionData",
+		"task-1",
+		"Implement execution contract",
+		"cmd/run.go",
+		"internal/context/compiler.go",
+		"If the verifier rejects a test, ask the user before changing it.",
+	} {
+		if !strings.Contains(capturedPrompt, want) {
+			t.Errorf("prompt should contain %q; got: %q", want, capturedPrompt)
+		}
+	}
+	if strings.Contains(capturedPrompt, `"tddPhase":`) {
+		t.Errorf("non-TDD prompt must not surface tddPhase; got: %q", capturedPrompt)
+	}
+}
+
+func TestRunCmd_ExecutionWithoutActiveSpec_FailsClosed(t *testing.T) {
+	root := t.TempDir()
+	seedExecutingStateWithoutSpec(t, root, makeRunManifest(false))
+	setProjectRoot(t, root)
+
+	invoked := false
+	swapRunnerSelect(t, func(_ *state.NosManifest, _ string) (runner.Runner, error) {
+		return &fakeRunner{
+			name: "claude-code",
+			invokeFn: func(_ context.Context, _ runner.RunRequest) (*runner.RunResult, error) {
+				invoked = true
+				return &runner.RunResult{ExitCode: 0}, nil
+			},
+		}, nil
+	})
+
+	err := executeRunCmd([]string{"--tool", "claude-code", "--max-iterations", "1"})
+	if err == nil {
+		t.Fatal("want error when execution state has no active spec, got nil")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "active spec") {
+		t.Errorf("error should mention active spec; got %q", err.Error())
+	}
+	if invoked {
+		t.Error("Invoke must not run when execution contract cannot be built")
+	}
+}
+
+func TestRunCmd_ExecutionWithMissingSpecFile_FailsClosed(t *testing.T) {
+	root := t.TempDir()
+	seedExecutingStateWithMissingSpecFile(t, root, "missing-spec", makeRunManifest(false))
+	setProjectRoot(t, root)
+
+	invoked := false
+	swapRunnerSelect(t, func(_ *state.NosManifest, _ string) (runner.Runner, error) {
+		return &fakeRunner{
+			name: "claude-code",
+			invokeFn: func(_ context.Context, _ runner.RunRequest) (*runner.RunResult, error) {
+				invoked = true
+				return &runner.RunResult{ExitCode: 0}, nil
+			},
+		}, nil
+	})
+
+	err := executeRunCmd([]string{"--tool", "claude-code", "--max-iterations", "1"})
+	if err == nil {
+		t.Fatal("want error when active spec file is missing, got nil")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "parse spec") {
+		t.Errorf("error should mention parse spec failure; got %q", err.Error())
+	}
+	if invoked {
+		t.Error("Invoke must not run when spec parsing fails")
+	}
+}
+
+func TestBuildAgentPrompt_RequiresExecutionData(t *testing.T) {
+	_, err := buildAgentPrompt(ctxpkg.NextOutput{Phase: "EXECUTING"})
+	if err == nil {
+		t.Fatal("want error when executionData is missing, got nil")
+	}
+	if !strings.Contains(err.Error(), "executionData") {
+		t.Errorf("error should mention executionData; got %q", err.Error())
+	}
+}
+
+func assertPromptSectionOrder(t *testing.T, prompt string, sections []string) {
+	t.Helper()
+
+	last := -1
+	for _, section := range sections {
+		idx := strings.Index(prompt, section)
+		if idx == -1 {
+			t.Fatalf("prompt should contain section %q; got: %q", section, prompt)
+		}
+		if idx <= last {
+			t.Fatalf("section %q should appear after the previous ordered section; got: %q", section, prompt)
+		}
+		last = idx
+	}
+}
+
+func TestBuildAgentPrompt_IncludesTDDExecutionPayload(t *testing.T) {
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseExecuting
+	name := "prompt-tdd"
+	st.Spec = &name
+	st.Execution.TDDCycle = state.TDDCycleRefactor
+	st.Execution.RefactorRounds = 1
+	st.Execution.LastVerification = &state.VerificationResult{
+		Passed:    true,
+		Phase:     state.TDDCycleRefactor,
+		Timestamp: "ts",
+		RefactorNotes: []state.RefactorNote{
+			{File: "cmd/run.go", Suggestion: "Inline prompt contract", Rationale: "keep contract close to execution loop"},
+		},
+	}
+	manifest := makeRunManifest(true)
+
+	compiled := ctxpkg.Compile(
+		st,
+		nil,
+		nil,
+		&manifest,
+		&specpkg.ParsedSpec{
+			Name: "prompt-tdd",
+			Tasks: []specpkg.ParsedTask{
+				{ID: "task-1", Title: "Repair prompt contract", Files: []string{"cmd/run.go"}, Covers: []string{"EC-1"}},
+			},
+		},
+		nil,
+		nil,
+		nil,
+		nil,
+		0,
+	)
+
+	prompt, err := buildAgentPrompt(compiled)
+	if err != nil {
+		t.Fatalf("buildAgentPrompt: %v", err)
+	}
+
+	assertPromptSectionOrder(t, prompt, []string{
+		"Current phase:",
+		"Current task:",
+		"Files touched or suggested:",
+		"Edge cases:",
+		"TDD phase:",
+		"Verifier / refactor instructions:",
+		"Exact report JSON expected back:",
+		"Execution contract (`executionData`):",
+	})
+
+	for _, want := range []string{
+		"executionData",
+		`"tddPhase": "refactor"`,
+		`"refactorInstructions"`,
+		"Inline prompt contract",
+		"cmd/run.go",
+		`"refactorApplied": true`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt should contain %q; got: %q", want, prompt)
+		}
+	}
+}
+
+func TestBuildAgentPrompt_IncludesStatusReportAndVerificationFailurePayload(t *testing.T) {
+	st := state.CreateInitialState()
+	st.Phase = state.PhaseExecuting
+	name := "prompt-status"
+	st.Spec = &name
+	st.Execution.AwaitingStatusReport = true
+	st.Execution.TDDCycle = state.TDDCycleGreen
+	st.Execution.LastVerification = &state.VerificationResult{
+		Passed:                false,
+		Output:                "2 tests failed",
+		UncoveredEdgeCases:    []string{"EC-1"},
+		VerificationFailCount: 1,
+	}
+	manifest := makeRunManifest(true)
+
+	compiled := ctxpkg.Compile(
+		st,
+		nil,
+		nil,
+		&manifest,
+		&specpkg.ParsedSpec{
+			Name: "prompt-status",
+			Tasks: []specpkg.ParsedTask{
+				{ID: "task-1", Title: "Verify status payload"},
+			},
+		},
+		nil,
+		nil,
+		nil,
+		nil,
+		0,
+	)
+
+	prompt, err := buildAgentPrompt(compiled)
+	if err != nil {
+		t.Fatalf("buildAgentPrompt: %v", err)
+	}
+
+	assertPromptSectionOrder(t, prompt, []string{
+		"Current phase:",
+		"Current task:",
+		"Files touched or suggested:",
+		"Edge cases:",
+		"TDD phase:",
+		"Verifier / refactor instructions:",
+		"Exact report JSON expected back:",
+		"Execution contract (`executionData`):",
+	})
+
+	for _, want := range []string{
+		`"statusReportRequired": true`,
+		`"statusReport"`,
+		`"verificationFailed": true`,
+		`"verificationOutput": "2 tests failed"`,
+		`"tddFailureReport"`,
+		`"completed": [`,
+		`"remaining": [`,
+		`"blocked": []`,
+		`"na": []`,
+		`"newIssues": []`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt should contain %q; got: %q", want, prompt)
+		}
 	}
 }
 

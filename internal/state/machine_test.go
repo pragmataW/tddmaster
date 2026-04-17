@@ -89,6 +89,7 @@ func TestStartSpec(t *testing.T) {
 		assert.False(t, result.Discovery.Completed)
 		assert.Equal(t, 0, result.Discovery.CurrentQuestion)
 		assert.Equal(t, []DiscoveryAnswer{}, result.Discovery.Answers)
+		assert.Equal(t, []DiscoveryPrefillQuestion{}, result.Discovery.Prefills)
 		assert.Equal(t, "none", result.SpecState.Status)
 		assert.Equal(t, 0, result.Execution.Iteration)
 		assert.Equal(t, []Decision{}, result.Decisions)
@@ -435,9 +436,32 @@ func TestAddSpecNote(t *testing.T) {
 
 func TestSetUserContext(t *testing.T) {
 	s := CreateInitialState()
+	s.Discovery.Prefills = []DiscoveryPrefillQuestion{
+		{QuestionID: "status_quo", Items: []DiscoveryPrefillItem{{Type: "STATED", Text: "old", Basis: "old"}}},
+	}
 	result := SetUserContext(s, "user wants feature X")
 	assert.Equal(t, "user wants feature X", *result.Discovery.UserContext)
 	assert.Equal(t, false, *result.Discovery.UserContextProcessed)
+	assert.Empty(t, result.Discovery.Prefills)
+}
+
+func TestSetDiscoveryPrefills(t *testing.T) {
+	s := CreateInitialState()
+	prefills := []DiscoveryPrefillQuestion{
+		{
+			QuestionID: "verification",
+			Items: []DiscoveryPrefillItem{
+				{Type: "INFERRED", Text: "Add regression coverage.", Basis: "bug/regression wording"},
+			},
+		},
+	}
+
+	result := SetDiscoveryPrefills(s, prefills)
+	require.Len(t, result.Discovery.Prefills, 1)
+	assert.Equal(t, "verification", result.Discovery.Prefills[0].QuestionID)
+
+	prefills[0].Items[0].Text = "mutated"
+	assert.Equal(t, "Add regression coverage.", result.Discovery.Prefills[0].Items[0].Text)
 }
 
 func TestMarkUserContextProcessed(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/pragmataW/tddmaster/internal/defaults"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
+	"github.com/pragmataW/tddmaster/internal/tddcontract"
 )
 
 // =============================================================================
@@ -142,10 +143,11 @@ type NextOutput struct {
 
 // DiscoveryQuestion is a discovery question as presented in output.
 type DiscoveryQuestion struct {
-	ID       string   `json:"id"`
-	Text     string   `json:"text"`
-	Concerns []string `json:"concerns"`
-	Extras   []string `json:"extras"`
+	ID       string                       `json:"id"`
+	Text     string                       `json:"text"`
+	Concerns []string                     `json:"concerns"`
+	Extras   []string                     `json:"extras"`
+	Prefills []state.DiscoveryPrefillItem `json:"prefills,omitempty"`
 }
 
 // PreDiscoveryResearch is injected when tech version terms are detected in description.
@@ -633,7 +635,7 @@ func buildBehavioral(
 			}, append(mandatoryRules,
 				optionRule,
 				"Encourage full context: 'Tell me what you want to build — one-liner, detailed requirements, meeting notes, anything.' Slug is auto-generated. Pass full text to `tddmaster spec new \"...\"`.",
-				"After spec new, ask: full discovery, quick discovery, or skip to spec draft. Never skip without asking.",
+				"After spec new, listen first, then ask the user to choose a discovery mode: full, validate, technical-depth, ship-fast, or explore.",
 				"Every task gets a spec. No exceptions. A one-liner fix, a config change, a 'simple' refactor — all get specs. The spec can be short but it must exist. 'Too simple for a spec' is the anti-pattern.",
 			)...),
 			Tone: "Welcoming. Present choices, then wait.",
@@ -661,15 +663,15 @@ func buildBehavioral(
 		return BehavioralBlock{
 			ModeOverride: strPtr("plan mode. DO NOT create, edit, or write any files. DO NOT run state-modifying commands. MAY read files and run read-only commands (cat, ls, grep, git log, git diff)."),
 			Rules: append(mandatoryRules,
-				fmt.Sprintf("%s Never answer questions yourself. Never submit answers without user confirmation. Pre-fill suggested answers from detailed descriptions — user must confirm each. With a fully formed plan, skip questions but MUST run premise challenge and alternatives.", questionMethod),
+				fmt.Sprintf("%s Never answer questions yourself. Never submit answers without user confirmation. Pre-fill suggested answers from detailed descriptions — user must confirm each. With a fully formed plan, keep discovery brief by confirming pre-filled answers one at a time, but MUST still run premise challenge and alternatives.", questionMethod),
 				"DO NOT create, edit, or write any files.",
 				"DO NOT run shell commands that modify state.",
 				"You MAY read files and run read-only commands (cat, ls, grep, git log, git diff).",
-				"Pre-discovery: (1) pre-discovery codebase scan — read README, CLAUDE.md, design docs, last 20 commits, TODOs, existing specs, directory structure. Present a brief audit summary. (2) If `preDiscoveryResearch.required`, web-search every `extractedTerms` entry — report versions, API changes, deprecations. (3) Ask discovery mode: A) Explore scope B) Technical depth C) Validate my plan D) Ship fast. Adapt emphasis accordingly.",
+				"Pre-discovery: (1) pre-discovery codebase scan — read README, CLAUDE.md, design docs, last 20 commits, TODOs, existing specs, directory structure. Present a brief audit summary. (2) If `preDiscoveryResearch.required`, web-search every `extractedTerms` entry — report versions, API changes, deprecations. (3) Ask discovery mode using the real options: A) Full discovery B) Validate my plan C) Technical depth D) Ship fast E) Explore scope. Adapt emphasis accordingly.",
 				"Before starting discovery questions, challenge the user's initial spec description against codebase findings. Flag: hidden complexity, conflicts with existing code, scope mismatch, overlapping modules. Ask clarifying follow-ups.",
 				"When asking questions, offer concrete options from codebase knowledge alongside the open-ended question (e.g., 'I see three scenarios: A)... B)... C)... D) Something else'). Push back on vague answers. Follow up on short answer with 'Can you be more specific?'",
 				fmt.Sprintf("%s Then: (1) expansion opportunities as numbered proposals with effort (S/M/L/XL), risk, completeness delta — options: Add/Defer/Skip. (2) Architectural decisions that BLOCK implementation — present with options, RECOMMENDATION, completeness scores. Unresolved = risk flag. (3) Error/rescue map: codepath | failure mode | handling. Flag CRITICAL GAPS as decisions.", dreamBase),
-				"Present DISCOVERY SUMMARY for confirmation: intent, scope, dream state, expansions, architectural decisions, error map. Ask for confirmation before generating spec. Submit all answers together in one `tddmaster next --answer` JSON call.",
+				"Present DISCOVERY SUMMARY for confirmation: intent, scope, dream state, expansions, architectural decisions, error map. Ask for confirmation before generating spec. Keep discovery sequential: submit each confirmed answer as its own `tddmaster next --answer` call.",
 			),
 			Tone: "Curious interviewer with a stake in the answers. Comes PREPARED — read the codebase first. Challenge assumptions, think about architecture and failure modes.",
 		}
@@ -1509,6 +1511,50 @@ func computeContributors(
 	return contributors
 }
 
+func buildDiscoveryQuestion(question QuestionWithExtras, prefills []state.DiscoveryPrefillQuestion) DiscoveryQuestion {
+	extras := make([]string, len(question.Extras))
+	for i, e := range question.Extras {
+		extras[i] = e.Text
+	}
+
+	out := DiscoveryQuestion{
+		ID:       question.ID,
+		Text:     question.Text,
+		Concerns: question.Concerns,
+		Extras:   extras,
+	}
+	if items := state.GetPrefillsForQuestion(prefills, question.ID); len(items) > 0 {
+		out.Prefills = items
+	}
+	return out
+}
+
+func selectCurrentDiscoveryQuestion(
+	questions []QuestionWithExtras,
+	answers []state.DiscoveryAnswer,
+	currentIdx int,
+) (*QuestionWithExtras, int) {
+	answeredIDs := make(map[string]bool, len(answers))
+	for _, answer := range answers {
+		answeredIDs[answer.QuestionID] = true
+	}
+
+	if currentIdx >= 0 && currentIdx < len(questions) {
+		candidate := questions[currentIdx]
+		if !answeredIDs[candidate.ID] {
+			return &candidate, currentIdx
+		}
+	}
+
+	for i := range questions {
+		if !answeredIDs[questions[i].ID] {
+			return &questions[i], i
+		}
+	}
+
+	return nil, len(questions)
+}
+
 func compileDiscovery(
 	st state.StateFile,
 	activeConcerns []state.ConcernDefinition,
@@ -1670,6 +1716,7 @@ func compileDiscovery(
 		specDescription = *st.SpecDescription
 	}
 	isRichDescription := len(specDescription) > 500
+	hasPersistedPrefills := len(st.Discovery.Prefills) > 0
 
 	// Premise context
 	var agreedPremises []string
@@ -1733,15 +1780,10 @@ func compileDiscovery(
 		return base
 	}
 
+	currentQ, currentIdx := selectCurrentDiscoveryQuestion(allQuestions, st.Discovery.Answers, st.Discovery.CurrentQuestion)
+
 	// Agent mode: return only current question
 	if isAgent {
-		currentIdx := st.Discovery.CurrentQuestion
-		var currentQ *QuestionWithExtras
-		if currentIdx < len(allQuestions) {
-			q := allQuestions[currentIdx]
-			currentQ = &q
-		}
-
 		if currentQ == nil {
 			return DiscoveryOutput{
 				Phase:         "DISCOVERY",
@@ -1755,17 +1797,7 @@ func compileDiscovery(
 			}
 		}
 
-		extras := make([]string, len(currentQ.Extras))
-		for i, e := range currentQ.Extras {
-			extras[i] = e.Text
-		}
-
-		question := DiscoveryQuestion{
-			ID:       currentQ.ID,
-			Text:     currentQ.Text,
-			Concerns: currentQ.Concerns,
-			Extras:   extras,
-		}
+		question := buildDiscoveryQuestion(*currentQ, st.Discovery.Prefills)
 
 		total := len(allQuestions)
 		agentOut := DiscoveryOutput{
@@ -1808,7 +1840,7 @@ func compileDiscovery(
 			}
 			if planCtx := buildPlanContext(planPath); planCtx != nil {
 				agentOut.PlanContext = planCtx
-			} else if isRichDescription {
+			} else if isRichDescription && !hasPersistedPrefills {
 				agentOut.RichDescription = &RichDescriptionOutput{
 					Provided:    true,
 					Length:      len(specDescription),
@@ -1840,28 +1872,6 @@ func compileDiscovery(
 		return agentOut
 	}
 
-	// Human mode: return all unanswered questions
-	answeredIDs := make(map[string]bool)
-	for _, a := range st.Discovery.Answers {
-		answeredIDs[a.QuestionID] = true
-	}
-
-	var unanswered []DiscoveryQuestion
-	for _, q := range allQuestions {
-		if !answeredIDs[q.ID] {
-			extras := make([]string, len(q.Extras))
-			for i, e := range q.Extras {
-				extras[i] = e.Text
-			}
-			unanswered = append(unanswered, DiscoveryQuestion{
-				ID:       q.ID,
-				Text:     q.Text,
-				Concerns: q.Concerns,
-				Extras:   extras,
-			})
-		}
-	}
-
 	history := st.RevisitHistory
 	var lastRevisit *state.RevisitEntry
 	if len(history) > 0 {
@@ -1869,24 +1879,33 @@ func compileDiscovery(
 	}
 	isRevisited := lastRevisit != nil
 
-	revisitInstruction := "Conduct a thorough discovery conversation. FIRST: perform a pre-discovery codebase scan (README, CLAUDE.md, recent git log, TODOs, directory structure) and present a brief audit summary. THEN: challenge the user's spec description against your findings. THEN: ask the discovery questions one at a time, offering concrete options based on codebase knowledge. AFTER questions: present a dream state table (current → this spec → future), scored expansion proposals, architectural decisions, and an error/rescue map. FINALLY: present a complete discovery synthesis for user confirmation before submitting answers as a JSON object."
+	revisitInstruction := "Conduct a thorough discovery conversation. FIRST: perform a pre-discovery codebase scan (README, CLAUDE.md, recent git log, TODOs, directory structure) and present a brief audit summary. THEN: challenge the user's spec description against your findings. THEN: ask the current discovery question, wait for the answer, and submit it immediately with `tddmaster next --answer=\"<answer>\"`. Continue one question at a time, offering concrete options based on codebase knowledge. AFTER questions: present a dream state table (current → this spec → future), scored expansion proposals, architectural decisions, and an error/rescue map. FINALLY: present a complete discovery synthesis for user confirmation before approve."
 	if isRevisited {
 		revisitInstruction = "This spec was revisited from EXECUTING. Previous discovery answers are preserved — review and revise as needed, or approve to regenerate tasks."
 	}
 
-	answerJSON := cs("next --answer='{\"status_quo\":\"...\",\"ambition\":\"...\",...}'", specName)
+	var questions []DiscoveryQuestion
+	if currentQ != nil {
+		questions = []DiscoveryQuestion{buildDiscoveryQuestion(*currentQ, st.Discovery.Prefills)}
+	} else {
+		questions = []DiscoveryQuestion{}
+	}
+
+	total := len(allQuestions)
 	out := DiscoveryOutput{
-		Phase:         "DISCOVERY",
-		Instruction:   revisitInstruction,
-		Questions:     unanswered,
-		AnsweredCount: answeredCount,
+		Phase:           "DISCOVERY",
+		Instruction:     revisitInstruction,
+		Questions:       questions,
+		AnsweredCount:   answeredCount,
+		CurrentQuestion: &currentIdx,
+		TotalQuestions:  &total,
 		Context: ContextBlock{
 			Rules:            rulesWithMode,
 			ConcernReminders: reminders,
 		},
 		Transition: struct {
 			OnComplete string `json:"onComplete"`
-		}{OnComplete: answerJSON},
+		}{OnComplete: cs("next --answer=\"<answer>\"", specName)},
 	}
 
 	if currentUser != nil {
@@ -1933,7 +1952,7 @@ func compileDiscovery(
 		}
 		if planCtx := buildPlanContext(planPath); planCtx != nil {
 			out.PlanContext = planCtx
-		} else if isRichDescription {
+		} else if isRichDescription && !hasPersistedPrefills {
 			out.RichDescription = &RichDescriptionOutput{
 				Provided:    true,
 				Length:      len(specDescription),
@@ -2392,24 +2411,11 @@ func buildTDDVerificationContext(cycle string) *TDDVerificationContext {
 	var instruction string
 	switch cycle {
 	case state.TDDCycleRed:
-		instruction = "RED phase (READ-ONLY): DO NOT run tests or type-checkers. DO NOT execute any shell command. " +
-			"Read each test file written in this iteration using your Read and Grep tools. " +
-			"Verify: (1) each test asserts behavior tied to a planned task or edge-case; " +
-			"(2) no placeholder/TODO/empty test bodies; " +
-			"(3) syntax is well-formed (imports resolve, function signatures match framework conventions). " +
-			"Return JSON: {\"passed\": true|false, \"phase\": \"red\", \"readOnly\": true, \"output\": \"<summary>\", \"results\": [...]}. " +
-			"`passed=true` means \"tests are well-formed and cover the planned tasks.\""
+		instruction = tddcontract.VerifierRedPhaseInstruction()
 	case state.TDDCycleGreen:
-		instruction = "GREEN phase: run the full test suite for the target ACs. Exit code MUST be zero — all tests MUST pass. " +
-			"If any test fails, set `passed=false` and report `reason='expected-pass-but-failed'` plus failing test names in `failedACs`. Set `refactorNotes=[]`. " +
-			"If tests pass, scan the modified files and produce `refactorNotes` — a JSON array of {file, suggestion, rationale} " +
-			"describing concrete improvements (dead code, duplication, naming, structure). An empty array means the code is already clean. " +
-			"Return JSON: {\"passed\": true|false, \"phase\": \"green\", \"output\": \"<summary>\", \"failedACs\": [...], \"refactorNotes\": [...]}."
+		instruction = tddcontract.VerifierGreenPhaseInstruction("", "")
 	case state.TDDCycleRefactor:
-		instruction = "REFACTOR phase: run the full suite. If red, reason='behavior-changed' (treated like GREEN regression). " +
-			"If green, produce refactorNotes — a JSON array of {file, suggestion, rationale} describing concrete improvements " +
-			"(dead code, duplication, naming, structure). An empty array is valid and means the task is clean. " +
-			"Return JSON: {\"passed\": true|false, \"phase\": \"refactor\", \"output\": \"<summary>\", \"refactorNotes\": [...]}."
+		instruction = tddcontract.VerifierRefactorPhaseInstruction("", "")
 	default:
 		return nil
 	}

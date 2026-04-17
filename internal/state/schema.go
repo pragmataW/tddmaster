@@ -148,23 +148,35 @@ type Delegation struct {
 	AnsweredAt  *string `json:"answeredAt,omitempty"`
 }
 
+type DiscoveryPrefillItem struct {
+	Type  string `json:"type"` // "STATED" | "INFERRED"
+	Text  string `json:"text"`
+	Basis string `json:"basis"`
+}
+
+type DiscoveryPrefillQuestion struct {
+	QuestionID string                 `json:"questionId"`
+	Items      []DiscoveryPrefillItem `json:"items"`
+}
+
 type DiscoveryState struct {
-	Answers               []DiscoveryAnswer `json:"answers"`
-	Completed             bool              `json:"completed"`
-	CurrentQuestion       int               `json:"currentQuestion"`
-	Audience              string            `json:"audience"` // "agent" | "human"
-	Approved              bool              `json:"approved"`
-	PlanPath              *string           `json:"planPath"`
-	Mode                  *DiscoveryMode    `json:"mode,omitempty"`
-	Premises              []Premise         `json:"premises,omitempty"`
-	SelectedApproach      *SelectedApproach `json:"selectedApproach,omitempty"`
-	PremisesCompleted     *bool             `json:"premisesCompleted,omitempty"`
-	AlternativesPresented *bool             `json:"alternativesPresented,omitempty"`
-	Contributors          []string          `json:"contributors,omitempty"`
-	Delegations           []Delegation      `json:"delegations,omitempty"`
-	FollowUps             []FollowUp        `json:"followUps,omitempty"`
-	UserContext           *string           `json:"userContext,omitempty"`
-	UserContextProcessed  *bool             `json:"userContextProcessed,omitempty"`
+	Answers               []DiscoveryAnswer          `json:"answers"`
+	Prefills              []DiscoveryPrefillQuestion `json:"prefills,omitempty"`
+	Completed             bool                       `json:"completed"`
+	CurrentQuestion       int                        `json:"currentQuestion"`
+	Audience              string                     `json:"audience"` // "agent" | "human"
+	Approved              bool                       `json:"approved"`
+	PlanPath              *string                    `json:"planPath"`
+	Mode                  *DiscoveryMode             `json:"mode,omitempty"`
+	Premises              []Premise                  `json:"premises,omitempty"`
+	SelectedApproach      *SelectedApproach          `json:"selectedApproach,omitempty"`
+	PremisesCompleted     *bool                      `json:"premisesCompleted,omitempty"`
+	AlternativesPresented *bool                      `json:"alternativesPresented,omitempty"`
+	Contributors          []string                   `json:"contributors,omitempty"`
+	Delegations           []Delegation               `json:"delegations,omitempty"`
+	FollowUps             []FollowUp                 `json:"followUps,omitempty"`
+	UserContext           *string                    `json:"userContext,omitempty"`
+	UserContextProcessed  *bool                      `json:"userContextProcessed,omitempty"`
 	// Jidoka C1: answers were batch-submitted by agent and need user confirmation.
 	BatchSubmitted *bool `json:"batchSubmitted,omitempty"`
 }
@@ -323,6 +335,7 @@ func CreateInitialState() StateFile {
 		Branch:          nil,
 		Discovery: DiscoveryState{
 			Answers:         []DiscoveryAnswer{},
+			Prefills:        []DiscoveryPrefillQuestion{},
 			Completed:       false,
 			CurrentQuestion: 0,
 			Audience:        "human",
@@ -466,6 +479,18 @@ func GetCombinedAnswer(answers []DiscoveryAnswer, questionID string) string {
 		result += a.Answer + " -- *" + a.User + "*"
 	}
 	return result
+}
+
+func GetPrefillsForQuestion(prefills []DiscoveryPrefillQuestion, questionID string) []DiscoveryPrefillItem {
+	for _, p := range prefills {
+		if p.QuestionID != questionID {
+			continue
+		}
+		result := make([]DiscoveryPrefillItem, len(p.Items))
+		copy(result, p.Items)
+		return result
+	}
+	return nil
 }
 
 // =============================================================================

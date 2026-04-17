@@ -46,6 +46,15 @@ func TestVerifierGreenPhaseBlock_SignalsExpectedPass(t *testing.T) {
 	assert.Contains(t, out, "expected-pass-but-failed")
 	assert.Contains(t, out, "deno test", "GREEN must include test command")
 	assert.Contains(t, out, "deno check", "GREEN must include type check command")
+	assert.Contains(t, out, "REQUIRED", "GREEN PASS must require refactorNotes field")
+}
+
+func TestVerifierReportBlock_DescribesGreenAndRefactorNotesContract(t *testing.T) {
+	out := VerifierInstructionsAllPhases("deno check", "deno test")
+	assert.Contains(t, out, "required in GREEN and REFACTOR",
+		"report schema must state refactorNotes is valid in both GREEN and REFACTOR")
+	assert.NotContains(t, out, "only populated in REFACTOR phase",
+		"stale contract: refactorNotes is also valid on GREEN PASS")
 }
 
 func TestVerifierRefactorPhaseBlock_MentionsNotesContract(t *testing.T) {

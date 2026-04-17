@@ -83,6 +83,7 @@ func StartSpec(state StateFile, specName, branch string, description *string) (S
 	state.Branch = &branch
 	state.Discovery = DiscoveryState{
 		Answers:         []DiscoveryAnswer{},
+		Prefills:        []DiscoveryPrefillQuestion{},
 		Completed:       false,
 		CurrentQuestion: 0,
 		Audience:        "human",
@@ -561,7 +562,27 @@ func AddSpecNote(state StateFile, text string, user *UserInfo) StateFile {
 func SetUserContext(state StateFile, context string) StateFile {
 	f := false
 	state.Discovery.UserContext = &context
+	state.Discovery.Prefills = []DiscoveryPrefillQuestion{}
 	state.Discovery.UserContextProcessed = &f
+	return state
+}
+
+// SetDiscoveryPrefills stores persisted discovery suggestions derived from user context.
+func SetDiscoveryPrefills(state StateFile, prefills []DiscoveryPrefillQuestion) StateFile {
+	if prefills == nil {
+		state.Discovery.Prefills = []DiscoveryPrefillQuestion{}
+		return state
+	}
+	copied := make([]DiscoveryPrefillQuestion, len(prefills))
+	for i, prefill := range prefills {
+		items := make([]DiscoveryPrefillItem, len(prefill.Items))
+		copy(items, prefill.Items)
+		copied[i] = DiscoveryPrefillQuestion{
+			QuestionID: prefill.QuestionID,
+			Items:      items,
+		}
+	}
+	state.Discovery.Prefills = copied
 	return state
 }
 
@@ -1000,6 +1021,7 @@ func ResetToIdle(state StateFile) (StateFile, error) {
 	state.Branch = nil
 	state.Discovery = DiscoveryState{
 		Answers:         []DiscoveryAnswer{},
+		Prefills:        []DiscoveryPrefillQuestion{},
 		Completed:       false,
 		CurrentQuestion: 0,
 		Audience:        "human",

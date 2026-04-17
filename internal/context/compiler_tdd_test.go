@@ -148,8 +148,8 @@ func TestCompile_SpecDraftIncludesDerivedEdgeCases(t *testing.T) {
 
 	out := ctx.Compile(st, nil, nil, nil, nil, nil, nil, nil, nil, 0)
 	require.NotNil(t, out.SpecDraftData)
-	assert.Contains(t, out.SpecDraftData.EdgeCases, "Cover timeout recovery")
 	assert.Contains(t, out.SpecDraftData.EdgeCases, "If the verifier rejects a test, ask the user before changing it.")
+	assert.NotContains(t, out.SpecDraftData.EdgeCases, "Cover timeout recovery")
 	require.NotNil(t, out.SpecDraftData.SelfReview)
 	assert.Contains(t, strings.Join(out.SpecDraftData.SelfReview.Checks, "\n"), "Edge cases")
 }
@@ -177,7 +177,8 @@ func TestCompile_ExecutionIncludesEdgeCasesAndTestWriterGuidance(t *testing.T) {
 
 	out := ctx.Compile(st, nil, nil, nil, parsedSpec, nil, nil, nil, nil, 0)
 	require.NotNil(t, out.ExecutionData)
-	assert.Contains(t, out.ExecutionData.EdgeCases, "Cover timeout recovery")
+	assert.NotContains(t, out.ExecutionData.EdgeCases, "Cover timeout recovery")
+	assert.Contains(t, out.ExecutionData.EdgeCases, "If the verifier rejects a test, ask the user before changing it.")
 	assert.Contains(t, out.ExecutionData.Instruction, "edge cases")
 	assert.Contains(t, out.ExecutionData.Instruction, "test-writer")
 	assert.Contains(t, strings.Join(out.Behavioral.Rules, "\n"), "pass them explicitly to the test-writer")
@@ -288,9 +289,9 @@ func TestCompile_TDDFailureReport_PresentWhenVerificationFailed(t *testing.T) {
 	specName := "my-spec"
 	st.Spec = &specName
 	st.Execution.LastVerification = &state.VerificationResult{
-		Passed:               false,
-		Output:               "2 tests failed",
-		UncoveredEdgeCases:   []string{"EC-3"},
+		Passed:                false,
+		Output:                "2 tests failed",
+		UncoveredEdgeCases:    []string{"EC-3"},
 		VerificationFailCount: 1,
 	}
 
@@ -324,8 +325,8 @@ func TestCompile_TDDFailureReport_WillBlock_WhenFailCountAtMax(t *testing.T) {
 	specName := "my-spec"
 	st.Spec = &specName
 	st.Execution.LastVerification = &state.VerificationResult{
-		Passed:               false,
-		Output:               "failed",
+		Passed:                false,
+		Output:                "failed",
 		VerificationFailCount: 3,
 	}
 
@@ -341,8 +342,8 @@ func TestCompile_TDDFailureReport_NilWhenTDDDisabled(t *testing.T) {
 	specName := "my-spec"
 	st.Spec = &specName
 	st.Execution.LastVerification = &state.VerificationResult{
-		Passed:               false,
-		Output:               "failed",
+		Passed:                false,
+		Output:                "failed",
 		VerificationFailCount: 2,
 	}
 
@@ -499,6 +500,6 @@ func TestCompile_ExecutionStatusReportCarriesEdgeCases(t *testing.T) {
 
 	out := ctx.Compile(st, nil, nil, nil, nil, nil, nil, nil, nil, 0)
 	require.NotNil(t, out.ExecutionData)
-	assert.Contains(t, out.ExecutionData.EdgeCases, "Cover timeout recovery")
 	assert.Contains(t, out.ExecutionData.EdgeCases, "If the verifier rejects a test, ask the user before changing it.")
+	assert.NotContains(t, out.ExecutionData.EdgeCases, "Cover timeout recovery")
 }

@@ -21,6 +21,7 @@ func TestCreateInitialState(t *testing.T) {
 	assert.Equal(t, "human", s.Discovery.Audience)
 	assert.Nil(t, s.Discovery.PlanPath)
 	assert.Equal(t, []DiscoveryAnswer{}, s.Discovery.Answers)
+	assert.Equal(t, []DiscoveryPrefillQuestion{}, s.Discovery.Prefills)
 	assert.Equal(t, "none", s.SpecState.Status)
 	assert.Nil(t, s.SpecState.Path)
 	assert.Equal(t, 0, s.Execution.Iteration)
@@ -92,6 +93,50 @@ func TestGetCombinedAnswer(t *testing.T) {
 		assert.Contains(t, result, "second answer")
 		assert.Contains(t, result, "Unknown User")
 	})
+}
+
+func TestGetPrefillsForQuestion(t *testing.T) {
+	prefills := []DiscoveryPrefillQuestion{
+		{
+			QuestionID: "status_quo",
+			Items: []DiscoveryPrefillItem{
+				{Type: "STATED", Text: "Users currently do this by hand.", Basis: "Quoted from initial context"},
+			},
+		},
+	}
+
+	t.Run("returns copied items for matching question", func(t *testing.T) {
+		result := GetPrefillsForQuestion(prefills, "status_quo")
+		require.Len(t, result, 1)
+		assert.Equal(t, "STATED", result[0].Type)
+		result[0].Text = "mutated"
+		assert.Equal(t, "Users currently do this by hand.", prefills[0].Items[0].Text)
+	})
+
+	t.Run("returns nil for unknown question", func(t *testing.T) {
+		assert.Nil(t, GetPrefillsForQuestion(prefills, "verification"))
+	})
+}
+
+func TestDiscoveryPrefills_JSONRoundTrip(t *testing.T) {
+	s := CreateInitialState()
+	s.Discovery.Prefills = []DiscoveryPrefillQuestion{
+		{
+			QuestionID: "verification",
+			Items: []DiscoveryPrefillItem{
+				{Type: "STATED", Text: "Add regression tests.", Basis: "Quoted from initial context"},
+			},
+		},
+	}
+
+	data, err := json.Marshal(s)
+	require.NoError(t, err)
+
+	var restored StateFile
+	require.NoError(t, json.Unmarshal(data, &restored))
+	require.Len(t, restored.Discovery.Prefills, 1)
+	assert.Equal(t, "verification", restored.Discovery.Prefills[0].QuestionID)
+	assert.Equal(t, "STATED", restored.Discovery.Prefills[0].Items[0].Type)
 }
 
 // =============================================================================

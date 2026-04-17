@@ -1,6 +1,10 @@
 package shared
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/pragmataW/tddmaster/internal/tddcontract"
+)
 
 // VerifierInstructions returns the generic (phase-agnostic) verifier body.
 //
@@ -57,7 +61,7 @@ func VerifierRedPhaseBlock() string {
 		"- VERIFY: (1) each test asserts behavior tied to a planned task or edge-case; (2) no placeholder/TODO/empty test bodies; (3) syntax is well-formed (imports resolve, function signatures match framework conventions).",
 		"- Set `passed: true` when all test files are well-formed and cover the planned tasks.",
 		"- Set `passed: false` with `reason: \"tests-malformed\"` and describe what is missing or incorrect.",
-		`- Report {"passed": true|false, "phase": "red", "readOnly": true, "output": "<summary>", "results": [...]}.`,
+		"- " + tddcontract.VerifierRedPhaseInstruction(),
 		"- Do NOT comment on implementation quality. Do NOT run typeCheckCmd or testCmd.",
 	}, "\n")
 }
@@ -76,6 +80,8 @@ func VerifierGreenPhaseBlock(typeCheckCmd, testCmd string) string {
 		"- If all tests pass, set `passed: true` and scan the modified files for concrete improvements.",
 		"  Produce `refactorNotes` — a JSON array of `{file, suggestion, rationale}` (dead code, duplication, naming, structure).",
 		"  An empty array is valid and means the code is already clean — the orchestrator will skip refactor.",
+		"  `refactorNotes` is REQUIRED in every GREEN PASS report — provide `[{...}]` with concrete entries, or `[]` to assert the code is clean. Never omit the field on a pass.",
+		"  Contract: " + tddcontract.VerifierGreenPhaseInstruction(typeCheckCmd, testCmd),
 		"  Do NOT suggest changes that alter test behavior or public API.",
 	}, "\n")
 }
@@ -91,6 +97,7 @@ func VerifierRefactorPhaseBlock(typeCheckCmd, testCmd string) string {
 		"- Run the full test suite: `" + testCmd + "`. If red, set `passed: false` and report `reason: \"behavior-changed\"` with failing test names.",
 		"- If green, scan the modified files for any remaining improvements and produce `refactorNotes` — a JSON array of `{file, suggestion, rationale}`.",
 		"- An empty `refactorNotes` array means the task is clean; the orchestrator advances to the next task.",
+		"- Contract: " + tddcontract.VerifierRefactorPhaseInstruction(typeCheckCmd, testCmd),
 		"- Do NOT suggest changes that alter test behavior or public API.",
 	}, "\n")
 }
@@ -116,18 +123,15 @@ func genericVerifierLines(typeCheckCmd, testCmd string) []string {
 }
 
 func verifierReportBlock() string {
-	return strings.Join([]string{
+	lines := []string{
 		"## Report Format",
 		"Return a structured JSON summary:",
 		"```json",
-		`{"passed": true|false, "phase": "red|green|refactor|", "readOnly": true|false, "output": "<summary>", "failedACs": ["<ac-id>"], "uncoveredEdgeCases": ["<EC-id>"], "refactorNotes": [{"file": "<path>", "suggestion": "<what to change>", "rationale": "<why>"}], "results": [{"id": "ac-1", "status": "PASS", "evidence": "..."}]}`,
+		tddcontract.VerifierReportSchemaJSON(),
 		"```",
 		"",
 		"Rules for the JSON fields:",
-		"- `phase`: echo the current TDD phase, or an empty string when TDD is disabled.",
-		"- `readOnly`: set to true in RED phase (no commands executed). Omit or set false in GREEN/REFACTOR.",
-		"- `passed`: in RED phase, `true` means \"tests are well-formed and cover planned tasks\". In GREEN/REFACTOR, `true` means \"all tests pass\".",
-		"- `refactorNotes`: only populated in REFACTOR phase. An empty array means \"no improvements found; task is clean.\"",
-		"- `results`: legacy per-AC breakdown; keep it filled in for compatibility.",
-	}, "\n")
+	}
+	lines = append(lines, tddcontract.VerifierReportRules()...)
+	return strings.Join(lines, "\n")
 }

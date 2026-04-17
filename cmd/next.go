@@ -1,4 +1,3 @@
-
 package cmd
 
 import (
@@ -393,13 +392,16 @@ func handleDiscoveryAnswer(
 	answer string,
 	user *state.UserInfo,
 ) (state.StateFile, error) {
+	st = processPendingUserContextPrefills(st)
+
 	hasUserContext := st.Discovery.UserContext != nil && len(*st.Discovery.UserContext) > 0
 	hasDesc := st.SpecDescription != nil && len(*st.SpecDescription) > 0
 	discoveryMode := st.Discovery.Mode
 
 	if !hasUserContext && discoveryMode == nil && hasDesc {
-		// First response: store user context
-		return state.SetUserContext(st, answer), nil
+		newState := state.SetUserContext(st, answer)
+		newState = storeUserContextPrefills(newState, answer)
+		return newState, nil
 	}
 
 	// Mode selection
@@ -407,7 +409,7 @@ func handleDiscoveryAnswer(
 		validModes := map[string]state.DiscoveryMode{
 			"full": state.DiscoveryModeFull, "validate": state.DiscoveryModeValidate,
 			"technical-depth": state.DiscoveryModeTechnicalDepth,
-			"ship-fast": state.DiscoveryModeShipFast, "explore": state.DiscoveryModeExplore,
+			"ship-fast":       state.DiscoveryModeShipFast, "explore": state.DiscoveryModeExplore,
 		}
 		mode, ok := validModes[strings.TrimSpace(strings.ToLower(answer))]
 		if !ok {
@@ -459,14 +461,25 @@ func handleDiscoveryAnswer(
 		return st, fmt.Errorf("premise challenge requires valid JSON with premises array")
 	}
 
+	allQuestions := ctxpkg.GetQuestionsWithExtras(activeConcerns)
+
 	// Try batch JSON answers.
-	// Use map[string]interface{} so array values (e.g. edge_cases: ["a","b"]) are
-	// accepted without causing json.Unmarshal to fail. Array values are joined with
-	// newlines so DeriveEdgeCases and toBulletList can parse them as plain-text lists.
+	// Keep batch JSON as a backward-compatible fallback, but only when the payload
+	// actually targets canonical discovery question IDs.
 	var answersRaw map[string]interface{}
 	if err := json.Unmarshal([]byte(answer), &answersRaw); err == nil && answersRaw != nil {
+		questionIDs := make(map[string]bool, len(allQuestions))
+		for _, question := range allQuestions {
+			questionIDs[question.ID] = true
+		}
+
 		answersMap := make(map[string]string, len(answersRaw))
+		recognized := 0
 		for k, v := range answersRaw {
+			if !questionIDs[k] {
+				continue
+			}
+			recognized++
 			switch val := v.(type) {
 			case string:
 				answersMap[k] = val
@@ -482,35 +495,43 @@ func handleDiscoveryAnswer(
 				answersMap[k] = fmt.Sprintf("%v", v)
 			}
 		}
-		newState := st
-		for qID, qAnswer := range answersMap {
-			if qAnswer != "" {
+
+		if recognized > 0 {
+			newState := st
+			persisted := 0
+			for qID, qAnswer := range answersMap {
+				if strings.TrimSpace(qAnswer) == "" {
+					continue
+				}
 				var ansErr error
 				newState, ansErr = state.AddDiscoveryAnswer(newState, qID, qAnswer, user)
 				if ansErr != nil {
-					// Skip invalid answers
 					continue
 				}
+				persisted++
 			}
-		}
-		batchSubmitted := true
-		newState.Discovery.BatchSubmitted = &batchSubmitted
 
-		// Check if discovery is complete
-		allQs := ctxpkg.GetQuestionsWithExtras(activeConcerns)
-		if isDiscoveryComplete(newState.Discovery.Answers, allQs) {
-			var complErr error
-			newState, complErr = state.CompleteDiscovery(newState)
-			if complErr != nil {
-				return newState, nil // Not yet complete, that's fine
+			if persisted == 0 {
+				return st, fmt.Errorf("batch discovery answer contained no valid responses")
 			}
+
+			batchSubmitted := true
+			newState.Discovery.BatchSubmitted = &batchSubmitted
+			newState.Discovery.CurrentQuestion = nextUnansweredDiscoveryQuestionIndex(allQuestions, newState.Discovery.Answers)
+
+			if isDiscoveryComplete(newState.Discovery.Answers, allQuestions) {
+				var complErr error
+				newState, complErr = state.CompleteDiscovery(newState)
+				if complErr != nil {
+					return newState, nil
+				}
+			}
+			return newState, nil
 		}
-		return newState, nil
 	}
 
 	// Single answer mode
-	allQuestions := ctxpkg.GetQuestionsWithExtras(activeConcerns)
-	currentIdx := st.Discovery.CurrentQuestion
+	currentIdx := nextUnansweredDiscoveryQuestionIndex(allQuestions, st.Discovery.Answers)
 	if currentIdx >= len(allQuestions) {
 		return st, nil
 	}
@@ -520,7 +541,7 @@ func handleDiscoveryAnswer(
 	if err != nil {
 		return st, err
 	}
-	newState, _ = state.AdvanceDiscoveryQuestion(newState)
+	newState.Discovery.CurrentQuestion = nextUnansweredDiscoveryQuestionIndex(allQuestions, newState.Discovery.Answers)
 
 	// Check if discovery is complete
 	if isDiscoveryComplete(newState.Discovery.Answers, allQuestions) {
@@ -528,6 +549,40 @@ func handleDiscoveryAnswer(
 	}
 
 	return newState, nil
+}
+
+func processPendingUserContextPrefills(st state.StateFile) state.StateFile {
+	if st.Discovery.UserContext == nil {
+		return st
+	}
+	if st.Discovery.UserContextProcessed != nil && *st.Discovery.UserContextProcessed {
+		return st
+	}
+	return storeUserContextPrefills(st, *st.Discovery.UserContext)
+}
+
+func storeUserContextPrefills(st state.StateFile, context string) state.StateFile {
+	prefills := ctxpkg.ExtractUserContextPrefills(context)
+	st = state.SetDiscoveryPrefills(st, prefills)
+	return state.MarkUserContextProcessed(st)
+}
+
+func nextUnansweredDiscoveryQuestionIndex(
+	questions []ctxpkg.QuestionWithExtras,
+	answers []state.DiscoveryAnswer,
+) int {
+	answeredIDs := make(map[string]bool, len(answers))
+	for _, answer := range answers {
+		answeredIDs[answer.QuestionID] = true
+	}
+
+	for i, question := range questions {
+		if !answeredIDs[question.ID] {
+			return i
+		}
+	}
+
+	return len(questions)
 }
 
 // isDiscoveryComplete returns true if all required questions have been answered.
@@ -1090,16 +1145,31 @@ func readStringArray(payload map[string]interface{}, key string) []string {
 	return out
 }
 
+func specApprovedTDDSelectionPending(st state.StateFile, config *state.NosManifest) bool {
+	return config != nil && config.IsTDDEnabled() &&
+		(st.TaskTDDSelected == nil || !*st.TaskTDDSelected)
+}
+
+func startExecutionFromApproved(st state.StateFile, config *state.NosManifest) (state.StateFile, error) {
+	newState, err := state.StartExecution(st)
+	if err != nil {
+		return st, err
+	}
+
+	if config != nil && config.IsTDDEnabled() && state.ShouldRunTDDForCurrentTask(newState, config) {
+		state.StartTDDCycleForTask(&newState)
+	}
+
+	return newState, nil
+}
+
 func handleSpecApprovedAnswer(root string, st state.StateFile, config *state.NosManifest, answer string) (state.StateFile, error) {
 	trimmed := strings.TrimSpace(answer)
 	if strings.EqualFold(trimmed, "save") {
 		return st, nil
 	}
 
-	tddActive := config != nil && config.IsTDDEnabled()
-	selectionPending := tddActive && (st.TaskTDDSelected == nil || !*st.TaskTDDSelected)
-
-	if selectionPending {
+	if specApprovedTDDSelectionPending(st, config) {
 		choice, err := parseTDDSelectionAnswer(trimmed)
 		if err != nil {
 			return st, err
@@ -1114,18 +1184,7 @@ func handleSpecApprovedAnswer(root string, st state.StateFile, config *state.Nos
 		return newSt, nil
 	}
 
-	// Start execution
-	newState, err := state.StartExecution(st)
-	if err != nil {
-		return st, err
-	}
-
-	// Seed the TDD cycle at RED only when the first task uses TDD.
-	if tddActive && state.ShouldRunTDDForCurrentTask(newState, config) {
-		state.StartTDDCycleForTask(&newState)
-	}
-
-	return newState, nil
+	return startExecutionFromApproved(st, config)
 }
 
 // tddSelectionChoice captures the user's intent from the TDD selection
