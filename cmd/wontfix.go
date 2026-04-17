@@ -14,7 +14,7 @@ import (
 func newWontfixCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wontfix",
-		Short: "Mark the current task as wontfix",
+		Short: "Mark the current spec as wontfix",
 		RunE:  runWontfix,
 	}
 	cmd.Flags().String("spec", "", "Spec name")

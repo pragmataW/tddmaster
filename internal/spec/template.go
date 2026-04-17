@@ -18,9 +18,26 @@ import (
 // technical answers and splitting on them fragmented content mid-sentence.
 var sentenceSplitRe = regexp.MustCompile(`\.(?:\s+[A-Z])`)
 
+// numberedMarkerRe matches "(N) " style numbered list markers where N is one or
+// more digits. These are split points when a user writes "(1) X. (2) Y." style
+// answers. The match is on the space+open-paren so that the marker stays with
+// the item that follows it.
+var numberedMarkerRe = regexp.MustCompile(`\s+\(\d+\)\s+`)
+
+// splitPoint describes a single split location in the text with the start
+// offset of the current item and the start offset of the next item.
+type splitPoint struct {
+	// itemEnd is the exclusive end of the current item (the character after the
+	// last meaningful content character, e.g. the period that ends a sentence).
+	itemEnd int
+	// nextStart is the inclusive start of the following item.
+	nextStart int
+}
+
 // toBulletList splits text into list items by line breaks or sentence boundaries.
 // Does NOT split on dots inside filenames, extensions, abbreviations,
 // version numbers, or URLs, nor on semicolons within a sentence.
+// Also splits on "(N)" style numbered markers like "(1) Alpha. (2) Beta."
 func toBulletList(text string) []string {
 	// Split on line breaks first
 	rawLines := strings.Split(text, "\n")
@@ -36,11 +53,31 @@ func toBulletList(text string) []string {
 		return lines
 	}
 
-	// Single block — split on sentence-ending periods (". A").
-	// We use FindAllStringIndex to locate split points, then slice manually
-	// so we preserve the character after the dot (uppercase letter of next sentence).
-	idxs := sentenceSplitRe.FindAllStringIndex(text, -1)
-	if len(idxs) == 0 {
+	// Build a merged, sorted list of split points from two sources:
+	//   1. sentenceSplitRe  — ". A"  → itemEnd = loc[0]+1, nextStart = loc[0]+2
+	//   2. numberedMarkerRe — " (N) " → itemEnd = loc[0], nextStart = loc[1]
+	//
+	// We keep the original slicing arithmetic for sentenceSplitRe unchanged.
+
+	var splits []splitPoint
+
+	for _, loc := range sentenceSplitRe.FindAllStringIndex(text, -1) {
+		// Match is ". A" (len 3). Keep the period with the first part; next
+		// sentence starts at loc[0]+2 (skip ". ").
+		splits = append(splits, splitPoint{itemEnd: loc[0] + 1, nextStart: loc[0] + 2})
+	}
+
+	for _, loc := range numberedMarkerRe.FindAllStringIndex(text, -1) {
+		// Match is " (N) ". The current item ends at loc[0] (before the space);
+		// the next item starts at loc[1] (after the closing space), but we want
+		// to include the "(N)" marker at the beginning of the item, so we step
+		// back to find the opening paren.
+		// loc[0] = index of the leading space; loc[0]+1 = '('
+		// The next item begins at loc[0]+1 (the '(' of the marker).
+		splits = append(splits, splitPoint{itemEnd: loc[0], nextStart: loc[0] + 1})
+	}
+
+	if len(splits) == 0 {
 		trimmed := strings.TrimSpace(text)
 		if len(trimmed) > 5 {
 			return []string{trimmed}
@@ -48,13 +85,22 @@ func toBulletList(text string) []string {
 		return []string{}
 	}
 
+	// Sort split points by nextStart so we process the text left-to-right.
+	// Simple insertion sort is fine for the small slice sizes seen in practice.
+	for i := 1; i < len(splits); i++ {
+		for j := i; j > 0 && splits[j].nextStart < splits[j-1].nextStart; j-- {
+			splits[j], splits[j-1] = splits[j-1], splits[j]
+		}
+	}
+
 	var parts []string
 	prev := 0
-	for _, loc := range idxs {
-		// Match is ". A" (len 3). Keep the period with the first part; next
-		// sentence starts at loc[0]+2 (skip ". ").
-		parts = append(parts, strings.TrimSpace(text[prev:loc[0]+1]))
-		prev = loc[0] + 2
+	for _, sp := range splits {
+		if sp.itemEnd <= prev {
+			continue // overlapping split — skip
+		}
+		parts = append(parts, strings.TrimSpace(text[prev:sp.itemEnd]))
+		prev = sp.nextStart
 	}
 	if prev < len(text) {
 		parts = append(parts, strings.TrimSpace(text[prev:]))
@@ -403,6 +449,9 @@ func RenderSpec(
 	lines = append(lines, "")
 
 	for _, answer := range answers {
+		if answer.QuestionID == "edge_cases" || answer.QuestionID == "scope_boundary" {
+			continue
+		}
 		lines = append(lines, fmt.Sprintf("### %s", answer.QuestionID))
 		lines = append(lines, "")
 		lines = append(lines, answer.Answer)

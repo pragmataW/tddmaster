@@ -1,4 +1,3 @@
-
 package cmd
 
 import (
@@ -13,7 +12,7 @@ import (
 func newCancelCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cancel",
-		Short: "Cancel the current task",
+		Short: "Cancel the current spec",
 		RunE:  runCancel,
 	}
 	cmd.Flags().String("spec", "", "Spec name")
@@ -38,6 +37,13 @@ func runCancelWithArgs(args []string) error {
 	specResult := state.RequireSpecFlag(args)
 	if !specResult.OK {
 		return fmt.Errorf("%s", specResult.Error)
+	}
+	if err := rejectPositionalArgs(
+		"cancel",
+		args,
+		"`cancel` terminates the entire spec and does not accept a task ID. Use `wontfix` if you need a reasoned terminal resolution.",
+	); err != nil {
+		return err
 	}
 
 	st, err := state.ResolveState(root, &specResult.Spec)

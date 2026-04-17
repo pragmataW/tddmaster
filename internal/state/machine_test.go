@@ -33,6 +33,8 @@ func TestCanTransition(t *testing.T) {
 		{PhaseBlocked, PhaseCompleted, true},
 		{PhaseCompleted, PhaseIdle, true},
 		{PhaseCompleted, PhaseDiscovery, true},
+		{PhaseCompleted, PhaseExecuting, true},
+		{PhaseCompleted, PhaseBlocked, true},
 	}
 
 	for _, tt := range tests {
@@ -319,6 +321,53 @@ func TestReopenSpec(t *testing.T) {
 	})
 }
 
+func TestResumeCompletedSpec(t *testing.T) {
+	t.Run("restores executing phase and preserves execution state", func(t *testing.T) {
+		s := CreateInitialState()
+		s.Phase = PhaseCompleted
+		reason := CompletionReasonDone
+		s.CompletionReason = &reason
+		s.Execution.Iteration = 4
+		s.Execution.CompletedTasks = []string{"task-1"}
+		s.TransitionHistory = []PhaseTransition{{From: PhaseExecuting, To: PhaseCompleted}}
+
+		result, err := ResumeCompletedSpec(s)
+		require.NoError(t, err)
+		assert.Equal(t, PhaseExecuting, result.Phase)
+		assert.Nil(t, result.CompletionReason)
+		assert.Equal(t, 4, result.Execution.Iteration)
+		assert.Equal(t, []string{"task-1"}, result.Execution.CompletedTasks)
+	})
+
+	t.Run("restores blocked phase when that was the terminal source", func(t *testing.T) {
+		s := CreateInitialState()
+		s.Phase = PhaseCompleted
+		reason := CompletionReasonCancelled
+		s.CompletionReason = &reason
+		progress := "BLOCKED: waiting on DB"
+		s.Execution.LastProgress = &progress
+		s.TransitionHistory = []PhaseTransition{{From: PhaseBlocked, To: PhaseCompleted}}
+
+		result, err := ResumeCompletedSpec(s)
+		require.NoError(t, err)
+		assert.Equal(t, PhaseBlocked, result.Phase)
+		require.NotNil(t, result.Execution.LastProgress)
+		assert.Equal(t, progress, *result.Execution.LastProgress)
+	})
+
+	t.Run("falls back to executing when no execution transition is available", func(t *testing.T) {
+		s := CreateInitialState()
+		s.Phase = PhaseCompleted
+		reason := CompletionReasonDone
+		s.CompletionReason = &reason
+		s.TransitionHistory = []PhaseTransition{{From: PhaseSpecApproved, To: PhaseCompleted}}
+
+		result, err := ResumeCompletedSpec(s)
+		require.NoError(t, err)
+		assert.Equal(t, PhaseExecuting, result.Phase)
+	})
+}
+
 func TestRevisitSpec(t *testing.T) {
 	s := CreateInitialState()
 	s.Phase = PhaseExecuting
@@ -580,4 +629,54 @@ func TestResetToIdle(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cancel")
 	})
+}
+
+// =============================================================================
+// UncompleteTask
+// =============================================================================
+
+func makeExecutingStateWithTasks(completedIDs []string, overrideTasks []SpecTask) StateFile {
+	s := CreateInitialState()
+	s.Phase = PhaseExecuting
+	s.Execution.CompletedTasks = completedIDs
+	s.OverrideTasks = overrideTasks
+	return s
+}
+
+func TestUncompleteTask_HappyPath_RemovesFromCompletedTasks(t *testing.T) {
+	s := makeExecutingStateWithTasks([]string{"task-1", "task-2", "task-3"}, nil)
+	result, err := UncompleteTask(s, "task-2")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"task-1", "task-3"}, result.Execution.CompletedTasks)
+}
+
+func TestUncompleteTask_HappyPath_FlipsOverrideTaskCompleted(t *testing.T) {
+	tasks := []SpecTask{
+		{ID: "task-1", Title: "First", Completed: true},
+		{ID: "task-2", Title: "Second", Completed: true},
+	}
+	s := makeExecutingStateWithTasks([]string{"task-1", "task-2"}, tasks)
+	result, err := UncompleteTask(s, "task-1")
+	require.NoError(t, err)
+
+	// task-1 must be uncompleted
+	assert.False(t, result.OverrideTasks[0].Completed)
+	// task-2 must remain completed
+	assert.True(t, result.OverrideTasks[1].Completed)
+}
+
+func TestUncompleteTask_UnknownID_ReturnsError(t *testing.T) {
+	s := makeExecutingStateWithTasks([]string{"task-1"}, nil)
+	_, err := UncompleteTask(s, "task-99")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "task-99")
+}
+
+func TestUncompleteTask_DoesNotTouchPhaseOrIteration(t *testing.T) {
+	s := makeExecutingStateWithTasks([]string{"task-1"}, nil)
+	s.Execution.Iteration = 5
+	result, err := UncompleteTask(s, "task-1")
+	require.NoError(t, err)
+	assert.Equal(t, PhaseExecuting, result.Phase)
+	assert.Equal(t, 5, result.Execution.Iteration)
 }

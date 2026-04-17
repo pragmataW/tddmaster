@@ -1,4 +1,3 @@
-
 // Package shared provides utilities shared by multiple tool adapters.
 package shared
 
@@ -46,6 +45,19 @@ func BuildProtocol(commandPrefix string, options *statesync.SyncOptions) string 
 		"",
 		"Every tddmaster command that operates on a spec MUST include `spec <name>`.",
 		"Never omit it. Use `" + commandPrefix + " spec list` to see available specs.",
+		"",
+		"### Task recovery vs spec termination",
+		"",
+		"These three commands look similar but have very different blast radii:",
+		"",
+		"- `" + commandPrefix + " undo` — resets the most recently completed task (task-level, reversible)",
+		"- `" + commandPrefix + " spec <name> task undo <id>` — resets a specific task (task-level, reversible)",
+		"- `" + commandPrefix + " spec <name> done` / `cancel` — terminates the ENTIRE spec and wipes the",
+		"  execution context (spec-level, use `reopen --resume-execution` to recover execution state)",
+		"",
+		"If the user says \"undo that task\" or \"I didn't mean to mark that done\", use `undo` —",
+		"never `done`/`cancel`. `undo` only flips the task flag; it does not rewind iteration",
+		"counters or TDD phase state. Plain `reopen` is for discovery revision; `" + commandPrefix + " spec <name> reopen --resume-execution` is for accidental terminal completion.",
 		"",
 		"### Why tddmaster calls matter",
 		"",

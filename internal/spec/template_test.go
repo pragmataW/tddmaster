@@ -652,3 +652,70 @@ func TestRenderSpec_WithOutOfScopeOverride_AppendsItems(t *testing.T) {
 	assert.Contains(t, md, "- database persistence")
 }
 
+// =============================================================================
+// C.1 — edge_cases/scope_boundary skip in Discovery Answers section
+// =============================================================================
+
+// TestRenderSpec_EdgeCasesNotDuplicated verifies that edge_cases answers appear
+// only in the dedicated "## Edge Cases" section and NOT as a discovery answer
+// heading in the "## Discovery Answers" section.
+func TestRenderSpec_EdgeCasesNotDuplicated(t *testing.T) {
+	answers := []state.DiscoveryAnswer{
+		{QuestionID: "status_quo", Answer: "Users manually track tasks in spreadsheets."},
+		{QuestionID: "edge_cases", Answer: "- Empty list\n- Long text overflow"},
+	}
+	md := RenderSpec("test", answers, nil, nil, nil, nil, nil, nil, nil, false)
+
+	// edge_cases must appear in the dedicated Edge Cases section
+	assert.Contains(t, md, "## Edge Cases")
+	assert.Contains(t, md, "- Empty list")
+
+	// but NOT as a discovery answer heading
+	assert.NotContains(t, md, "### edge_cases")
+}
+
+// TestRenderSpec_ScopeBoundaryNotDuplicated verifies that scope_boundary answers
+// appear only in the "## Out of Scope" section and NOT in "## Discovery Answers".
+func TestRenderSpec_ScopeBoundaryNotDuplicated(t *testing.T) {
+	answers := []state.DiscoveryAnswer{
+		{QuestionID: "status_quo", Answer: "Users manually track tasks in spreadsheets."},
+		{QuestionID: "scope_boundary", Answer: "Auth and billing are out of scope."},
+	}
+	md := RenderSpec("test", answers, nil, nil, nil, nil, nil, nil, nil, false)
+
+	// scope_boundary must appear in the dedicated Out of Scope section
+	assert.Contains(t, md, "## Out of Scope")
+	assert.Contains(t, md, "- Auth and billing are out of scope.")
+
+	// but NOT as a discovery answer heading
+	assert.NotContains(t, md, "### scope_boundary")
+}
+
+// =============================================================================
+// C.2 — toBulletList handles (N) numbered markers
+// =============================================================================
+
+// TestToBulletList_NumberedMarkers verifies "(N)" prefixed items are split into
+// separate bullets.
+func TestToBulletList_NumberedMarkers(t *testing.T) {
+	items := toBulletList("(1) Alpha. (2) Beta. (3) Gamma.")
+	assert.Len(t, items, 3)
+	assert.Equal(t, "(1) Alpha.", items[0])
+	assert.Equal(t, "(2) Beta.", items[1])
+	assert.Equal(t, "(3) Gamma.", items[2])
+}
+
+// TestToBulletList_ExistingSentenceBoundariesUnchanged ensures the existing
+// sentence-splitting logic still works correctly after the regex change.
+func TestToBulletList_ExistingSentenceBoundariesUnchanged(t *testing.T) {
+	items := toBulletList("Foo sentence. Bar sentence.")
+	assert.True(t, len(items) >= 2, "existing sentence splitting must still work")
+}
+
+// TestToBulletList_NoFalsePositiveOnFilename verifies "file.go contains X." is
+// not split into a new bullet.
+func TestToBulletList_NoFalsePositiveOnFilename(t *testing.T) {
+	items := toBulletList("file.go contains important logic for the system.")
+	assert.Len(t, items, 1)
+}
+

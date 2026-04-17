@@ -1,4 +1,3 @@
-
 // State machine — valid phase transitions and enforcement.
 
 package state
@@ -24,7 +23,7 @@ var ValidTransitions = map[Phase][]Phase{
 	PhaseSpecApproved:        {PhaseExecuting, PhaseCompleted},
 	PhaseExecuting:           {PhaseCompleted, PhaseBlocked},
 	PhaseBlocked:             {PhaseExecuting, PhaseCompleted},
-	PhaseCompleted:           {PhaseIdle, PhaseDiscovery},
+	PhaseCompleted:           {PhaseIdle, PhaseDiscovery, PhaseExecuting, PhaseBlocked},
 }
 
 // =============================================================================
@@ -395,6 +394,43 @@ func ReopenSpec(state StateFile) (StateFile, error) {
 		NaItems:              []string{},
 	}
 	state.Classification = nil
+	return state, nil
+}
+
+// ResumeCompletedSpec restores the most recent execution phase from COMPLETED
+// without wiping execution progress. When no prior execution transition is
+// available, it falls back to EXECUTING.
+func ResumeCompletedSpec(state StateFile) (StateFile, error) {
+	if state.Phase != PhaseCompleted {
+		return state, fmt.Errorf("cannot resume in phase: %s", state.Phase)
+	}
+
+	restorePhase := PhaseExecuting
+	for i := len(state.TransitionHistory) - 1; i >= 0; i-- {
+		tr := state.TransitionHistory[i]
+		if tr.To != PhaseCompleted {
+			continue
+		}
+		if tr.From == PhaseExecuting || tr.From == PhaseBlocked {
+			restorePhase = tr.From
+		}
+		break
+	}
+	if err := AssertTransition(state.Phase, restorePhase); err != nil {
+		return state, err
+	}
+
+	var reopenedFrom *string
+	if state.CompletionReason != nil {
+		s := string(*state.CompletionReason)
+		reopenedFrom = &s
+	}
+
+	state.Phase = restorePhase
+	state.ReopenedFrom = reopenedFrom
+	state.CompletionReason = nil
+	state.CompletedAt = nil
+	state.CompletionNote = nil
 	return state, nil
 }
 
@@ -909,6 +945,42 @@ func StartTDDCycleForTask(st *StateFile) {
 // when the executor reports that it consumed the verifier's refactor notes.
 func MarkRefactorApplied(st *StateFile) {
 	st.Execution.RefactorApplied = true
+}
+
+// ErrTaskNotCompleted is returned by UncompleteTask when the given task ID is
+// not found in CompletedTasks.
+var ErrTaskNotCompleted = fmt.Errorf("task not found in completed tasks")
+
+// UncompleteTask reverses the completion of a single task identified by taskID.
+// It removes the ID from CompletedTasks and sets Completed=false on the matching
+// OverrideTasks entry (if present). Phase, Iteration, and TDDCycle are not
+// touched — this is a task-flag flip only. Returns ErrTaskNotCompleted when
+// taskID is absent from CompletedTasks.
+func UncompleteTask(st StateFile, taskID string) (StateFile, error) {
+	// Find and remove from CompletedTasks
+	found := false
+	kept := make([]string, 0, len(st.Execution.CompletedTasks))
+	for _, id := range st.Execution.CompletedTasks {
+		if id == taskID {
+			found = true
+			continue
+		}
+		kept = append(kept, id)
+	}
+	if !found {
+		return st, fmt.Errorf("%w: %s", ErrTaskNotCompleted, taskID)
+	}
+	st.Execution.CompletedTasks = kept
+
+	// Flip Completed=false on the matching OverrideTasks entry (if any).
+	for i := range st.OverrideTasks {
+		if st.OverrideTasks[i].ID == taskID {
+			st.OverrideTasks[i].Completed = false
+			break
+		}
+	}
+
+	return st, nil
 }
 
 // ResetToIdle resets state to IDLE. Only allowed from terminal/safe phases.

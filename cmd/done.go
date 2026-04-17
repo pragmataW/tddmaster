@@ -1,8 +1,8 @@
-
 package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,7 +15,7 @@ import (
 func newDoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "done",
-		Short: "Mark the current task as done",
+		Short: "Mark the current spec as complete",
 		RunE:  runDone,
 	}
 	cmd.Flags().String("spec", "", "Spec name")
@@ -41,6 +41,13 @@ func runDoneWithArgs(args []string) error {
 	if !specResult.OK {
 		return fmt.Errorf("%s", specResult.Error)
 	}
+	if err := rejectPositionalArgs(
+		"done",
+		args,
+		"`done` completes the entire spec. Use `tddmaster undo` or `tddmaster spec <name> task undo <id>` for task-level recovery.",
+	); err != nil {
+		return err
+	}
 
 	st, err := state.ResolveState(root, &specResult.Spec)
 	if err != nil {
@@ -54,6 +61,15 @@ func runDoneWithArgs(args []string) error {
 	if st.Execution.AwaitingStatusReport {
 		return fmt.Errorf("cannot complete: status report is pending. Submit a status report first: %s",
 			output.Cmd(`next --answer='{"completed":[...],"remaining":[]}'`))
+	}
+	if pending := pendingTaskIDs(st); len(pending) > 0 {
+		return fmt.Errorf(
+			"cannot complete spec: pending tasks remain (%s). Submit them through %s or recover mistaken task state with %s / %s",
+			strings.Join(pending, ", "),
+			output.Cmd(`spec `+specResult.Spec+` next --answer='{"completed":[...],"remaining":[...]}'`),
+			output.Cmd("undo"),
+			output.Cmd("spec "+specResult.Spec+" task undo <id>"),
+		)
 	}
 
 	// Warn about unresolved debt
@@ -119,4 +135,24 @@ func runDoneWithArgs(args []string) error {
 
 	_ = time.Now // suppress import
 	return nil
+}
+
+func pendingTaskIDs(st state.StateFile) []string {
+	if len(st.OverrideTasks) == 0 {
+		return nil
+	}
+
+	completedSet := make(map[string]bool, len(st.Execution.CompletedTasks))
+	for _, id := range st.Execution.CompletedTasks {
+		completedSet[id] = true
+	}
+
+	var pending []string
+	for _, task := range st.OverrideTasks {
+		if task.Completed || completedSet[task.ID] {
+			continue
+		}
+		pending = append(pending, task.ID)
+	}
+	return pending
 }

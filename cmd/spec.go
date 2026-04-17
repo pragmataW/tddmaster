@@ -1,4 +1,3 @@
-
 package cmd
 
 import (
@@ -10,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/pragmataW/tddmaster/internal/output"
+	specp "github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
 )
 
@@ -403,13 +403,104 @@ func specAC(specName string, args []string) error {
 }
 
 // specTask manages tasks for a spec.
+// Supported subcommands: list, current, undo <id>.
 func specTask(specName string, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tddmaster spec %s task <add|list> [text]", specName)
+		return fmt.Errorf("usage: tddmaster spec %s task <list|current|undo> [task-id]", specName)
 	}
-	// Simplified: just output a placeholder
-	printErr(fmt.Sprintf("spec task %s: %s", specName, strings.Join(args, " ")))
-	return nil
+
+	root, err := resolveRoot()
+	if err != nil {
+		return err
+	}
+
+	sub := args[0]
+
+	switch sub {
+	case "list":
+		st, err := state.ResolveState(root, &specName)
+		if err != nil {
+			return err
+		}
+		type taskSummary struct {
+			ID        string `json:"id"`
+			Title     string `json:"title"`
+			Completed bool   `json:"completed"`
+		}
+		var summary []taskSummary
+		completedSet := make(map[string]bool, len(st.Execution.CompletedTasks))
+		for _, id := range st.Execution.CompletedTasks {
+			completedSet[id] = true
+		}
+		for _, t := range st.OverrideTasks {
+			summary = append(summary, taskSummary{
+				ID:        t.ID,
+				Title:     t.Title,
+				Completed: t.Completed || completedSet[t.ID],
+			})
+		}
+		return writeJSON(summary)
+
+	case "current":
+		st, err := state.ResolveState(root, &specName)
+		if err != nil {
+			return err
+		}
+		completedSet := make(map[string]bool, len(st.Execution.CompletedTasks))
+		for _, id := range st.Execution.CompletedTasks {
+			completedSet[id] = true
+		}
+		for _, t := range st.OverrideTasks {
+			if !t.Completed && !completedSet[t.ID] {
+				return writeJSON(t)
+			}
+		}
+		printErr("No active task (all tasks completed or none defined).")
+		return nil
+
+	case "undo":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: tddmaster spec %s task undo <task-id>", specName)
+		}
+		taskID := args[1]
+
+		st, err := state.ResolveState(root, &specName)
+		if err != nil {
+			return err
+		}
+
+		if st.Phase == state.PhaseCompleted {
+			return fmt.Errorf("spec '%s' is completed — use `tddmaster spec %s reopen --resume-execution` first", specName, specName)
+		}
+
+		newState, err := state.UncompleteTask(st, taskID)
+		if err != nil {
+			return err
+		}
+
+		config, _ := state.ReadManifest(root)
+		allConcerns, _ := state.ListConcerns(root)
+		activeConcerns := filterConcerns(allConcerns, config.Concerns)
+
+		if newState.Spec != nil {
+			if _, genErr := specp.GenerateSpec(root, &newState, activeConcerns); genErr != nil {
+				printErr(fmt.Sprintf("warning: undo succeeded but spec.md regeneration failed: %v", genErr))
+			}
+			if err := state.WriteSpecState(root, *newState.Spec, newState); err != nil {
+				return err
+			}
+		}
+
+		if err := state.WriteState(root, newState); err != nil {
+			return err
+		}
+
+		printErr(fmt.Sprintf("Task '%s' marked as incomplete.", taskID))
+		return nil
+
+	default:
+		return fmt.Errorf("unknown task subcommand: %s (use list, current, or undo)", sub)
+	}
 }
 
 // specNote adds a note to a spec.
@@ -492,4 +583,3 @@ func specRevisit(specName string, args []string) error {
 	printErr(fmt.Sprintf("Spec %s revisited. Back to DISCOVERY.", specName))
 	return nil
 }
-

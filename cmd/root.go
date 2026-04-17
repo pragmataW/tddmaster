@@ -31,6 +31,7 @@ func init() {
 		newCancelCmd(),
 		newWontfixCmd(),
 		newReopenCmd(),
+		newUndoCmd(),
 		newConcernCmd(),
 		newRunCmd(),
 		newWatchCmd(),
