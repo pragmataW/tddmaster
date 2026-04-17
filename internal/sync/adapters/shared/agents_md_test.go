@@ -52,3 +52,11 @@ func TestBuildProtocol_TaskRecoveryAppearsBeforeWhySection(t *testing.T) {
 	assert.True(t, whyIdx != -1, "Why section must be present")
 	assert.Less(t, recoveryIdx, whyIdx, "Task recovery must appear before Why section")
 }
+
+func TestBuildProtocol_DiscoveryRefinementRequiresAnswerRenderingBeforeApproval(t *testing.T) {
+	section := BuildProtocol("tddmaster", nil)
+
+	assert.Contains(t, section, "`discoveryReviewData.reviewSummary`")
+	assert.Contains(t, section, "`discoveryReviewData.answers`")
+	assert.Contains(t, section, "Do NOT show approve/revise/split options until after the answer list is visible to the user.")
+}

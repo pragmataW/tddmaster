@@ -176,15 +176,32 @@ type DiscoveryContributor struct {
 	Contributions string `json:"contributions"`
 }
 
+// DiscoveryModeOption is a single discovery mode choice presented to the user
+// at the mode selection sub-step. The same list is the source of truth for
+// both ModeSelectionOutput.Options and the top-level interactiveOptions
+// emitted for PhaseDiscovery.
+type DiscoveryModeOption struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// discoveryModeOptions returns the canonical list of discovery modes.
+func discoveryModeOptions() []DiscoveryModeOption {
+	return []DiscoveryModeOption{
+		{"full", "Full discovery", "Standard 7 questions with all concern extras. Default for new features."},
+		{"validate", "Validate my plan", "I already know what I want — challenge my assumptions, find gaps."},
+		{"technical-depth", "Technical depth", "Focus on architecture, data flow, performance, integration points."},
+		{"ship-fast", "Ship fast", "Minimum viable scope. What can we defer? What's the MVP?"},
+		{"explore", "Explore scope", "Think bigger. 10x version? Adjacent opportunities? What are we missing?"},
+	}
+}
+
 // ModeSelectionOutput provides mode selection options for discovery.
 type ModeSelectionOutput struct {
-	Required    bool   `json:"required"`
-	Instruction string `json:"instruction"`
-	Options     []struct {
-		ID          string `json:"id"`
-		Label       string `json:"label"`
-		Description string `json:"description"`
-	} `json:"options"`
+	Required    bool                  `json:"required"`
+	Instruction string                `json:"instruction"`
+	Options     []DiscoveryModeOption `json:"options"`
 }
 
 // PremiseChallengeOutput asks the agent to challenge spec premises.
@@ -276,10 +293,11 @@ type ReviewChecklist struct {
 
 // DiscoveryReviewOutput is the output for the DISCOVERY_REFINEMENT phase.
 type DiscoveryReviewOutput struct {
-	Phase       string                  `json:"phase"`
-	Instruction string                  `json:"instruction"`
-	Answers     []DiscoveryReviewAnswer `json:"answers"`
-	Transition  struct {
+	Phase         string                  `json:"phase"`
+	Instruction   string                  `json:"instruction"`
+	Answers       []DiscoveryReviewAnswer `json:"answers"`
+	ReviewSummary string                  `json:"reviewSummary,omitempty"`
+	Transition    struct {
 		OnApprove string `json:"onApprove"`
 		OnRevise  string `json:"onRevise"`
 	} `json:"transition"`
@@ -643,13 +661,17 @@ func buildBehavioral(
 
 	case state.PhaseDiscovery:
 		var questionMethod string
+		var subStepMethod string
 		switch {
 		case hints.AskUserStrategy == "tddmaster_block":
 			questionMethod = "Ask one question at a time via `tddmaster block \"question\"`. One question per interaction."
+			subStepMethod = "Listen-first: ask the single open-ended context question via `tddmaster block`. Mode selection: present the provided interactiveOptions one by one via `tddmaster block`. Premise challenge: one `tddmaster block` call per premise."
 		case !hints.HasAskUserTool:
 			questionMethod = "Ask one question at a time as text."
+			subStepMethod = "Listen-first: ask the single open-ended context question as plain text. Mode selection: present the provided interactiveOptions as a numbered list. Premise challenge: ask one premise at a time as plain text."
 		default:
 			questionMethod = "Ask each question via AskUserQuestion. One question per call."
+			subStepMethod = "Listen-first step: ask the single open-ended context question via AskUserQuestion (free-form, no fabricated options). Mode selection: use AskUserQuestion with the provided interactiveOptions — never present them as prose or a numbered list. Premise challenge: one AskUserQuestion per premise, aggregate client-side, then submit the JSON payload."
 		}
 
 		dreamPrompts := GetDreamStatePrompts(activeConcerns)
@@ -664,6 +686,7 @@ func buildBehavioral(
 			ModeOverride: strPtr("plan mode. DO NOT create, edit, or write any files. DO NOT run state-modifying commands. MAY read files and run read-only commands (cat, ls, grep, git log, git diff)."),
 			Rules: append(mandatoryRules,
 				fmt.Sprintf("%s Never answer questions yourself. Never submit answers without user confirmation. Pre-fill suggested answers from detailed descriptions — user must confirm each. With a fully formed plan, keep discovery brief by confirming pre-filled answers one at a time, but MUST still run premise challenge and alternatives.", questionMethod),
+				subStepMethod,
 				"DO NOT create, edit, or write any files.",
 				"DO NOT run shell commands that modify state.",
 				"You MAY read files and run read-only commands (cat, ls, grep, git log, git diff).",
@@ -691,6 +714,8 @@ func buildBehavioral(
 			Rules: append(mandatoryRules,
 				"DO NOT create, edit, or write any files.",
 				"Present ALL discovery answers to the user clearly, one by one.",
+				"Before you ask for approval or revision, render `discoveryReviewData.reviewSummary` verbatim. If it is missing, render every item in `discoveryReviewData.answers` yourself.",
+				"Do NOT jump straight to interactiveOptions. The answer review must appear before approve/revise/split choices.",
 				confirmQ,
 				"If the user approves, run the approve command.",
 				"If the user wants to revise, collect their corrections and submit them.",
@@ -1035,8 +1060,9 @@ func buildRoadmap(phase state.Phase) string {
 func buildGate(st state.StateFile, parsedSpec *spec.ParsedSpec) *GateInfo {
 	switch st.Phase {
 	case state.PhaseDiscoveryRefinement:
+		totalQuestions := len(Questions)
 		return &GateInfo{
-			Message: fmt.Sprintf("%d/6 answers collected.", len(st.Discovery.Answers)),
+			Message: fmt.Sprintf("%d/%d answers collected.", len(st.Discovery.Answers), totalQuestions),
 			Action:  "Type APPROVE to generate spec, or REVISE to correct answers.",
 			Phase:   "DISCOVERY_REFINEMENT",
 		}
@@ -1252,6 +1278,36 @@ func buildInteractiveOptions(st state.StateFile, activeConcerns []state.ConcernD
 				Command:     cs("next --answer=\"save\"", specName),
 			},
 		}
+
+	case state.PhaseDiscovery:
+		mode := st.Discovery.Mode
+		hasUserContext := st.Discovery.UserContext != nil && len(*st.Discovery.UserContext) > 0
+		hasDescription := st.SpecDescription != nil && len(*st.SpecDescription) > 0
+		hasPlan := st.Discovery.PlanPath != nil
+		answeredCount := len(st.Discovery.Answers)
+
+		// Mode selection sub-step — emit the five discovery modes so the
+		// top-level interactiveOptions (and toolHint="AskUserQuestion") are
+		// set. Guard mirrors the mode-selection branch in compileDiscovery:
+		// mode not chosen, user context already captured (listen-first has
+		// completed), no plan override, no answers yet.
+		if mode == nil && hasDescription && answeredCount == 0 && !hasPlan && hasUserContext {
+			opts := make([]internalOption, 0, len(discoveryModeOptions()))
+			for _, m := range discoveryModeOptions() {
+				opts = append(opts, internalOption{
+					Label:       m.Label,
+					Description: m.Description,
+					Command:     cs("next --answer=\""+m.ID+"\"", specName),
+				})
+			}
+			return opts
+		}
+
+		// Listen-first (no user context yet) and premise challenge are
+		// handled via instruction text + behavioral rules; both are
+		// open-ended or per-item AskUserQuestion flows that don't map
+		// cleanly to a single interactiveOptions array.
+		return nil
 
 	case state.PhaseExecuting:
 		return nil // Agent should be working
@@ -1618,32 +1674,15 @@ func compileDiscovery(
 
 	// Mode selection step
 	if mode == nil && hasDescription && answeredCount == 0 && !hasPlan {
-		type modeOption struct {
-			ID          string `json:"id"`
-			Label       string `json:"label"`
-			Description string `json:"description"`
-		}
 		ms := &ModeSelectionOutput{
 			Required:    true,
-			Instruction: "Select the discovery mode.",
-		}
-		// Manually assign options
-		type opt = struct {
-			ID          string `json:"id"`
-			Label       string `json:"label"`
-			Description string `json:"description"`
-		}
-		ms.Options = []opt{
-			{"full", "Full discovery", "Standard 6 questions with all concern extras. Default for new features."},
-			{"validate", "Validate my plan", "I already know what I want — challenge my assumptions, find gaps."},
-			{"technical-depth", "Technical depth", "Focus on architecture, data flow, performance, integration points."},
-			{"ship-fast", "Ship fast", "Minimum viable scope. What can we defer? What's the MVP?"},
-			{"explore", "Explore scope", "Think bigger. 10x version? Adjacent opportunities? What are we missing?"},
+			Instruction: "Select the discovery mode via AskUserQuestion. Present the five options exactly as listed in interactiveOptions — do not paraphrase them into prose.",
+			Options:     discoveryModeOptions(),
 		}
 
 		out := DiscoveryOutput{
 			Phase:         "DISCOVERY",
-			Instruction:   "Before starting discovery, select the discovery mode that best fits this spec.",
+			Instruction:   "Before starting discovery, select the discovery mode via AskUserQuestion. Use the options provided in interactiveOptions — do NOT present them as prose or a numbered list.",
 			Questions:     []DiscoveryQuestion{},
 			AnsweredCount: 0,
 			Context: ContextBlock{
@@ -1989,15 +2028,17 @@ func compileDiscoveryReview(
 			Answer:     a.Answer,
 		})
 	}
+	reviewSummary := buildDiscoveryReviewSummary(reviewAnswers)
 
 	splitProposal := AnalyzeForSplit(st.Discovery.Answers, "")
 
 	// Sub-phase: approved + split detected → user decides
 	if st.Discovery.Approved && splitProposal.Detected {
 		return DiscoveryReviewOutput{
-			Phase:       "DISCOVERY_REFINEMENT",
-			Instruction: "Discovery answers are approved. tddmaster detected multiple independent work areas in this spec. Present the split proposal to the user and let them decide whether to keep as one spec or split into separate specs.",
-			Answers:     reviewAnswers,
+			Phase:         "DISCOVERY_REFINEMENT",
+			Instruction:   "FIRST render `discoveryReviewData.reviewSummary` to the user. THEN present the split proposal and let them decide whether to keep this as one spec or split it into separate specs.",
+			Answers:       reviewAnswers,
+			ReviewSummary: reviewSummary,
 			Transition: struct {
 				OnApprove string `json:"onApprove"`
 				OnRevise  string `json:"onRevise"`
@@ -2021,10 +2062,11 @@ func compileDiscoveryReview(
 		alt.Format.Fields = altFields
 
 		return DiscoveryReviewOutput{
-			Phase:       "DISCOVERY_REFINEMENT",
-			SubPhase:    &subPhase,
-			Instruction: "Based on discovery answers, propose 2-3 distinct implementation approaches. Present each with name, summary, effort (S/M/L/XL), risk (Low/Med/High), pros, and cons. Ask the user to choose one, or skip.",
-			Answers:     reviewAnswers,
+			Phase:         "DISCOVERY_REFINEMENT",
+			SubPhase:      &subPhase,
+			Instruction:   "FIRST render `discoveryReviewData.reviewSummary` to the user. THEN propose 2-3 distinct implementation approaches with name, summary, effort (S/M/L/XL), risk (Low/Med/High), pros, and cons. Ask the user to choose one, or skip.",
+			Answers:       reviewAnswers,
+			ReviewSummary: reviewSummary,
 			Transition: struct {
 				OnApprove string `json:"onApprove"`
 				OnRevise  string `json:"onRevise"`
@@ -2082,15 +2124,16 @@ func compileDiscoveryReview(
 
 	var instruction string
 	if splitProposal.Detected {
-		instruction = "Present ALL discovery answers to the user for review. ALSO present the split proposal — tddmaster detected multiple independent areas." + batchWarning
+		instruction = "FIRST render `discoveryReviewData.reviewSummary` to the user. ALSO present the split proposal — tddmaster detected multiple independent areas. Only after the answer list is visible should you ask the user what to do next." + batchWarning
 	} else {
-		instruction = "Present ALL discovery answers to the user for review. The user must confirm or correct each answer before the spec can be generated. Use AskUserQuestion to ask for confirmation." + batchWarning
+		instruction = "FIRST render `discoveryReviewData.reviewSummary` to the user. The user must confirm or correct each answer before the spec can be generated. Only AFTER the review should you ask whether to approve or revise." + batchWarning
 	}
 
 	result := DiscoveryReviewOutput{
-		Phase:       "DISCOVERY_REFINEMENT",
-		Instruction: instruction,
-		Answers:     reviewAnswers,
+		Phase:         "DISCOVERY_REFINEMENT",
+		Instruction:   instruction,
+		Answers:       reviewAnswers,
+		ReviewSummary: reviewSummary,
 		Transition: struct {
 			OnApprove string `json:"onApprove"`
 			OnRevise  string `json:"onRevise"`
@@ -2104,6 +2147,20 @@ func compileDiscoveryReview(
 		result.SplitProposal = &splitProposal
 	}
 	return result
+}
+
+func buildDiscoveryReviewSummary(answers []DiscoveryReviewAnswer) string {
+	if len(answers) == 0 {
+		return ""
+	}
+
+	lines := make([]string, 0, len(answers)*2)
+	for i, answer := range answers {
+		lines = append(lines, fmt.Sprintf("%d. [%s] %s", i+1, answer.QuestionID, answer.Question))
+		lines = append(lines, "Answer: "+answer.Answer)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func compileSpecDraft(st state.StateFile) SpecDraftOutput {

@@ -122,6 +122,8 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 		"### Interactive choices",
 		"",
 		"- Use AskUserQuestion for `interactiveOptions`. Use `commandMap` to resolve selections.",
+		"- Listen-first step (mode not yet chosen, no user context): ask the single open-ended context question via AskUserQuestion with a free-form prompt. Do NOT fabricate options.",
+		"- Premise challenge step: ask each premise via a separate AskUserQuestion call (agree / disagree / revise with free-form notes). Aggregate the answers client-side, then submit the final JSON payload.",
 		"- On recurring patterns or corrections: ask 'Permanent rule?' → `" + commandPrefix + ` rule add "description"` + "``.",
 	}
 
