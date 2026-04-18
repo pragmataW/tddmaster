@@ -179,6 +179,8 @@ func TestClaudeCodeAdapter_SyncAgents_DefaultDeno(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(execData), "Self-Verification", "executor must not self-verify")
 	assert.NotContains(t, string(execData), `"verification"`, "executor report must not have verification field")
+	assert.Contains(t, string(execData), "Absolute Rule: Never Write Tests",
+		"executor must carry the shared never-write-tests rule")
 
 	verifData, err := os.ReadFile(filepath.Join(agentDir, "tddmaster-verifier.md"))
 	require.NoError(t, err)
@@ -224,6 +226,8 @@ func TestCodexAdapter_SyncAgents_DefaultDeno(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(execData), "Self-Verification", "executor must not self-verify")
 	assert.NotContains(t, string(execData), "verification", "executor report must not have verification field")
+	assert.Contains(t, string(execData), "Absolute Rule: Never Write Tests",
+		"executor must carry the shared never-write-tests rule")
 
 	verifData, err := os.ReadFile(filepath.Join(agentsDir, "tddmaster-verifier.toml"))
 	require.NoError(t, err)
@@ -267,6 +271,8 @@ func TestOpenCodeAdapter_SyncAgents_DefaultDeno(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(execData), "Self-Verification", "executor must not self-verify")
 	assert.NotContains(t, string(execData), `"verification"`, "executor report must not have verification field")
+	assert.Contains(t, string(execData), "Absolute Rule: Never Write Tests",
+		"executor must carry the shared never-write-tests rule")
 
 	verifData, err := os.ReadFile(filepath.Join(agentsDir, "tddmaster-verifier.md"))
 	require.NoError(t, err)
@@ -526,6 +532,67 @@ func TestClaudeCodeAdapter_SyncAgents_NoTestWriterWhenTddModeFalse(t *testing.T)
 	agentDir := filepath.Join(dir, ".claude", "agents")
 	_, err := os.Stat(filepath.Join(agentDir, "test-writer.md"))
 	assert.True(t, os.IsNotExist(err), "test-writer.md should NOT be created when TddMode is false")
+}
+
+func TestClaudeCodeAdapter_SyncAgents_SubagentsUseSonnetModel(t *testing.T) {
+	dir := t.TempDir()
+	ctx := statesync.SyncContext{
+		Root:          dir,
+		Rules:         nil,
+		CommandPrefix: "tddmaster",
+		Manifest:      &state.Manifest{TddMode: true},
+	}
+	a := &adapters.ClaudeCodeAdapter{}
+	require.NoError(t, a.SyncAgents(ctx, nil))
+
+	agentDir := filepath.Join(dir, ".claude", "agents")
+
+	for _, name := range []string{"tddmaster-executor.md", "tddmaster-verifier.md", "test-writer.md"} {
+		data, err := os.ReadFile(filepath.Join(agentDir, name))
+		require.NoError(t, err, "reading %s", name)
+		assert.Contains(t, string(data), "model: sonnet",
+			"%s front-matter must declare model: sonnet so Claude Code spawns the sub-agent on Sonnet", name)
+	}
+}
+
+func TestOpenCodeAdapter_SyncAgents_NoModelSonnetField(t *testing.T) {
+	dir := t.TempDir()
+	ctx := statesync.SyncContext{
+		Root:          dir,
+		Rules:         nil,
+		CommandPrefix: "tddmaster",
+		Manifest:      &state.Manifest{TddMode: true},
+	}
+	a := &adapters.OpenCodeAdapter{}
+	require.NoError(t, a.SyncAgents(ctx, nil))
+
+	agentsDir := filepath.Join(dir, ".opencode", "agents")
+	for _, name := range []string{"tddmaster-executor.md", "tddmaster-verifier.md", "test-writer.md"} {
+		data, err := os.ReadFile(filepath.Join(agentsDir, name))
+		require.NoError(t, err, "reading %s", name)
+		assert.NotContains(t, string(data), "model: sonnet",
+			"%s must not carry model: sonnet — that field is Claude Code-specific", name)
+	}
+}
+
+func TestCodexAdapter_SyncAgents_NoModelSonnetField(t *testing.T) {
+	dir := t.TempDir()
+	ctx := statesync.SyncContext{
+		Root:          dir,
+		Rules:         nil,
+		CommandPrefix: "tddmaster",
+		Manifest:      &state.Manifest{TddMode: true},
+	}
+	a := &adapters.CodexAdapter{}
+	require.NoError(t, a.SyncAgents(ctx, nil))
+
+	agentsDir := filepath.Join(dir, ".codex", "agents")
+	for _, name := range []string{"tddmaster-executor.toml", "tddmaster-verifier.toml", "test-writer.toml"} {
+		data, err := os.ReadFile(filepath.Join(agentsDir, name))
+		require.NoError(t, err, "reading %s", name)
+		assert.NotContains(t, string(data), "model: sonnet",
+			"%s must not carry model: sonnet — that field is Claude Code-specific", name)
+	}
 }
 
 func TestClaudeCodeAdapter_SyncAgents_NoTestWriterWhenManifestNil(t *testing.T) {

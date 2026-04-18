@@ -72,7 +72,7 @@ func (a *OpenCodeAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.Syn
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-executor.md"), []byte(buildOpenCodeExecutorAgentMd(ctx.CommandPrefix, ctx.Manifest)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-executor.md"), []byte(buildOpenCodeExecutorAgentMd(ctx.CommandPrefix)), 0o644); err != nil {
 		return err
 	}
 
@@ -194,7 +194,7 @@ func buildOpenCodePluginContent(commandPrefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func buildOpenCodeExecutorAgentMd(commandPrefix string, manifest *state.Manifest) string {
+func buildOpenCodeExecutorAgentMd(commandPrefix string) string {
 	lines := []string{
 		"---",
 		"name: tddmaster-executor",
@@ -202,33 +202,7 @@ func buildOpenCodeExecutorAgentMd(commandPrefix string, manifest *state.Manifest
 		"tools: read, write, glob, grep, shell, delegate",
 		"---",
 		"",
-		"You are executing a single task from a tddmaster spec.",
-		"Your ONLY job is to complete the task described in the prompt.",
-		"Follow all behavioral rules provided in the prompt.",
-		"Do NOT start new tasks, explore unrelated code, or make architectural decisions.",
-		"If the task is too vague to execute, say so immediately.",
-		"",
-		"## TDD Context",
-		"If `tddPhase` is present in your task context, follow RGR discipline:",
-		"- `red` — write failing tests ONLY; do NOT write implementation code",
-		"- `green` — implement minimum code to make failing tests pass",
-		"- `refactor` — improve structure without changing behavior; tests must still pass",
-		"If `tddFailureReport` is present, read `failedACs` and address them before anything else.",
-		"Include `tddPhase` in your JSON report when it is set.",
-		"",
-		"## Refactor Mode",
-		"If `refactorInstructions` is present in your task context, this is a REFACTOR round:",
-		"1. Apply each note in `refactorInstructions.notes` verbatim.",
-		"2. Do NOT change test behavior — the full test suite must still pass.",
-		"3. Report `refactorApplied: true` in your JSON output.",
-		"The verifier will re-run tests after your changes to confirm behavior is preserved.",
-		"",
-		"## Reporting",
-		"When finished, provide a structured JSON summary:",
-		"```json",
-		`{"completed": ["<item IDs done>"], "remaining": ["<item IDs not done>"], "blocked": ["<item IDs needing decisions>"], "filesModified": ["<paths>"], "tddPhase": "<phase or omit>", "refactorApplied": true|false}`,
-		"```",
-		"The orchestrator will submit this to `" + commandPrefix + " next --answer` on your behalf.",
+		shared.ExecutorInstructions(commandPrefix),
 		"",
 	}
 
