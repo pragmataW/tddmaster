@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/output"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
@@ -155,9 +156,17 @@ func runNextCore(specPtr *string, answerText string) error {
 			if st.Spec != nil {
 				parsedSpec, _ = spec.ParseSpec(root, *st.Spec)
 			}
-			folderRules, _ := collectTouchedFiles(root, st)
 			u, _ := state.ResolveUser(root)
-			compiled := ctxpkg.Compile(st, activeConcerns, tier1, config, parsedSpec, folderRules, nil, hints, &struct{ Name, Email string }{Name: u.Name, Email: u.Email}, tier2Count)
+			compiled := ctxpkg.Compile(model.CompileInput{
+				State:            st,
+				ActiveConcerns:   activeConcerns,
+				Rules:            tier1,
+				Config:           config,
+				ParsedSpec:       parsedSpec,
+				InteractionHints: hints,
+				CurrentUser:      &model.CurrentUser{Name: u.Name, Email: u.Email},
+				Tier2Count:       tier2Count,
+			})
 			result := compiledToMap(compiled)
 			result["idempotent"] = true
 			return writeJSON(result)
@@ -217,8 +226,16 @@ func runNextCore(specPtr *string, answerText string) error {
 			parsedSpec, _ = spec.ParseSpec(root, *newState.Spec)
 		}
 
-		folderRules, _ := collectTouchedFiles(root, newState)
-		compiled := ctxpkg.Compile(newState, activeConcerns, tier1, config, parsedSpec, folderRules, nil, hints, &struct{ Name, Email string }{Name: user.Name, Email: user.Email}, tier2Count)
+		compiled := ctxpkg.Compile(model.CompileInput{
+			State:            newState,
+			ActiveConcerns:   activeConcerns,
+			Rules:            tier1,
+			Config:           config,
+			ParsedSpec:       parsedSpec,
+			InteractionHints: hints,
+			CurrentUser:      &model.CurrentUser{Name: user.Name, Email: user.Email},
+			Tier2Count:       tier2Count,
+		})
 
 		// Inject "saved" flag when "save" was the answer and phase didn't change
 		isSaveAnswer := strings.TrimSpace(strings.ToLower(answerText)) == "save"
@@ -249,14 +266,14 @@ func runNextCore(specPtr *string, answerText string) error {
 	}
 
 	// Build idle context if needed
-	var idleCtx *ctxpkg.IdleContext
+	var idleCtx *model.IdleContext
 	if st.Phase == state.PhaseIdle {
 		specStates, _ := state.ListSpecStates(root)
 		scoped, _ := loadRulesCount(root)
 		scopedPtr := &scoped
-		existingSpecs := make([]ctxpkg.SpecSummary, 0, len(specStates))
+		existingSpecs := make([]model.SpecSummary, 0, len(specStates))
 		for _, ss := range specStates {
-			es := ctxpkg.SpecSummary{
+			es := model.SpecSummary{
 				Name:      ss.Name,
 				Phase:     string(ss.State.Phase),
 				Iteration: ss.State.Execution.Iteration,
@@ -275,7 +292,7 @@ func runNextCore(specPtr *string, answerText string) error {
 			}
 			existingSpecs = append(existingSpecs, es)
 		}
-		idleCtx = &ctxpkg.IdleContext{
+		idleCtx = &model.IdleContext{
 			ExistingSpecs: existingSpecs,
 			RulesCount:    scopedPtr,
 		}
@@ -290,9 +307,18 @@ func runNextCore(specPtr *string, answerText string) error {
 		parsedSpec, _ = spec.ParseSpec(root, *st.Spec)
 	}
 
-	folderRules, _ := collectTouchedFiles(root, st)
 	user, _ := state.ResolveUser(root)
-	compiled := ctxpkg.Compile(st, activeConcerns, tier1, config, parsedSpec, folderRules, idleCtx, hints, &struct{ Name, Email string }{Name: user.Name, Email: user.Email}, tier2Count)
+	compiled := ctxpkg.Compile(model.CompileInput{
+		State:            st,
+		ActiveConcerns:   activeConcerns,
+		Rules:            tier1,
+		Config:           config,
+		ParsedSpec:       parsedSpec,
+		IdleContext:      idleCtx,
+		InteractionHints: hints,
+		CurrentUser:      &model.CurrentUser{Name: user.Name, Email: user.Email},
+		Tier2Count:       tier2Count,
+	})
 
 	// Pre-execution TDD mode prompt: when tddMode is active and the spec is
 	// approved (pre-execution gate), present a TDD-mode confirmation to the user.
@@ -315,11 +341,6 @@ func loadRulesCount(root string) (int, error) {
 		return 0, err
 	}
 	return len(rules), nil
-}
-
-// collectTouchedFiles returns folder rules for touched files (stub).
-func collectTouchedFiles(_ string, _ state.StateFile) ([]ctxpkg.FolderRule, error) {
-	return nil, nil
 }
 
 // handleAnswer processes an answer for the current phase and returns new
@@ -504,7 +525,7 @@ func handleDiscoveryAnswer(
 					continue
 				}
 				var ansErr error
-				newState, ansErr = state.AddDiscoveryAnswer(newState, qID, qAnswer, user)
+				newState, ansErr = state.AddDiscoveryAnswer(newState, qID, qAnswer)
 				if ansErr != nil {
 					continue
 				}
@@ -537,7 +558,7 @@ func handleDiscoveryAnswer(
 	}
 	currentQ := allQuestions[currentIdx]
 
-	newState, err := state.AddDiscoveryAnswer(st, currentQ.ID, answer, user)
+	newState, err := state.AddDiscoveryAnswer(st, currentQ.ID, answer)
 	if err != nil {
 		return st, err
 	}
@@ -568,7 +589,7 @@ func storeUserContextPrefills(st state.StateFile, context string) state.StateFil
 }
 
 func nextUnansweredDiscoveryQuestionIndex(
-	questions []ctxpkg.QuestionWithExtras,
+	questions []model.QuestionWithExtras,
 	answers []state.DiscoveryAnswer,
 ) int {
 	answeredIDs := make(map[string]bool, len(answers))
@@ -586,7 +607,7 @@ func nextUnansweredDiscoveryQuestionIndex(
 }
 
 // isDiscoveryComplete returns true if all required questions have been answered.
-func isDiscoveryComplete(answers []state.DiscoveryAnswer, questions []ctxpkg.QuestionWithExtras) bool {
+func isDiscoveryComplete(answers []state.DiscoveryAnswer, questions []model.QuestionWithExtras) bool {
 	answered := make(map[string]bool)
 	for _, a := range answers {
 		answered[a.QuestionID] = true
@@ -670,7 +691,7 @@ func handleDiscoveryRefinementAnswer(st state.StateFile, answer string, user *st
 			newState := st
 			for qID, qAnswer := range revise {
 				if qa, ok := qAnswer.(string); ok && qa != "" {
-					newState, _ = state.AddDiscoveryAnswer(newState, qID, qa, user)
+					newState, _ = state.AddDiscoveryAnswer(newState, qID, qa)
 				}
 			}
 			return newState, nil

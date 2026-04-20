@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/state"
 	statesync "github.com/pragmataW/tddmaster/internal/sync"
 )
@@ -35,7 +35,7 @@ func resolveRoot() (string, error) {
 }
 
 // loadRulesAndHints loads tier1 rules and interaction hints for a given state.
-func loadRulesAndHints(root string, st state.StateFile, config *state.NosManifest) ([]string, *ctxpkg.InteractionHints, int, error) {
+func loadRulesAndHints(root string, st state.StateFile, config *state.NosManifest) ([]string, *model.InteractionHints, int, error) {
 	scoped, err := statesync.LoadScopedRules(root)
 	if err != nil {
 		return nil, nil, 0, err
@@ -43,11 +43,11 @@ func loadRulesAndHints(root string, st state.StateFile, config *state.NosManifes
 
 	tier1, tier2Count := statesync.SplitByTier(scoped, st.Phase)
 
-	var hints *ctxpkg.InteractionHints
+	var hints *model.InteractionHints
 	if config != nil {
 		h := statesync.ResolveInteractionHints(config.Tools)
 		if h != nil {
-			hints = &ctxpkg.InteractionHints{
+			hints = &model.InteractionHints{
 				HasAskUserTool:        h.HasAskUserTool,
 				OptionPresentation:    h.OptionPresentation,
 				HasSubAgentDelegation: h.HasSubAgentDelegation,
@@ -61,7 +61,7 @@ func loadRulesAndHints(root string, st state.StateFile, config *state.NosManifes
 }
 
 // compiledToMap converts a NextOutput to a map via JSON round-trip.
-func compiledToMap(c ctxpkg.NextOutput) map[string]interface{} {
+func compiledToMap(c model.NextOutput) map[string]interface{} {
 	data, err := json.Marshal(c)
 	if err != nil {
 		return map[string]interface{}{}

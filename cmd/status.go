@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	ctxpkg "github.com/pragmataW/tddmaster/internal/context"
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/output"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/state"
@@ -99,7 +100,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		parsedSpec, _ = spec.ParseSpec(root, *st.Spec)
 	}
 
-	compiled := ctxpkg.Compile(st, activeConcerns, tier1, config, parsedSpec, nil, nil, hints, nil, tier2Count)
+	compiled := ctxpkg.Compile(model.CompileInput{
+		State:            st,
+		ActiveConcerns:   activeConcerns,
+		Rules:            tier1,
+		Config:           config,
+		ParsedSpec:       parsedSpec,
+		InteractionHints: hints,
+		Tier2Count:       tier2Count,
+	})
 	merged := mergeMap(statusData, compiledToMap(compiled))
 
 	return writeJSON(merged)

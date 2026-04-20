@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	ctx "github.com/pragmataW/tddmaster/internal/context"
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,11 +81,11 @@ func TestCompileDiscovery_AttachesPersistedPrefillsAndSuppressesRichDescription(
 		},
 	}
 
-	out := ctx.Compile(st, nil, nil, nil, nil, nil, nil, nil, nil, 0)
+	out := ctx.Compile(model.CompileInput{State: st})
 	require.NotNil(t, out.DiscoveryData)
 	assert.Nil(t, out.DiscoveryData.RichDescription)
 
-	var statusQuo *ctx.DiscoveryQuestion
+	var statusQuo *model.DiscoveryQuestion
 	for i := range out.DiscoveryData.Questions {
 		if out.DiscoveryData.Questions[i].ID == "status_quo" {
 			statusQuo = &out.DiscoveryData.Questions[i]
@@ -118,7 +119,7 @@ func TestCompileDiscovery_HidesPrefillsOnceQuestionHasConfirmedAnswer(t *testing
 		},
 	}
 
-	out := ctx.Compile(st, nil, nil, nil, nil, nil, nil, nil, nil, 0)
+	out := ctx.Compile(model.CompileInput{State: st})
 	require.NotNil(t, out.DiscoveryData)
 	for _, question := range out.DiscoveryData.Questions {
 		assert.NotEqual(t, "status_quo", question.ID)

@@ -143,7 +143,6 @@ func TestHelpContainsAllCommands(t *testing.T) {
 		"reopen",
 		"status",
 		"concern",
-		"run",
 		"watch",
 		"sync",
 		"learn",
