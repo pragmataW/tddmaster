@@ -1334,11 +1334,122 @@ func handleExecutingAnswer(root string, st state.StateFile, config *state.NosMan
 		return st, fmt.Errorf("expected status report JSON with completed/remaining arrays")
 	}
 
+	// skipVerify routing: when the manifest requests verifier-skip, apply the
+	// guard before the normal verifier-payload check. The guard handles all
+	// cases (error on misrouted verifier reports, advance on executor reports).
+	if config != nil && config.IsVerifierSkipped() {
+		return verifierPayloadGuard(st, config, structured)
+	}
+
 	if verifierPayload, ok := extractVerifierPayload(structured); ok {
 		return applyVerifierReport(st, config, verifierPayload)
 	}
 
 	return applyExecutorReport(st, config, structured)
+}
+
+// verifierPayloadGuard is the entry point for all answer routing when
+// skipVerify=true is set in the manifest.
+//
+// Rules:
+//   - GREEN phase → verifier is still required; route normally (verifier
+//     report → applyVerifierReport, executor report → error).
+//   - Non-GREEN phase + verifier shape in report → error (guard rejects).
+//   - Non-GREEN phase + pure executor report → advanceWithoutVerification.
+func verifierPayloadGuard(st state.StateFile, config *state.NosManifest, report map[string]interface{}) (state.StateFile, error) {
+	phase := st.Execution.TDDCycle
+
+	// GREEN phase always requires a real verifier even when skipVerify=true.
+	if config.IsTDDEnabled() && phase == state.TDDCycleGreen {
+		if verifierPayload, ok := extractVerifierPayload(report); ok {
+			return applyVerifierReport(st, config, verifierPayload)
+		}
+		return st, fmt.Errorf(
+			"verifier report required in GREEN phase even when skipVerify=true; "+
+				"current phase: %s", phase,
+		)
+	}
+
+	// Non-GREEN (or TDD=off): verifier is skipped. Reject verifier reports.
+	if _, ok := extractVerifierPayload(report); ok {
+		phaseStr := phase
+		if phaseStr == "" {
+			phaseStr = "(none)"
+		}
+		return st, fmt.Errorf(
+			"verifier report submitted but skipVerify=true; phase: %s", phaseStr,
+		)
+	}
+
+	// Pure executor report → advance without calling applyVerifierReport.
+	return advanceWithoutVerification(st, config, report)
+}
+
+// advanceWithoutVerification advances the state when skipVerify=true and the
+// report is a pure executor report (no verifier payload). It deliberately does
+// NOT call applyVerifierReport so that LastVerification is never set on the
+// skip-verify path (AC-7).
+//
+// TDD=off: complete tasks, increment iteration.
+// TDD=on + RED: transition to GREEN (tests accepted by executor).
+// TDD=on + REFACTOR: complete task, reseed next task's RED cycle.
+func advanceWithoutVerification(st state.StateFile, config *state.NosManifest, report map[string]interface{}) (state.StateFile, error) {
+	newState := st
+	newState.Execution.AwaitingStatusReport = false
+
+	phase := st.Execution.TDDCycle
+
+	if config.IsTDDEnabled() && phase == state.TDDCycleRed {
+		// RED → GREEN: tests have been written; accept without running verifier.
+		newState.Execution.TDDCycle = state.TDDCycleGreen
+		newState.Execution.Iteration++
+		return newState, nil
+	}
+
+	if config.IsTDDEnabled() && phase == state.TDDCycleRefactor {
+		// REFACTOR → task-complete + reseed next-task RED.
+		newState.Execution.Iteration++
+		if completed, ok := report["completed"].([]interface{}); ok {
+			for _, c := range completed {
+				s, ok := c.(string)
+				if !ok {
+					continue
+				}
+				newState.Execution.CompletedTasks = append(newState.Execution.CompletedTasks, s)
+				for i := range newState.OverrideTasks {
+					if newState.OverrideTasks[i].ID == s {
+						newState.OverrideTasks[i].Completed = true
+						break
+					}
+				}
+			}
+		}
+		if getBoolField(report, "refactorApplied") {
+			state.MarkRefactorApplied(&newState)
+		}
+		clearTDDRefactorState(&newState)
+		reseedTDDCycleIfNeeded(&newState, config)
+		return newState, nil
+	}
+
+	// TDD=off (or any other phase): standard task completion + iteration bump.
+	newState.Execution.Iteration++
+	if completed, ok := report["completed"].([]interface{}); ok {
+		for _, c := range completed {
+			s, ok := c.(string)
+			if !ok {
+				continue
+			}
+			newState.Execution.CompletedTasks = append(newState.Execution.CompletedTasks, s)
+			for i := range newState.OverrideTasks {
+				if newState.OverrideTasks[i].ID == s {
+					newState.OverrideTasks[i].Completed = true
+					break
+				}
+			}
+		}
+	}
+	return newState, nil
 }
 
 // parseStructuredReport returns the decoded top-level object when the answer is
@@ -1457,6 +1568,13 @@ func applyExecutorReport(st state.StateFile, config *state.NosManifest, report m
 	return newState, nil
 }
 
+// clearTDDRefactorState resets all three TDD/refactor tracking fields on st.
+func clearTDDRefactorState(st *state.StateFile) {
+	st.Execution.TDDCycle = ""
+	st.Execution.RefactorRounds = 0
+	st.Execution.RefactorApplied = false
+}
+
 // reseedTDDCycleIfNeeded sets or clears Execution.TDDCycle based on whether
 // the current task (after any CompletedTasks append) should run under TDD.
 func reseedTDDCycleIfNeeded(st *state.StateFile, config *state.NosManifest) {
@@ -1466,9 +1584,7 @@ func reseedTDDCycleIfNeeded(st *state.StateFile, config *state.NosManifest) {
 		}
 		return
 	}
-	st.Execution.TDDCycle = ""
-	st.Execution.RefactorRounds = 0
-	st.Execution.RefactorApplied = false
+	clearTDDRefactorState(st)
 }
 
 // applyVerifierReport routes a verifier report through RecordTDDVerificationFull
@@ -1504,7 +1620,7 @@ func applyVerifierReport(st state.StateFile, config *state.NosManifest, report m
 	}
 
 	newState, err := state.RecordTDDVerificationFull(
-		st, maxRetries, maxRefactorRounds, passed, output, failedACs, uncoveredEdgeCases, refactorNotes,
+		st, maxRetries, maxRefactorRounds, passed, output, failedACs, uncoveredEdgeCases, refactorNotes, config,
 	)
 	if err != nil {
 		return st, err

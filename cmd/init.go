@@ -98,7 +98,28 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().String("concerns", "", "Comma-separated concern IDs to enable")
 	cmd.Flags().String("tools", "", "Comma-separated tool IDs to enable")
 	cmd.Flags().Bool("non-interactive", false, "Skip interactive prompts")
+	cmd.Flags().Bool("skip-verify", false, "Skip verifier sub-agent (GREEN-only if TDD enabled)")
+	cmd.Flags().Bool("tdd-enabled", true, "Enable TDD (test-first) workflow")
 	return cmd
+}
+
+func resolveTddSettings(cmd *cobra.Command, existing *state.NosManifest) (tddMode, skipVerify bool) {
+	// defaults
+	tddMode = true
+	skipVerify = false
+	// existing manifest
+	if existing != nil && existing.Tdd != nil {
+		tddMode = existing.Tdd.TddMode
+		skipVerify = existing.Tdd.SkipVerify
+	}
+	// flags override when explicitly set
+	if cmd.Flags().Changed("tdd-enabled") {
+		tddMode, _ = cmd.Flags().GetBool("tdd-enabled")
+	}
+	if cmd.Flags().Changed("skip-verify") {
+		skipVerify, _ = cmd.Flags().GetBool("skip-verify")
+	}
+	return
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -153,13 +174,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 	detectedTools := detect.DetectCodingTools(root)
 	fmt.Fprintf(os.Stderr, "%d coding tool(s) detected\n", len(detectedTools))
 
+	// Read existing manifest once for the alreadyInitialized branch (tools, concerns, TDD settings).
+	var existingManifest *state.NosManifest
+	if alreadyInitialized {
+		existingManifest, _ = state.ReadManifest(root)
+	}
+
 	var codingTools []state.CodingToolId
 	if len(parsedTools) > 0 {
 		codingTools = parsedTools
 	} else if alreadyInitialized {
-		existing, _ := state.ReadManifest(root)
-		if existing != nil {
-			codingTools = existing.Tools
+		if existingManifest != nil {
+			codingTools = existingManifest.Tools
 		} else {
 			codingTools = detectedTools
 		}
@@ -184,9 +210,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 			}
 		}
 	} else if alreadyInitialized {
-		existing, _ := state.ReadManifest(root)
-		if existing != nil {
-			selectedConcernIds = existing.Concerns
+		if existingManifest != nil {
+			selectedConcernIds = existingManifest.Concerns
 		}
 	} else if !nonInteractive {
 		selectedConcernIds = pickConcerns(allConcerns)
@@ -210,19 +235,26 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 6: Ask TDD mode preference
-	tddMode := true
+	tddMode, skipVerify := resolveTddSettings(cmd, existingManifest)
+
 	if !nonInteractive {
-		tddEnabled := true
+		tddEnabled := tddMode
+		skipVerifyVal := skipVerify
 		form := huh.NewForm(
 			huh.NewGroup(
 				huh.NewConfirm().
 					Title("Enable TDD (test-first) workflow?").
 					Description("When enabled, test tasks run before implementation tasks.").
 					Value(&tddEnabled),
+				huh.NewConfirm().
+					Title("Skip verifier sub-agent?").
+					Description("When enabled, verification step is skipped (GREEN-only mode).").
+					Value(&skipVerifyVal),
 			),
 		)
 		if err := form.Run(); err == nil {
 			tddMode = tddEnabled
+			skipVerify = skipVerifyVal
 		}
 	}
 
@@ -235,7 +267,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	config := state.CreateInitialManifest(selectedConcernIds, codingTools, projectTraits)
 	config.Command = output.CmdPrefix()
-	config.Tdd = &state.Manifest{TddMode: tddMode}
+	config.Tdd = &state.Manifest{TddMode: tddMode, SkipVerify: skipVerify}
 
 	if err := state.WriteManifest(root, config); err != nil {
 		return fmt.Errorf("write manifest: %w", err)

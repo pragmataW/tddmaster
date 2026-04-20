@@ -159,7 +159,7 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 		"When `TDDEnabled` is `true`, tddmaster enforces Red-Green-Refactor cycles.",
 		"The executor context includes `tddPhase` (`red`|`green`|`refactor`|`\"\"`), `tddVerificationContext`, and `tddFailureReport`.",
 		"- `red` — write failing tests ONLY; do NOT write implementation code",
-		"- `green` — implement minimum code to make failing tests pass",
+		"- `green` — implement clean, working code that makes the failing tests pass (do not artificially minimise the solution)",
 		"- `refactor` — improve structure without changing behavior",
 		"Include `tddPhase` in status reports. When `tddFailureReport` is present, address `failedACs` before reporting done.",
 	)
@@ -275,9 +275,10 @@ func generateVerifierFile(root string, manifest *state.Manifest) error {
 	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
 	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
+	skipVerify := manifest != nil && manifest.SkipVerify
 	var verifierInstructions string
 	if tddMode {
-		verifierInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd)
+		verifierInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd, skipVerify)
 	} else {
 		verifierInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}

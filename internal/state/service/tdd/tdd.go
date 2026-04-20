@@ -91,7 +91,7 @@ func RecordTDDVerification(
 	failedACs []string,
 	uncoveredEdgeCases []string,
 ) (model.StateFile, error) {
-	return RecordTDDVerificationFull(st, maxRetries, 0, passed, output, failedACs, uncoveredEdgeCases, nil)
+	return RecordTDDVerificationFull(st, maxRetries, 0, passed, output, failedACs, uncoveredEdgeCases, nil, nil)
 }
 
 // RecordTDDVerificationFull is the full-featured TDD verification recorder. It
@@ -116,6 +116,7 @@ func RecordTDDVerificationFull(
 	failedACs []string,
 	uncoveredEdgeCases []string,
 	refactorNotes []model.RefactorNote,
+	cfg *model.NosManifest,
 ) (model.StateFile, error) {
 	if st.Phase != model.PhaseExecuting {
 		return st, fmt.Errorf("cannot record TDD verification in phase: %s", st.Phase)
@@ -178,6 +179,9 @@ func RecordTDDVerificationFull(
 			st.Execution.TDDCycle = model.TDDCycleRefactor
 			st.Execution.RefactorRounds = 0
 			st.Execution.RefactorApplied = false
+			if shouldPopulatePendingNotes(cfg) {
+				st.Execution.PendingRefactorNotes = refactorNotes
+			}
 		}
 
 	case model.TDDCycleRefactor:
@@ -192,11 +196,20 @@ func RecordTDDVerificationFull(
 				resetCycleForNextTask(&st)
 			} else {
 				st.Execution.RefactorApplied = false
+				if shouldPopulatePendingNotes(cfg) {
+					st.Execution.PendingRefactorNotes = refactorNotes
+				}
 			}
 		}
 	}
 
 	return st, nil
+}
+
+// shouldPopulatePendingNotes reports whether refactor notes should be stored
+// for a verifier-skipped TDD-enabled configuration.
+func shouldPopulatePendingNotes(cfg *model.NosManifest) bool {
+	return cfg != nil && cfg.IsVerifierSkipped() && cfg.IsTDDEnabled()
 }
 
 // resetCycleForNextTask clears per-task TDD cycle state.

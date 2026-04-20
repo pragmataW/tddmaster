@@ -33,6 +33,7 @@ type Manifest struct {
 	TestRunner             *string `json:"testRunner,omitempty" yaml:"testRunner"`
 	MaxVerificationRetries int     `json:"maxVerificationRetries" yaml:"maxVerificationRetries"`
 	MaxRefactorRounds      int     `json:"maxRefactorRounds,omitempty" yaml:"maxRefactorRounds,omitempty"`
+	SkipVerify             bool    `json:"skipVerify,omitempty" yaml:"skipVerify,omitempty"`
 }
 
 // NosManifest is the root `tddmaster:` section persisted in manifest.yml. It
@@ -55,4 +56,10 @@ type NosManifest struct {
 // Returns false when the Tdd field is nil or when TddMode is explicitly false.
 func (m NosManifest) IsTDDEnabled() bool {
 	return m.Tdd != nil && m.Tdd.TddMode
+}
+
+// IsVerifierSkipped returns true when the verifier sub-agent should be skipped.
+// Returns false when Tdd is nil or when SkipVerify is not set.
+func (m NosManifest) IsVerifierSkipped() bool {
+	return m.Tdd != nil && m.Tdd.SkipVerify
 }

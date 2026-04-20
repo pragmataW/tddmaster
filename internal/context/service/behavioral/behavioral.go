@@ -63,6 +63,7 @@ func Build(
 	activeConcerns []state.ConcernDefinition,
 	parsedSpec *spec.ParsedSpec,
 	hints model.InteractionHints,
+	verifierRequired bool,
 ) model.BehavioralBlock {
 	stale := st.Execution.Iteration >= maxIterationsBeforeRestart
 	mandatory := buildMandatoryRules(allowGit, hints)
@@ -84,7 +85,7 @@ func Build(
 	case state.PhaseSpecApproved:
 		return phaseSpecApprovedBehavioral(mandatory, hints)
 	case state.PhaseExecuting:
-		return phaseExecutingBehavioral(r, st, mandatory, scopeItems, hints, stale)
+		return phaseExecutingBehavioral(r, st, mandatory, scopeItems, hints, stale, verifierRequired)
 	case state.PhaseBlocked:
 		return model.BehavioralBlock{
 			Rules: append(mandatory,
@@ -285,6 +286,7 @@ func phaseExecutingBehavioral(
 	scopeItems []string,
 	hints model.InteractionHints,
 	stale bool,
+	verifierRequired bool,
 ) model.BehavioralBlock {
 	reportCmd := r.CS("next --answer='{\"completed\":[...],\"remaining\":[...],\"blocked\":[]}'", st.Spec)
 	verifierScope := "Verifier scope: (1) AC verification with evidence. (2) Plan alignment — does implementation match task description? Flag deviations. (3) Code quality — follows existing patterns? Flag style breaks, missing error handling. Categorize findings: CRITICAL (blocks completion), IMPORTANT (should fix), SUGGESTION (nice to have)."
@@ -293,16 +295,24 @@ func phaseExecutingBehavioral(
 	switch hints.SubAgentMethod {
 	case "task":
 		spawnInstruction = fmt.Sprintf("Spawn tddmaster-executor via Agent tool. Pass: task title, description, ACs, rules, scope constraints, concern reminders, file paths. Report via `%s`.", reportCmd)
-		verifyInstruction = fmt.Sprintf("After executor completes, spawn tddmaster-verifier with changed files + ACs + test commands. Never trust executor self-report alone. %s", verifierScope)
+		if verifierRequired {
+			verifyInstruction = fmt.Sprintf("After executor completes, spawn tddmaster-verifier with changed files + ACs + test commands. Never trust executor self-report alone. %s", verifierScope)
+		}
 	case "spawn":
 		spawnInstruction = fmt.Sprintf("Use spawn_agent for tddmaster-executor. Pass: task, ACs, rules, scope, file paths. Use wait_agent to collect. Report via `%s`.", reportCmd)
-		verifyInstruction = fmt.Sprintf("After executor completes, spawn tddmaster-verifier with changed files + ACs + test commands. %s", verifierScope)
+		if verifierRequired {
+			verifyInstruction = fmt.Sprintf("After executor completes, spawn tddmaster-verifier with changed files + ACs + test commands. %s", verifierScope)
+		}
 	case "fleet":
 		spawnInstruction = fmt.Sprintf("Use /fleet for parallel executors. Pass each: task, ACs, rules, scope, file paths. Report via `%s`.", reportCmd)
-		verifyInstruction = fmt.Sprintf("After fleet completes, run verification pass. %s", verifierScope)
+		if verifierRequired {
+			verifyInstruction = fmt.Sprintf("After fleet completes, run verification pass. %s", verifierScope)
+		}
 	case "delegation":
 		spawnInstruction = fmt.Sprintf("Use agent delegation for tddmaster-executor. Pass: task, ACs, rules, scope, file paths. Report via `%s`.", reportCmd)
-		verifyInstruction = fmt.Sprintf("After executor completes, delegate to tddmaster-verifier with changed files + ACs + test commands. %s", verifierScope)
+		if verifierRequired {
+			verifyInstruction = fmt.Sprintf("After executor completes, delegate to tddmaster-verifier with changed files + ACs + test commands. %s", verifierScope)
+		}
 	default:
 		spawnInstruction = fmt.Sprintf("Execute tasks sequentially yourself. Verify (type-check + tests) after each. Report via `%s`.", reportCmd)
 		verifyInstruction = ""
@@ -335,10 +345,28 @@ func phaseExecutingBehavioral(
 		"If execution output includes `edgeCases`, pass them explicitly to the test-writer. Those cases are mandatory red-phase coverage before implementation.",
 		"Parallel vs serial sub-agents: PARALLEL when tasks touch different files with no shared state. SERIAL when tasks modify same files or depend on each other. When unsure, default to serial.",
 	)
-	if hasSubAgents {
-		base = append(base, "VERIFICATION REQUIRED: After EVERY task completion, you MUST spawn tddmaster-verifier before reporting done. If you skip verification and self-report, the status report will flag it. No exceptions — 'it looks correct' is not verification.")
-	} else {
-		base = append(base, "VERIFICATION REQUIRED: After EVERY task completion, run type-check + tests before reporting done. Evidence of passing tests must be included in the status report.")
+
+	// Gate VERIFICATION REQUIRED sentences on verifierRequired.
+	if verifierRequired {
+		if hasSubAgents {
+			base = append(base, "VERIFICATION REQUIRED: After EVERY task completion, you MUST spawn tddmaster-verifier before reporting done. If you skip verification and self-report, the status report will flag it. No exceptions — 'it looks correct' is not verification.")
+		} else {
+			base = append(base, "VERIFICATION REQUIRED: After EVERY task completion, run type-check + tests before reporting done. Evidence of passing tests must be included in the status report.")
+		}
+	}
+
+	// When verifierRequired=false + TDD=on, emit skip-verifier directive for
+	// red and refactor phases. For green phase with verifierRequired=true, add
+	// mandatory refactorNotes language.
+	tddCycle := st.Execution.TDDCycle
+	if !verifierRequired && tddCycle != "" {
+		switch tddCycle {
+		case state.TDDCycleRed, state.TDDCycleRefactor:
+			base = append(base, model.SkipVerifierDirective)
+		}
+	}
+	if verifierRequired && tddCycle == state.TDDCycleGreen {
+		base = append(base, model.GreenRefactorNotesMandatory)
 	}
 
 	if st.Execution.LastVerification != nil && !st.Execution.LastVerification.Passed {

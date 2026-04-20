@@ -72,6 +72,7 @@ type ExecutionState struct {
 	TDDCycle             string              `json:"tddCycle,omitempty"  yaml:"tddCycle,omitempty"`
 	RefactorRounds       int                 `json:"refactorRounds,omitempty"`
 	RefactorApplied      bool                `json:"refactorApplied,omitempty"`
+	PendingRefactorNotes []RefactorNote      `json:"pendingRefactorNotes,omitempty"`
 }
 
 type SpecState struct {

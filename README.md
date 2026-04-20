@@ -149,7 +149,7 @@ flowchart LR
     B --> C[Current Task Uses TDD]
     C --> D[RED: write failing tests only]
     D --> E[RED verification: read-only test inspection]
-    E --> F[GREEN: minimum implementation]
+    E --> F[GREEN: clean, working implementation]
     F --> G[GREEN verification: run tests]
     G --> H{Refactor notes?}
     H -- No --> I[Next task]
@@ -164,7 +164,7 @@ What that means in practice:
 
 - `red`: tests first, no production code
 - red verification is read-only and checks test quality/coverage shape
-- `green`: implement the minimum needed to make the tests pass
+- `green`: implement clean, working code that makes the tests pass — do not artificially minimise the solution
 - green verification runs the suite and can emit refactor notes
 - `refactor`: apply cleanup without changing behavior
 - refactor verification reruns tests and may continue for another round or stop
@@ -290,7 +290,35 @@ Useful supporting commands:
 - `tddmaster watch`
 - `tddmaster run --spec=<name>`
 - `tddmaster run --spec=<name> --tool=codex` (override the default runner)
+- `tddmaster run --spec=<name> --tdd-enabled` (enable TDD workflow for this run)
+- `tddmaster run --spec=<name> --skip-verify` (skip verifier sub-agent calls)
 - `tddmaster rule add "..."` 
+
+### CLI Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--tdd-enabled` | bool | Enable TDD (test-first) workflow |
+| `--skip-verify` | bool | Skip verifier sub-agent (GREEN-only if TDD enabled) |
+
+### `init` usage with new flags
+
+```bash
+tddmaster init
+# then run with flags as needed:
+tddmaster run --spec=<name> --tdd-enabled --skip-verify
+```
+
+### Behavior matrix
+
+| TDD | skipVerify | Behavior |
+|-----|------------|----------|
+| off | false      | Default: verifier called after every executor/test-writer |
+| off | true       | No verifier calls |
+| on  | false      | Default: verifier called in RED, GREEN, REFACTOR phases |
+| on  | true       | Verifier called only once per task in GREEN phase (for refactorNotes) |
+
+> **Plan**: See [`docs/skip-verify-plan.md`](docs/skip-verify-plan.md) for full design details.
 
 ### Choosing a coding CLI
 

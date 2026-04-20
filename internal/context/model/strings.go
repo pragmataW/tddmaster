@@ -62,13 +62,13 @@ var ModeRulesExplore = []string{
 // verify the exact rule texts without coupling to buildBehavioral internals.
 var TDDBehavioralRules = []string{
 	"TDD REQUIRED: Write tests before implementation. No production code without a failing test.",
-	"TDD REQUIRED: Follow red-green-refactor. (1) Write test — it MUST fail. (2) Write minimum code to make it pass. (3) Refactor without breaking tests.",
+	"TDD REQUIRED: Follow red-green-refactor. (1) Write test — it MUST fail. (2) Write clean, working implementation that makes it pass — do NOT artificially shrink the solution. (3) Refactor only when a concrete improvement is visible.",
 	"TDD REQUIRED: Test task comes first. When a task has a corresponding test task, complete the test task before any implementation task.",
 	"TDD REQUIRED: In RED phase, test-writer writes tests only — it does NOT run them. tddmaster-verifier in RED phase performs read-only inspection (no test execution) to confirm tests are well-formed.",
 	"TDD REQUIRED: Sub-agent selection for each task follows the cycle. Do NOT conflate roles — test-writer writes tests only, tddmaster-executor writes implementation or applies refactor notes only, tddmaster-verifier is read-only and evaluates each step. Delegation table (drive it by `tddPhase`, `lastVerification.phase`, and `refactorInstructions`):\n" +
 		"  - tddPhase='red' && no verifier result yet OR lastVerification.phase!='red' → spawn `test-writer`. Pass the spec's edge cases explicitly.\n" +
 		"  - tddPhase='red' && lastVerification.phase='red' && lastVerification.passed=false → spawn `tddmaster-verifier` with phase='red'. It reads test files without running them and confirms they are well-formed (readOnly: true).\n" +
-		"  - tddPhase='green' && (no verifier result OR lastVerification.phase!='green') → spawn `tddmaster-executor` with the task; executor writes minimum implementation (does NOT run tests).\n" +
+		"  - tddPhase='green' && (no verifier result OR lastVerification.phase!='green') → spawn `tddmaster-executor` with the task; executor writes a clean, working implementation that makes the failing tests pass (does NOT run tests, does NOT artificially minimise the solution).\n" +
 		"  - tddPhase='green' && lastVerification.phase='green' && lastVerification.passed=false → spawn `tddmaster-verifier` with phase='green' to run and re-check tests.\n" +
 		"  - tddPhase='green' && lastVerification.phase='green' && lastVerification.passed=true → tddmaster already advanced to the next phase; no action needed here — run `next`.\n" +
 		"  - tddPhase='refactor' && refactorInstructions is present → spawn `tddmaster-executor` to apply the notes (from the GREEN scan or a prior REFACTOR re-check) verbatim and report `refactorApplied: true` (does NOT run tests).\n" +
@@ -167,6 +167,17 @@ var DesignChecklistDimensions = []DesignChecklistDimension{
 }
 
 const DesignChecklistInstruction = "Before completing any UI task, rate your implementation 0-10 on these dimensions and include the ratings in your AC report:"
+
+// TDD phase directives.
+const (
+	// SkipVerifierDirective is injected in RED and REFACTOR phases when
+	// verifierRequired=false to suppress verifier spawning.
+	SkipVerifierDirective = "do not spawn verifier — report directly to next: verifier çağırma, raporu doğrudan next'e gönder."
+
+	// GreenRefactorNotesMandatory is injected in GREEN phase when
+	// verifierRequired=true to require refactorNotes in the status report.
+	GreenRefactorNotesMandatory = "GREEN phase: refactorNotes ZORUNLU — executor MUST include refactorNotes in the status report. Verifier will enforce this."
+)
 
 // Execution instructions.
 const (

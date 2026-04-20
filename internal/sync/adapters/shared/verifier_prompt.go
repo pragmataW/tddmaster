@@ -3,6 +3,7 @@ package shared
 import (
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/context/service/tdd"
 )
 
@@ -31,7 +32,7 @@ func VerifierInstructions(typeCheckCmd, testCmd string) string {
 //	} else {
 //	    VerifierInstructions(...)   // no TDD blocks for non-TDD projects
 //	}
-func VerifierInstructionsAllPhases(typeCheckCmd, testCmd string) string {
+func VerifierInstructionsAllPhases(typeCheckCmd, testCmd string, skipVerify bool) string {
 	lines := genericVerifierLines(typeCheckCmd, testCmd)
 	lines = append(lines,
 		"",
@@ -39,41 +40,58 @@ func VerifierInstructionsAllPhases(typeCheckCmd, testCmd string) string {
 		"If your task context includes `tddPhase`, follow the matching phase block below.",
 		"Otherwise ignore them and use the generic steps above.",
 		"",
-		VerifierRedPhaseBlock(),
+		verifierRedPhaseBlockWithSkip(skipVerify),
 		"",
-		VerifierGreenPhaseBlock(typeCheckCmd, testCmd),
+		verifierGreenPhaseBlockWithSkip(typeCheckCmd, testCmd, skipVerify),
 		"",
-		VerifierRefactorPhaseBlock(typeCheckCmd, testCmd),
+		verifierRefactorPhaseBlockWithSkip(typeCheckCmd, testCmd, skipVerify),
 	)
 	lines = append(lines, "", verifierReportBlock())
 	return strings.Join(lines, "\n")
 }
 
-// VerifierRedPhaseBlock returns the standalone RED-phase instructions.
+// VerifierRedPhaseBlock returns the standalone RED-phase instructions (non-skipVerify).
 // Exposed so tests and specialized adapters can reuse the block verbatim.
 // RED phase is read-only: the verifier inspects test files without running them.
 func VerifierRedPhaseBlock() string {
-	return strings.Join([]string{
+	return verifierRedPhaseBlockWithSkip(false)
+}
+
+func verifierRedPhaseBlockWithSkip(skipVerify bool) string {
+	var executionLine, qualityLine string
+	if skipVerify {
+		executionLine = "- Test execution is optional in skip-verify mode. If needed, you may inspect test files."
+		qualityLine = "- Do NOT comment on implementation quality."
+	} else {
+		executionLine = "- DO NOT run tests. DO NOT invoke type-checkers. DO NOT execute any shell command."
+		qualityLine = "- Do NOT comment on implementation quality. Do NOT run typeCheckCmd or testCmd."
+	}
+	lines := []string{
 		"### TDD RED Phase (READ-ONLY)",
 		"You are verifying that the test-writer produced well-formed tests BEFORE any implementation exists.",
-		"- DO NOT run tests. DO NOT invoke type-checkers. DO NOT execute any shell command.",
+		executionLine,
 		"- READ each test file written in this iteration using your Read and Grep tools.",
 		"- VERIFY: (1) each test asserts behavior tied to a planned task or edge-case; (2) no placeholder/TODO/empty test bodies; (3) syntax is well-formed (imports resolve, function signatures match framework conventions).",
 		"- Set `passed: true` when all test files are well-formed and cover the planned tasks.",
 		"- Set `passed: false` with `reason: \"tests-malformed\"` and describe what is missing or incorrect.",
 		"- " + tdd.VerifierRedPhaseInstruction(),
-		"- Do NOT comment on implementation quality. Do NOT run typeCheckCmd or testCmd.",
-	}, "\n")
+		qualityLine,
+	}
+	return strings.Join(lines, "\n")
 }
 
-// VerifierGreenPhaseBlock returns the standalone GREEN-phase instructions.
+// VerifierGreenPhaseBlock returns the standalone GREEN-phase instructions (non-skipVerify).
 // In the merged flow this phase also acts as the refactor scanner: if tests pass
 // the verifier immediately produces refactorNotes so a separate REFACTOR verifier
 // call is no longer required.
 func VerifierGreenPhaseBlock(typeCheckCmd, testCmd string) string {
+	return verifierGreenPhaseBlockWithSkip(typeCheckCmd, testCmd, false)
+}
+
+func verifierGreenPhaseBlockWithSkip(typeCheckCmd, testCmd string, skipVerify bool) string {
 	lines := []string{
 		"### TDD GREEN Phase",
-		"You are verifying that the executor's minimum implementation makes the target tests pass.",
+		"You are verifying that the executor's implementation makes the target tests pass.",
 		"- Run type check: `" + typeCheckCmd + "` on modified files.",
 		"- Run the full test suite: `" + testCmd + "` for the target ACs. Exit code MUST be zero.",
 		"- If any test fails, set `passed: false`, report `reason: \"expected-pass-but-failed\"` plus failing test names in `failedACs`, and set `refactorNotes: []`.",
@@ -84,19 +102,32 @@ func VerifierGreenPhaseBlock(typeCheckCmd, testCmd string) string {
 		"  Contract: " + tdd.VerifierGreenPhaseInstruction(typeCheckCmd, testCmd),
 		"  Do NOT suggest changes that alter test behavior or public API.",
 	}
+	if skipVerify {
+		lines = append(lines, "  "+model.GreenRefactorNotesMandatory)
+	}
 	lines = append(lines, refactorQualityRubric()...)
 	return strings.Join(lines, "\n")
 }
 
-// VerifierRefactorPhaseBlock returns the standalone REFACTOR-phase instructions.
+// VerifierRefactorPhaseBlock returns the standalone REFACTOR-phase instructions (non-skipVerify).
 // In the merged flow this phase is a regression-check after the executor applied
 // the notes produced during the GREEN scan. It may also emit new notes for another round.
 func VerifierRefactorPhaseBlock(typeCheckCmd, testCmd string) string {
+	return verifierRefactorPhaseBlockWithSkip(typeCheckCmd, testCmd, false)
+}
+
+func verifierRefactorPhaseBlockWithSkip(typeCheckCmd, testCmd string, skipVerify bool) string {
+	var testRunLine string
+	if skipVerify {
+		testRunLine = "- Running the full test suite is optional in skip-verify mode; if needed run `" + testCmd + "`. If red, set `passed: false` and report `reason: \"behavior-changed\"` with failing test names."
+	} else {
+		testRunLine = "- Run the full test suite: `" + testCmd + "`. If red, set `passed: false` and report `reason: \"behavior-changed\"` with failing test names."
+	}
 	lines := []string{
 		"### TDD REFACTOR Phase",
 		"You are verifying that the executor's refactor changes did not break behavior.",
 		"- Run type check: `" + typeCheckCmd + "`.",
-		"- Run the full test suite: `" + testCmd + "`. If red, set `passed: false` and report `reason: \"behavior-changed\"` with failing test names.",
+		testRunLine,
 		"- If green, scan the modified files against the Quality rubric below and produce `refactorNotes` — a JSON array of `{file, suggestion, rationale}`.",
 		"- An empty `refactorNotes` array means the task is clean; the orchestrator advances to the next task.",
 		"- Contract: " + tdd.VerifierRefactorPhaseInstruction(typeCheckCmd, testCmd),
@@ -117,7 +148,7 @@ func refactorQualityRubric() []string {
 	return []string{
 		"",
 		"#### Quality rubric (language-agnostic)",
-		"Scan the diff against every item below. For each hit, emit a `refactorNotes` entry whose `suggestion` speaks in the vocabulary of the code under review (reuse its identifiers and filenames) rather than prescribing a specific language construct. \"Minimum code to make tests pass\" is the executor's mandate — your job is to surface what should still be cleaned up. Being overly permissive here defeats the REFACTOR phase.",
+		"Scan the diff against every item below. For each hit, emit a `refactorNotes` entry whose `suggestion` speaks in the vocabulary of the code under review (reuse its identifiers and filenames) rather than prescribing a specific language construct. The executor is expected to ship a clean, working implementation — your job is to surface ONLY concrete improvements that are clearly worth a refactor round. If the code is already good, return an empty array; do NOT invent issues to justify a refactor. Equally, do not be overly permissive when a real improvement exists.",
 		"- Magic values: any literal string, number, or boolean that carries meaning and appears more than once, or that a future change would have to update in multiple places. Suggest extracting a named, single-source-of-truth symbol.",
 		"- Duplication (DRY): near-identical blocks or branches that could be parameterised into a shared helper.",
 		"- Single responsibility: a function, method, or type that mixes unrelated concerns — split along the seams.",

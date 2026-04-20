@@ -5,6 +5,7 @@ package tdd
 import (
 	"github.com/pragmataW/tddmaster/internal/context/model"
 	"github.com/pragmataW/tddmaster/internal/state"
+	statemodel "github.com/pragmataW/tddmaster/internal/state/model"
 )
 
 // InjectRules appends TDD behavioural rules to rules and returns the combined
@@ -33,6 +34,33 @@ func BuildVerificationContext(cycle string) *model.TDDVerificationContext {
 		return nil
 	}
 	return &model.TDDVerificationContext{Phase: cycle, Instruction: instruction}
+}
+
+// VerifierRequired returns true when the verifier sub-agent must run for the
+// given manifest + TDD phase combination.
+//
+// Rules:
+//   - manifest==nil or manifest.Tdd==nil → treat as skipVerify=false → true.
+//   - skipVerify=false → always true (AC-1).
+//   - skipVerify=true + TDD=off → false (AC-2).
+//   - skipVerify=true + TDD=on + phase=green → true (AC-3).
+//   - skipVerify=true + TDD=on + phase∈{red,refactor} → false (AC-4).
+func VerifierRequired(manifest *statemodel.NosManifest, phase string) bool {
+	if manifest == nil || manifest.Tdd == nil {
+		// No skip flag configured → verifier is required.
+		return true
+	}
+	if !manifest.IsVerifierSkipped() {
+		// skipVerify=false → always require verifier.
+		return true
+	}
+	// skipVerify=true from here on.
+	if !manifest.IsTDDEnabled() {
+		// TDD off → skip.
+		return false
+	}
+	// TDD on → only green phase requires verifier.
+	return phase == statemodel.TDDCycleGreen
 }
 
 // BuildRefactorInstructions packages verifier refactor notes into an executor

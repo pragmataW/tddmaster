@@ -117,4 +117,5 @@ type ExecutionOutput struct {
 	TDDVerificationContext *TDDVerificationContext `json:"tddVerificationContext,omitempty"`
 	TDDFailureReport       *TDDFailureReport       `json:"tddFailureReport,omitempty"`
 	RefactorInstructions   *RefactorInstructions   `json:"refactorInstructions,omitempty"`
+	VerifierRequired       bool                    `json:"verifierRequired"`
 }

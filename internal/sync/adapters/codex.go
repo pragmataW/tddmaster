@@ -234,9 +234,10 @@ func buildCodexVerifierAgentToml(manifest *state.Manifest) string {
 	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
 	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
+	skipVerify := manifest != nil && manifest.SkipVerify
 	var baseInstructions string
 	if tddMode {
-		baseInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd)
+		baseInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd, skipVerify)
 	} else {
 		baseInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}

@@ -37,7 +37,12 @@ func Compile(in model.CompileInput) model.NextOutput {
 		allowGit = in.Config.AllowGit
 	}
 
-	behavioralBlock := behavioral.Build(r, st, maxIter, allowGit, activeConcerns, in.ParsedSpec, hints)
+	// Determine verifierRequired early so behavioral.Build can gate sentences.
+	// We compute a preliminary value here; the canonical value for ExecutionData
+	// is computed later in the PhaseExecuting case below.
+	prelimVerifierRequired := tdd.VerifierRequired(in.Config, st.Execution.TDDCycle)
+
+	behavioralBlock := behavioral.Build(r, st, maxIter, allowGit, activeConcerns, in.ParsedSpec, hints, prelimVerifierRequired)
 
 	if st.Phase == state.PhaseExecuting {
 		_, tier2Reminders := concerns.SplitRemindersByTier(activeConcerns)
@@ -95,13 +100,18 @@ func Compile(in model.CompileInput) model.NextOutput {
 		currentTaskUsesTDD := state.ShouldRunTDDForCurrentTask(st, in.Config)
 		if currentTaskUsesTDD && st.Execution.TDDCycle != "" {
 			cycle := st.Execution.TDDCycle
+			// AC-8: TDDPhase is always set (not gated by VerifierRequired).
 			exec.TDDPhase = &cycle
-			exec.TDDVerificationContext = tdd.BuildVerificationContext(cycle)
-			maxRounds := 0
-			if in.Config != nil && in.Config.Tdd != nil {
-				maxRounds = in.Config.Tdd.MaxRefactorRounds
+			// AC-6: VerifierRequired determined by the VerifierRequired function.
+			exec.VerifierRequired = tdd.VerifierRequired(in.Config, cycle)
+			// AC-7: TDDVerificationContext only populated when VerifierRequired=true.
+			if exec.VerifierRequired {
+				exec.TDDVerificationContext = tdd.BuildVerificationContext(cycle)
 			}
-			exec.RefactorInstructions = tdd.BuildRefactorInstructions(st, maxRounds)
+			exec.RefactorInstructions = tdd.BuildRefactorInstructions(st, getMaxRefactorRounds(in.Config))
+		} else {
+			// AC-6: When TDD is off or no cycle, compute VerifierRequired from manifest alone.
+			exec.VerifierRequired = tdd.VerifierRequired(in.Config, "")
 		}
 		if currentTaskUsesTDD &&
 			st.Execution.LastVerification != nil && !st.Execution.LastVerification.Passed {
@@ -177,4 +187,13 @@ func Compile(in model.CompileInput) model.NextOutput {
 	}
 
 	return result
+}
+
+// getMaxRefactorRounds safely reads the MaxRefactorRounds field from cfg,
+// returning 0 when cfg or cfg.Tdd is nil.
+func getMaxRefactorRounds(cfg *state.NosManifest) int {
+	if cfg == nil || cfg.Tdd == nil {
+		return 0
+	}
+	return cfg.Tdd.MaxRefactorRounds
 }

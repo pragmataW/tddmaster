@@ -102,7 +102,7 @@ func BuildProtocol(commandPrefix string, options *statesync.SyncOptions) string 
 		"",
 		"**Phase rules:**",
 		"- `red` — write failing tests ONLY; do NOT write implementation code",
-		"- `green` — implement the minimum code to make failing tests pass",
+		"- `green` — implement clean, working code that makes the failing tests pass (do not artificially minimise the solution)",
 		"- `refactor` — improve code structure; all tests must still pass; behavior must not change",
 		"",
 		"Include `tddPhase` in your status report when it is set.",

@@ -493,9 +493,10 @@ func RecordTDDVerificationFull(
 	failedACs []string,
 	uncoveredEdgeCases []string,
 	refactorNotes []RefactorNote,
+	cfg *NosManifest,
 ) (StateFile, error) {
 	return tdd.RecordTDDVerificationFull(
-		st, maxRetries, maxRefactorRounds, passed, output, failedACs, uncoveredEdgeCases, refactorNotes,
+		st, maxRetries, maxRefactorRounds, passed, output, failedACs, uncoveredEdgeCases, refactorNotes, cfg,
 	)
 }
 

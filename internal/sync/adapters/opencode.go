@@ -216,9 +216,10 @@ func buildOpenCodeVerifierAgentMd(manifest *state.Manifest) string {
 	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
 	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
+	skipVerify := manifest != nil && manifest.SkipVerify
 	var verifierInstructions string
 	if tddMode {
-		verifierInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd)
+		verifierInstructions = shared.VerifierInstructionsAllPhases(typeCheckCmd, testCmd, skipVerify)
 	} else {
 		verifierInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}

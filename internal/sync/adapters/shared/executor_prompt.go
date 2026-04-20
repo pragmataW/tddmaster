@@ -28,7 +28,7 @@ func ExecutorInstructions(commandPrefix string) string {
 		"## TDD Context",
 		"If `tddPhase` is present in your task context, follow RGR discipline:",
 		"- `red` — test-writer handles this phase; you do NOT write implementation or tests here",
-		"- `green` — implement minimum code to make existing failing tests pass (no new tests)",
+		"- `green` — implement clean, working code that makes the existing failing tests pass (no new tests, no artificially minimised solutions — the refactor phase only runs when a concrete improvement is visible)",
 		"- `refactor` — improve structure without changing behavior; tests must still pass (no new tests)",
 		"If `tddFailureReport` is present, read `failedACs` and address them before anything else.",
 		"Include `tddPhase` in your JSON report when it is set.",
