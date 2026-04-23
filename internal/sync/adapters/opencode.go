@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,7 +18,6 @@ import (
 const opencodePluginsDir = ".opencode/plugins"
 const opencodeAgentsDir = ".opencode/agents"
 const opencodeSkillsDir = ".opencode/skills"
-const opencodeConfigFile = "opencode.json"
 
 // =============================================================================
 // OpenCodeAdapter
@@ -38,7 +36,7 @@ func (a *OpenCodeAdapter) Capabilities() statesync.ToolCapabilities {
 		Hooks:  true,
 		Agents: true,
 		Specs:  true,
-		Mcp:    true,
+		Mcp:    false,
 		Interaction: statesync.InteractionHints{
 			HasAskUserTool:        false,
 			OptionPresentation:    "prose",
@@ -113,39 +111,8 @@ func (a *OpenCodeAdapter) SyncSpecs(ctx statesync.SyncContext, specPath string) 
 	return os.WriteFile(filepath.Join(skillsDir, specName+".md"), []byte(buildOpenCodeSkillMd(parsed)), 0o644)
 }
 
-func (a *OpenCodeAdapter) SyncMcp(ctx statesync.SyncContext) error {
-	configPath := filepath.Join(ctx.Root, opencodeConfigFile)
-
-	existing := map[string]interface{}{}
-	if data, err := os.ReadFile(configPath); err == nil {
-		_ = json.Unmarshal(data, &existing)
-	}
-
-	parts := strings.Fields(ctx.CommandPrefix)
-	command := "npx"
-	if len(parts) > 0 {
-		command = parts[0]
-	}
-	args := append(parts[1:], "mcp-serve") //nolint:gocritic
-
-	existingMcp, _ := existing["mcp"].(map[string]interface{})
-	if existingMcp == nil {
-		existingMcp = map[string]interface{}{}
-	}
-	existingMcp["tddmaster"] = map[string]interface{}{
-		"type":    "local",
-		"command": command,
-		"args":    args,
-	}
-	existing["mcp"] = existingMcp
-
-	data, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-
-	return os.WriteFile(configPath, data, 0o644)
+func (a *OpenCodeAdapter) SyncMcp(statesync.SyncContext) error {
+	return nil // not supported
 }
 
 // =============================================================================
@@ -194,19 +161,34 @@ func buildOpenCodePluginContent(commandPrefix string) string {
 	return strings.Join(lines, "\n")
 }
 
-func buildOpenCodeExecutorAgentMd(commandPrefix string) string {
+func buildOpenCodeToolsBlock(tools ...string) []string {
+	lines := []string{"tools:"}
+	for _, tool := range tools {
+		lines = append(lines, "  "+tool+": true")
+	}
+	return lines
+}
+
+func buildOpenCodeAgentMd(name, description string, tools []string, body ...string) string {
 	lines := []string{
 		"---",
-		"name: tddmaster-executor",
-		`description: "Executes a single tddmaster task. Follows spec behavioral rules and reports structured results."`,
-		"tools: read, write, glob, grep, shell, delegate",
-		"---",
-		"",
-		shared.ExecutorInstructions(commandPrefix),
-		"",
+		"name: " + name,
+		description,
 	}
-
+	lines = append(lines, buildOpenCodeToolsBlock(tools...)...)
+	lines = append(lines, "---", "")
+	lines = append(lines, body...)
+	lines = append(lines, "")
 	return strings.Join(lines, "\n")
+}
+
+func buildOpenCodeExecutorAgentMd(commandPrefix string) string {
+	return buildOpenCodeAgentMd(
+		"tddmaster-executor",
+		`description: "Executes a single tddmaster task. Follows spec behavioral rules and reports structured results."`,
+		[]string{"read", "write", "glob", "grep", "shell", "delegate"},
+		shared.ExecutorInstructions(commandPrefix),
+	)
 }
 
 func buildOpenCodeVerifierAgentMd(manifest *state.Manifest) string {
@@ -224,35 +206,22 @@ func buildOpenCodeVerifierAgentMd(manifest *state.Manifest) string {
 		verifierInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}
 
-	lines := []string{
-		"---",
-		"name: tddmaster-verifier",
+	return buildOpenCodeAgentMd(
+		"tddmaster-verifier",
 		`description: "Independently verifies completed task work. Read-only. Never sees the executor's context."`,
-		"tools: read, glob, grep, shell",
-		"---",
-		"",
+		[]string{"read", "glob", "grep", "shell"},
 		verifierInstructions,
-		"",
 		"The orchestrator will use this report for the tddmaster status report.",
-		"",
-	}
-
-	return strings.Join(lines, "\n")
+	)
 }
 
 func buildOpenCodeTestWriterAgentMd() string {
-	lines := []string{
-		"---",
-		"name: test-writer",
+	return buildOpenCodeAgentMd(
+		"test-writer",
 		`description: "Writes tests FIRST following TDD principles. Reads the project rule set from .opencode/skills/ and AGENTS.md before writing any test."`,
-		"tools: read, write, glob, grep, shell",
-		"---",
-		"",
+		[]string{"read", "write", "glob", "grep", "shell"},
 		shared.TestWriterInstructions("`.opencode/skills/` and `AGENTS.md`"),
-		"",
-	}
-
-	return strings.Join(lines, "\n")
+	)
 }
 
 type opencodeSpecParsed struct {

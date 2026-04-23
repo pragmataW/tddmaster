@@ -18,7 +18,6 @@ import (
 const codexHooksDir = ".codex"
 const codexHooksFile = "hooks.json"
 const codexAgentsDir = ".codex/agents"
-const codexConfigFile = ".codex/config.toml"
 
 // =============================================================================
 // CodexAdapter
@@ -37,7 +36,7 @@ func (a *CodexAdapter) Capabilities() statesync.ToolCapabilities {
 		Hooks:  true,
 		Agents: true,
 		Specs:  false,
-		Mcp:    true,
+		Mcp:    false,
 		Interaction: statesync.InteractionHints{
 			HasAskUserTool:        false,
 			OptionPresentation:    "prose",
@@ -135,50 +134,8 @@ func (a *CodexAdapter) SyncSpecs(_ statesync.SyncContext, _ string) error {
 	return nil
 }
 
-func (a *CodexAdapter) SyncMcp(ctx statesync.SyncContext) error {
-	configPath := filepath.Join(ctx.Root, codexConfigFile)
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		return err
-	}
-
-	existing := ""
-	if data, err := os.ReadFile(configPath); err == nil {
-		existing = string(data)
-	}
-
-	// Remove existing [mcp_servers.tddmaster] section if present, then append
-	re := strings.NewReplacer() // dummy; we do manual regex-like replacement below
-	_ = re
-
-	// Simple removal of [mcp_servers.tddmaster] block
-	cleaned := removeMcpTddmasterSection(existing)
-
-	mcpSection := buildCodexMcpToml(ctx.CommandPrefix)
-	var merged string
-	if cleaned != "" {
-		merged = strings.TrimRight(cleaned, "\n") + "\n\n" + mcpSection
-	} else {
-		merged = mcpSection
-	}
-
-	return os.WriteFile(configPath, []byte(merged), 0o644)
-}
-
-// removeMcpTddmasterSection removes [mcp_servers.tddmaster] block from TOML content.
-func removeMcpTddmasterSection(content string) string {
-	startMarker := "[mcp_servers.tddmaster]"
-	startIdx := strings.Index(content, startMarker)
-	if startIdx == -1 {
-		return content
-	}
-
-	// Find the end: next [ section or end of string
-	rest := content[startIdx+len(startMarker):]
-	endIdx := strings.Index(rest, "\n[")
-	if endIdx == -1 {
-		return strings.TrimRight(content[:startIdx], "\n")
-	}
-	return strings.TrimRight(content[:startIdx], "\n") + rest[endIdx+1:]
+func (a *CodexAdapter) SyncMcp(statesync.SyncContext) error {
+	return nil // not supported
 }
 
 // =============================================================================
@@ -264,22 +221,4 @@ func buildCodexTestWriterAgentToml() string {
 		`"""`,
 		"",
 	}, "\n")
-}
-
-func buildCodexMcpToml(commandPrefix string) string {
-	parts := strings.Fields(commandPrefix)
-	command := "npx"
-	if len(parts) > 0 {
-		command = parts[0]
-	}
-
-	argParts := append(parts[1:], "mcp-serve") //nolint:gocritic
-	args := make([]string, len(argParts))
-	for i, a := range argParts {
-		args[i] = `"` + a + `"`
-	}
-
-	return `[mcp_servers.tddmaster]` + "\n" +
-		`command = "` + command + `"` + "\n" +
-		`args = [` + strings.Join(args, ", ") + `]` + "\n"
 }
