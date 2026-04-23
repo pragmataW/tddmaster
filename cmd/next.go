@@ -1519,6 +1519,15 @@ func applyExecutorReport(st state.StateFile, config *state.NosManifest, report m
 			completedLen = len(c)
 		}
 		if completedLen > 0 && hasPendingRefactorNotes(st) {
+			skipVerify := config != nil && config.IsVerifierSkipped()
+			if skipVerify {
+				return st, fmt.Errorf(
+					"cannot complete task while in REFACTOR phase with pending notes; " +
+						"apply the refactor notes and resubmit with BOTH `refactorApplied: true` " +
+						"AND `completed: [<task-id>]` in the same status report — " +
+						"in skip-verify mode this single report advances the task",
+				)
+			}
 			return st, fmt.Errorf(
 				"cannot complete task while in REFACTOR phase with pending notes; " +
 					"apply the refactor notes first and report `refactorApplied: true`, " +

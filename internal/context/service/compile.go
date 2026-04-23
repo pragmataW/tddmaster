@@ -108,7 +108,7 @@ func Compile(in model.CompileInput) model.NextOutput {
 			if exec.VerifierRequired {
 				exec.TDDVerificationContext = tdd.BuildVerificationContext(cycle)
 			}
-			exec.RefactorInstructions = tdd.BuildRefactorInstructions(st, getMaxRefactorRounds(in.Config))
+			exec.RefactorInstructions = tdd.BuildRefactorInstructions(st, getMaxRefactorRounds(in.Config), exec.VerifierRequired)
 		} else {
 			// AC-6: When TDD is off or no cycle, compute VerifierRequired from manifest alone.
 			exec.VerifierRequired = tdd.VerifierRequired(in.Config, "")

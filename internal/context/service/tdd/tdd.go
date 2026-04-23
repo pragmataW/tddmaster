@@ -65,8 +65,11 @@ func VerifierRequired(manifest *statemodel.NosManifest, phase string) bool {
 
 // BuildRefactorInstructions packages verifier refactor notes into an executor
 // directive. Returns nil when there are no notes to apply or when the executor
-// has already consumed the current batch.
-func BuildRefactorInstructions(st state.StateFile, maxRounds int) *model.RefactorInstructions {
+// has already consumed the current batch. When verifierRequired=false (skip-
+// verify in REFACTOR phase) the instruction text tells the executor to submit
+// `refactorApplied:true` and `completed:[<id>]` together, since no verifier
+// will re-run to advance the cycle.
+func BuildRefactorInstructions(st state.StateFile, maxRounds int, verifierRequired bool) *model.RefactorInstructions {
 	if st.Execution.TDDCycle != state.TDDCycleRefactor {
 		return nil
 	}
@@ -80,9 +83,13 @@ func BuildRefactorInstructions(st state.StateFile, maxRounds int) *model.Refacto
 	if len(notes) == 0 {
 		return nil
 	}
+	instruction := model.RefactorInstructionsText
+	if !verifierRequired {
+		instruction = model.RefactorInstructionsSkipVerifyText
+	}
 	return &model.RefactorInstructions{
 		Notes:       notes,
-		Instruction: model.RefactorInstructionsText,
+		Instruction: instruction,
 		Round:       st.Execution.RefactorRounds + 1,
 		MaxRounds:   maxRounds,
 	}

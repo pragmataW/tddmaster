@@ -189,6 +189,13 @@ const (
 
 	RefactorInstructionsText = "Apply each refactor note verbatim. Do NOT change test behavior — tests must still pass. When finished, report `refactorApplied: true` in your JSON output; the verifier will re-run tests."
 
+	// RefactorInstructionsSkipVerifyText is used in REFACTOR phase when
+	// verifierRequired=false (skipVerify=true + TDD=on). The verifier is
+	// disabled in this mode, so the executor must advance the task in a
+	// single submit that includes BOTH refactorApplied:true AND
+	// completed:[<task-id>].
+	RefactorInstructionsSkipVerifyText = "Apply each refactor note verbatim. Tests must still pass. Submit BOTH `refactorApplied: true` AND `completed: [<task-id>]` in the SAME status report — verifier is disabled in this mode, so this single submit advances the task."
+
 	BlockedInstruction = "A decision is needed. Ask the user."
 )
 

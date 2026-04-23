@@ -335,6 +335,109 @@ func TestAdvanceWithoutVerification_DoesNotSetLastVerification(t *testing.T) {
 	}
 }
 
+// refactorStateWithPendingNotes returns a StateFile parked in REFACTOR with
+// one pending refactor note (RefactorApplied=false, LastVerification.RefactorNotes=1).
+// Used to exercise the applyExecutorReport refactor-bypass guard.
+func refactorStateWithPendingNotes() state.StateFile {
+	tddEnabled := true
+	return state.StateFile{
+		Phase: state.PhaseExecuting,
+		OverrideTasks: []state.SpecTask{
+			{ID: "task-1", Title: "first task", TDDEnabled: &tddEnabled},
+		},
+		Execution: state.ExecutionState{
+			TDDCycle:        state.TDDCycleRefactor,
+			RefactorApplied: false,
+			Iteration:       2,
+			LastVerification: &state.VerificationResult{
+				Passed: true,
+				RefactorNotes: []state.RefactorNote{
+					{File: "foo.go", Suggestion: "extract helper", Rationale: "duplication"},
+				},
+			},
+		},
+	}
+}
+
+// TestApplyExecutorReport_RefactorBypassGuard_SkipVerify_ErrorMessage asserts
+// that when an executor submits `completed:[task-1]` in REFACTOR phase with
+// pending notes and skipVerify=true (so the "submit a verifier report" escape
+// hatch is closed), the guard error tells the AI to resubmit with BOTH
+// refactorApplied:true AND completed in the same report.
+func TestApplyExecutorReport_RefactorBypassGuard_SkipVerify_ErrorMessage(t *testing.T) {
+	cfg := skipVerifyManifest(true, true) // TDD=on, skipVerify=true
+	st := refactorStateWithPendingNotes()
+	report := executorReport("task-1") // no refactorApplied flag
+
+	_, err := applyExecutorReport(st, cfg, report)
+
+	if err == nil {
+		t.Fatal("expected guard error for completed submit during REFACTOR with pending notes, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "skip-verify mode") {
+		t.Errorf("skip-verify guard message should mention skip-verify mode; got %q", msg)
+	}
+	if !strings.Contains(msg, "refactorApplied: true") || !strings.Contains(msg, "completed") {
+		t.Errorf("skip-verify guard message should instruct to submit both refactorApplied and completed; got %q", msg)
+	}
+	if strings.Contains(msg, "verifier report (not an executor report)") {
+		t.Errorf("skip-verify guard message should NOT advise submitting a verifier report (that path is closed); got %q", msg)
+	}
+}
+
+// TestApplyExecutorReport_RefactorBypassGuard_VerifyMode_ErrorMessage asserts
+// the original guard message is preserved in the non-skip-verify (verifier
+// active) flow — this is the regression check for behavior prior to the
+// skip-verify branch.
+func TestApplyExecutorReport_RefactorBypassGuard_VerifyMode_ErrorMessage(t *testing.T) {
+	cfg := skipVerifyManifest(true, false) // TDD=on, skipVerify=false
+	st := refactorStateWithPendingNotes()
+	report := executorReport("task-1")
+
+	_, err := applyExecutorReport(st, cfg, report)
+
+	if err == nil {
+		t.Fatal("expected guard error for completed submit during REFACTOR with pending notes, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "verifier report (not an executor report)") {
+		t.Errorf("verify-mode guard message should advise submitting a verifier report; got %q", msg)
+	}
+	if strings.Contains(msg, "skip-verify mode") {
+		t.Errorf("verify-mode guard must NOT reference skip-verify mode; got %q", msg)
+	}
+}
+
+// TestApplyExecutorReport_RefactorBypassGuard_CombinedSubmit_PassesGuard
+// asserts the positive case: REFACTOR phase + pending notes, a single submit
+// carrying BOTH refactorApplied:true AND completed:[task-1] passes the guard
+// (no error) and marks the task completed. Cycle re-seeding for the next
+// task is handled by advanceWithoutVerification in the skip-verify flow,
+// which is covered by a separate test.
+func TestApplyExecutorReport_RefactorBypassGuard_CombinedSubmit_PassesGuard(t *testing.T) {
+	cfg := skipVerifyManifest(true, true)
+	st := refactorStateWithPendingNotes()
+	tddEnabled := true
+	st.OverrideTasks = append(st.OverrideTasks,
+		state.SpecTask{ID: "task-2", Title: "second task", TDDEnabled: &tddEnabled})
+	report := map[string]interface{}{
+		"completed":       []interface{}{"task-1"},
+		"refactorApplied": true,
+	}
+
+	newSt, err := applyExecutorReport(st, cfg, report)
+	if err != nil {
+		t.Fatalf("combined submit should pass the guard; got error: %v", err)
+	}
+	if !contains(newSt.Execution.CompletedTasks, "task-1") {
+		t.Errorf("expected task-1 in CompletedTasks, got %v", newSt.Execution.CompletedTasks)
+	}
+	if !newSt.Execution.RefactorApplied {
+		t.Errorf("expected RefactorApplied=true after combined submit")
+	}
+}
+
 // TestAdvanceWithoutVerification_SkipVerify_RefactorPhase_DoesNotSetLastVerification
 // asserts the same for refactor phase: applyVerifierReport is never called.
 func TestAdvanceWithoutVerification_SkipVerify_RefactorPhase_DoesNotSetLastVerification(t *testing.T) {

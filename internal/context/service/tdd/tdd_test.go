@@ -1,8 +1,10 @@
 package tdd
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/pragmataW/tddmaster/internal/context/model"
 	statemodel "github.com/pragmataW/tddmaster/internal/state/model"
 )
 
@@ -104,5 +106,64 @@ func TestVerifierRequired_TableDriven(t *testing.T) {
 				t.Errorf("VerifierRequired(%+v, %q) = %v; want %v", tc.manifest, tc.phase, got, tc.want)
 			}
 		})
+	}
+}
+
+// refactorPhaseState returns a minimal StateFile parked in the REFACTOR phase
+// with one pending refactor note, suitable for BuildRefactorInstructions tests.
+func refactorPhaseState() statemodel.StateFile {
+	return statemodel.StateFile{
+		Execution: statemodel.ExecutionState{
+			TDDCycle:        statemodel.TDDCycleRefactor,
+			RefactorApplied: false,
+			RefactorRounds:  0,
+			LastVerification: &statemodel.VerificationResult{
+				Passed: true,
+				RefactorNotes: []statemodel.RefactorNote{
+					{File: "foo.go", Suggestion: "extract helper", Rationale: "duplication"},
+				},
+			},
+		},
+	}
+}
+
+// TestBuildRefactorInstructions_VerifierRequiredWording verifies that when
+// verifierRequired=true (default skipVerify=false flow) the instruction text
+// tells the executor the verifier will re-run tests.
+func TestBuildRefactorInstructions_VerifierRequiredWording(t *testing.T) {
+	t.Parallel()
+	st := refactorPhaseState()
+	got := BuildRefactorInstructions(st, 3, true)
+	if got == nil {
+		t.Fatal("BuildRefactorInstructions returned nil; expected instructions")
+	}
+	if got.Instruction != model.RefactorInstructionsText {
+		t.Errorf("Instruction = %q; want %q", got.Instruction, model.RefactorInstructionsText)
+	}
+	if !strings.Contains(got.Instruction, "verifier will re-run") {
+		t.Errorf("Instruction should mention verifier re-run for verifierRequired=true; got %q", got.Instruction)
+	}
+}
+
+// TestBuildRefactorInstructions_SkipVerifyWording verifies that when
+// verifierRequired=false (skipVerify=true + TDD=on + REFACTOR) the
+// instruction text drops the "verifier will re-run" claim and tells the
+// executor to submit refactorApplied and completed together.
+func TestBuildRefactorInstructions_SkipVerifyWording(t *testing.T) {
+	t.Parallel()
+	st := refactorPhaseState()
+	got := BuildRefactorInstructions(st, 3, false)
+	if got == nil {
+		t.Fatal("BuildRefactorInstructions returned nil; expected instructions")
+	}
+	if got.Instruction != model.RefactorInstructionsSkipVerifyText {
+		t.Errorf("Instruction = %q; want %q", got.Instruction, model.RefactorInstructionsSkipVerifyText)
+	}
+	if strings.Contains(got.Instruction, "verifier will re-run") {
+		t.Errorf("skip-verify instruction must NOT mention verifier re-run; got %q", got.Instruction)
+	}
+	if !strings.Contains(got.Instruction, "refactorApplied: true") ||
+		!strings.Contains(got.Instruction, "completed") {
+		t.Errorf("skip-verify instruction must require both refactorApplied and completed in one submit; got %q", got.Instruction)
 	}
 }
