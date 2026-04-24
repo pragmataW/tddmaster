@@ -198,3 +198,70 @@ func TestManifest_JSON_SkipVerify_FieldTagName(t *testing.T) {
 		t.Errorf("expected JSON key 'skipVerify' but got keys: %v", raw)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ShouldInjectConventions — nil/pointer/value semantics
+// ---------------------------------------------------------------------------
+
+func TestManifest_ShouldInjectConventions_NilReceiver_True(t *testing.T) {
+	var m *Manifest
+	if !m.ShouldInjectConventions() {
+		t.Error("nil *Manifest should default to true")
+	}
+}
+
+func TestManifest_ShouldInjectConventions_NilPointer_True(t *testing.T) {
+	m := &Manifest{}
+	if !m.ShouldInjectConventions() {
+		t.Error("Manifest with nil InjectProjectConventions should default to true")
+	}
+}
+
+func TestManifest_ShouldInjectConventions_ExplicitFalse(t *testing.T) {
+	f := false
+	m := &Manifest{InjectProjectConventions: &f}
+	if m.ShouldInjectConventions() {
+		t.Error("ShouldInjectConventions should respect explicit false")
+	}
+}
+
+func TestManifest_ShouldInjectConventions_ExplicitTrue(t *testing.T) {
+	tr := true
+	m := &Manifest{InjectProjectConventions: &tr}
+	if !m.ShouldInjectConventions() {
+		t.Error("ShouldInjectConventions should respect explicit true")
+	}
+}
+
+func TestManifest_JSON_InjectProjectConventions_FieldTagName(t *testing.T) {
+	f := false
+	m := Manifest{InjectProjectConventions: &f}
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if _, ok := raw["injectProjectConventions"]; !ok {
+		t.Errorf("expected JSON key 'injectProjectConventions', got %v", raw)
+	}
+}
+
+func TestManifest_YAML_MissingInjectProjectConventions_DefaultsNil(t *testing.T) {
+	raw := `
+tddMode: true
+maxVerificationRetries: 3
+`
+	var m Manifest
+	if err := yaml.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatalf("yaml.Unmarshal failed: %v", err)
+	}
+	if m.InjectProjectConventions != nil {
+		t.Errorf("expected nil when key absent, got %v", *m.InjectProjectConventions)
+	}
+	if !m.ShouldInjectConventions() {
+		t.Error("absent key should default ShouldInjectConventions to true")
+	}
+}

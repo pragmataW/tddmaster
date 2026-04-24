@@ -16,7 +16,7 @@ import (
 	_ "github.com/pragmataW/tddmaster/internal/sync/adapters"
 )
 
-func pickCodingTools(detected []state.CodingToolId) []state.CodingToolId {
+func pickCodingTools(preselected []state.CodingToolId) []state.CodingToolId {
 	allTools := []struct {
 		Value state.CodingToolId
 		Label string
@@ -26,15 +26,15 @@ func pickCodingTools(detected []state.CodingToolId) []state.CodingToolId {
 		{Value: "codex", Label: "Codex CLI"},
 	}
 
-	detectedSet := make(map[state.CodingToolId]bool)
-	for _, d := range detected {
-		detectedSet[d] = true
+	preselectedSet := make(map[state.CodingToolId]bool)
+	for _, d := range preselected {
+		preselectedSet[d] = true
 	}
 
 	var options []huh.Option[state.CodingToolId]
 	for _, t := range allTools {
 		opt := huh.NewOption(t.Label, t.Value)
-		if detectedSet[t.Value] {
+		if preselectedSet[t.Value] {
 			opt = opt.Selected(true)
 		}
 		options = append(options, opt)
@@ -51,24 +51,33 @@ func pickCodingTools(detected []state.CodingToolId) []state.CodingToolId {
 	)
 
 	if err := form.Run(); err != nil {
-		return detected // on cancel, use detected
+		return preselected // on cancel, keep preselected
 	}
 
 	if len(selected) == 0 {
-		return detected
+		return preselected
 	}
 
 	return selected
 }
 
-func pickConcerns(allConcerns []state.ConcernDefinition) []string {
+func pickConcerns(allConcerns []state.ConcernDefinition, preselected []string) []string {
+	preselectedSet := make(map[string]bool, len(preselected))
+	for _, id := range preselected {
+		preselectedSet[id] = true
+	}
+
 	var options []huh.Option[string]
 	for _, c := range allConcerns {
 		desc := c.Description
 		if len(desc) > 60 {
 			desc = desc[:60]
 		}
-		options = append(options, huh.NewOption(c.Name+" — "+desc, c.ID))
+		opt := huh.NewOption(c.Name+" — "+desc, c.ID)
+		if preselectedSet[c.ID] {
+			opt = opt.Selected(true)
+		}
+		options = append(options, opt)
 	}
 
 	var selected []string
@@ -82,7 +91,7 @@ func pickConcerns(allConcerns []state.ConcernDefinition) []string {
 	)
 
 	if err := form.Run(); err != nil {
-		return nil // on cancel, no concerns
+		return preselected // on cancel, keep preselected
 	}
 
 	return selected
@@ -177,22 +186,30 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Read existing manifest once for the alreadyInitialized branch (tools, concerns, TDD settings).
 	var existingManifest *state.NosManifest
 	if alreadyInitialized {
-		existingManifest, _ = state.ReadManifest(root)
+		var rerr error
+		existingManifest, rerr = state.ReadManifest(root)
+		if rerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: manifest read failed: %v\n", rerr)
+		}
 	}
 
 	var codingTools []state.CodingToolId
 	if len(parsedTools) > 0 {
 		codingTools = parsedTools
-	} else if alreadyInitialized {
-		if existingManifest != nil {
+	} else if nonInteractive {
+		if alreadyInitialized && existingManifest != nil && len(existingManifest.Tools) > 0 {
 			codingTools = existingManifest.Tools
 		} else {
 			codingTools = detectedTools
 		}
-	} else if nonInteractive {
-		codingTools = detectedTools
 	} else {
-		codingTools = pickCodingTools(detectedTools)
+		// Always show the picker so users can add/remove tools on every sync.
+		// Preselect from manifest if initialized, otherwise from filesystem detection.
+		preselected := detectedTools
+		if alreadyInitialized && existingManifest != nil && len(existingManifest.Tools) > 0 {
+			preselected = existingManifest.Tools
+		}
+		codingTools = pickCodingTools(preselected)
 	}
 
 	// Step 4: Load default concerns
@@ -209,14 +226,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 				selectedConcernIds = append(selectedConcernIds, id)
 			}
 		}
-	} else if alreadyInitialized {
-		if existingManifest != nil {
+	} else if nonInteractive {
+		if alreadyInitialized && existingManifest != nil {
 			selectedConcernIds = existingManifest.Concerns
 		}
-	} else if !nonInteractive {
-		selectedConcernIds = pickConcerns(allConcerns)
+	} else {
+		// Always show the picker so users can adjust concerns on every sync.
+		// Preselect from manifest if initialized.
+		var preselected []string
+		if alreadyInitialized && existingManifest != nil {
+			preselected = existingManifest.Concerns
+		}
+		selectedConcernIds = pickConcerns(allConcerns, preselected)
 	}
-	// else: no concerns selected (non-interactive without explicit concerns)
 
 	// Step 5: Write selected concerns to disk
 	selectedConcerns := make([]state.ConcernDefinition, 0)
@@ -267,7 +289,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	config := state.CreateInitialManifest(selectedConcernIds, codingTools, projectTraits)
 	config.Command = output.CmdPrefix()
-	config.Tdd = &state.Manifest{TddMode: tddMode, SkipVerify: skipVerify}
+	tdd := &state.Manifest{TddMode: tddMode, SkipVerify: skipVerify}
+	if existingManifest != nil && existingManifest.Tdd != nil {
+		prev := existingManifest.Tdd
+		tdd.TestRunner = prev.TestRunner
+		tdd.MaxVerificationRetries = prev.MaxVerificationRetries
+		tdd.MaxRefactorRounds = prev.MaxRefactorRounds
+		tdd.InjectProjectConventions = prev.InjectProjectConventions
+	}
+	config.Tdd = tdd
 
 	if err := state.WriteManifest(root, config); err != nil {
 		return fmt.Errorf("write manifest: %w", err)
@@ -283,8 +313,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Step 8: Sync tool files
 	if len(codingTools) > 0 {
-		synced, _ := statesync.SyncAll(root, codingTools, &config)
+		synced, syncErr := statesync.SyncAll(root, codingTools, &config)
+		if syncErr != nil {
+			return fmt.Errorf("sync: %w", syncErr)
+		}
 		fmt.Fprintf(os.Stderr, "Synced %d tool(s)\n", len(synced))
+	} else {
+		fmt.Fprintln(os.Stderr, "warning: no coding tools — skipping adapter sync (no files written)")
 	}
 
 	fmt.Fprintf(os.Stderr, "Done. %d tool(s), %d concern(s).\n",

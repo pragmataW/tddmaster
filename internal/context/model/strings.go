@@ -80,10 +80,6 @@ var TDDBehavioralRules = []string{
 const (
 	PreDiscoveryResearchInstruction = "Before asking discovery questions, research the current state of all platforms, runtimes, libraries, and APIs mentioned in the spec description. Use web search and Context7 MCP if available. Report findings as a pre-discovery brief to the user. Do NOT assume your training data is current — versions change, APIs get added, features get deprecated."
 
-	PlanContextInstruction = "A plan document was provided. Read it carefully, extract relevant information for each discovery question, and present pre-filled answers for user review. Do NOT skip any question — present your extraction and let the user confirm, correct, or expand. IMPORTANT: When extracting answers from the plan, mark each extraction as [STATED] (directly written in the plan) or [INFERRED] (your interpretation). Present extractions individually for confirmation."
-
-	PlanContextOversizedInstruction = "A plan document was provided but it exceeds the 50KB embedding limit. Read it directly from the filesystem (path is available in state.PlanPath) and apply the same extraction protocol: for each discovery question, extract relevant information and mark it [STATED] or [INFERRED]. Do NOT skip any question."
-
 	RichDescriptionInstructionAgent = "The user provided a detailed description. For each question, extract relevant info and present as a pre-filled suggestion. IMPORTANT: When extracting answers from the description, mark each extraction as [STATED] (directly written by the user) or [INFERRED] (your interpretation). Present extractions individually for confirmation."
 
 	RichDescriptionInstructionUser = "The user provided a detailed description. For each question, extract relevant info and present as a pre-filled suggestion."
@@ -100,7 +96,7 @@ const (
 
 	DiscoveryNormalInstruction = "Conduct a thorough discovery conversation. FIRST: perform a pre-discovery codebase scan (README, CLAUDE.md, recent git log, TODOs, directory structure) and present a brief audit summary. THEN: challenge the user's spec description against your findings. THEN: ask the current discovery question, wait for the answer, and submit it immediately with `tddmaster next --answer=\"<answer>\"`. Continue one question at a time, offering concrete options based on codebase knowledge. AFTER questions: present a dream state table (current → this spec → future), scored expansion proposals, architectural decisions, and an error/rescue map. FINALLY: present a complete discovery synthesis for user confirmation before approve."
 
-	PremiseChallengeInstructionFmt = "Read the spec description%s. Identify 2-4 premises the spec assumes. Present each premise and ask the user to agree or disagree. Submit as JSON: {\"premises\":[{\"text\":\"...\",\"agreed\":true/false,\"revision\":\"...\"}]}"
+	PremiseChallengeInstruction = "Read the spec description. Identify 2-4 premises the spec assumes. Present each premise and ask the user to agree or disagree. Submit as JSON: {\"premises\":[{\"text\":\"...\",\"agreed\":true/false,\"revision\":\"...\"}]}"
 )
 
 // Discovery review / split / alternatives / checklist instructions.

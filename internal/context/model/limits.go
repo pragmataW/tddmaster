@@ -13,10 +13,6 @@ const (
 	// embedded in RichDescriptionOutput for agent-side extraction.
 	RichDescriptionThreshold = 500
 
-	// MaxPlanSize — plan document bytes beyond this are silently skipped from
-	// PlanContext embedding.
-	MaxPlanSize = 50 * 1024
-
 	// StaleSessionMS — elapsed milliseconds since last `next` call beyond which
 	// the protocol guide is re-emitted. Note: historical name was the typo
 	// `staleSesssionMS` (three s). See docs/bugs.md Context Package Findings.

@@ -48,14 +48,14 @@ func (a *ClaudeCodeAdapter) SyncHooks(ctx statesync.SyncContext, _ *statesync.Sy
 }
 
 func (a *ClaudeCodeAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.SyncOptions) error {
-	if err := generateAgentFile(ctx.Root, ctx.CommandPrefix); err != nil {
+	if err := generateAgentFile(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest); err != nil {
 		return err
 	}
-	if err := generateVerifierFile(ctx.Root, ctx.Manifest); err != nil {
+	if err := generateVerifierFile(ctx.Root, ctx.Rules, ctx.Manifest); err != nil {
 		return err
 	}
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
-		return generateClaudeCodeTestWriterFile(ctx.Root)
+		return generateClaudeCodeTestWriterFile(ctx.Root, ctx.Rules, ctx.Manifest)
 	}
 	return nil
 }
@@ -72,8 +72,12 @@ func (a *ClaudeCodeAdapter) SyncMcp(_ statesync.SyncContext) error {
 // CLAUDE.md generation
 // =============================================================================
 
-const claudeNosStart = "<!-- tddmaster:start -->"
-const claudeNosEnd = "<!-- tddmaster:end -->"
+func claudeCodeConventionSources() shared.ConventionSources {
+	return shared.ConventionSources{
+		ProjectFile: "CLAUDE.md",
+		HomeFile:    "~/.claude/CLAUDE.md",
+	}
+}
 
 func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandPrefix string) string {
 	allowGit := false
@@ -82,7 +86,7 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 	}
 
 	lines := []string{
-		claudeNosStart,
+		shared.NosStart,
 		"## tddmaster orchestrator",
 		"",
 		"State-driven orchestration. Do NOT read `.tddmaster/` files directly — tddmaster provides everything via JSON.",
@@ -143,7 +147,6 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 		"Listen first: after spec creation, ask user to share context before mode selection.",
 		"Modes: full (default), validate, technical-depth, ship-fast, explore.",
 		"Pre-scan codebase before questions. Challenge premises. Propose alternatives.",
-		"With --from-plan: extract answers, present for user confirmation.",
 		"",
 		"### Execution",
 		"",
@@ -175,7 +178,7 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 		}
 	}
 
-	lines = append(lines, claudeNosEnd)
+	lines = append(lines, shared.NosEnd)
 
 	return strings.Join(lines, "\n")
 }
@@ -191,10 +194,10 @@ func syncClaudeMd(root string, rules []string, options *statesync.SyncOptions, c
 	var content string
 	if data, err := os.ReadFile(filePath); err == nil {
 		content = string(data)
-		startIdx := strings.Index(content, claudeNosStart)
-		endIdx := strings.Index(content, claudeNosEnd)
+		startIdx := strings.Index(content, shared.NosStart)
+		endIdx := strings.Index(content, shared.NosEnd)
 		if startIdx != -1 && endIdx != -1 {
-			content = content[:startIdx] + section + content[endIdx+len(claudeNosEnd):]
+			content = content[:startIdx] + section + content[endIdx+len(shared.NosEnd):]
 		} else {
 			content = strings.TrimRight(content, "\n") + "\n\n" + section + "\n"
 		}
@@ -220,11 +223,13 @@ func resolveVerifierCommands(manifest *state.Manifest) (typeCheckCmd, testCmd st
 	return "deno check", "deno test"
 }
 
-func generateAgentFile(root, commandPrefix string) error {
+func generateAgentFile(root, commandPrefix string, rules []string, manifest *state.Manifest) error {
 	agentDir := filepath.Join(root, ".claude", "agents")
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		return err
 	}
+
+	preamble := shared.ConventionsPreamble(root, claudeCodeConventionSources(), rules, manifest.ShouldInjectConventions())
 
 	lines := []string{
 		"---",
@@ -234,18 +239,20 @@ func generateAgentFile(root, commandPrefix string) error {
 		"model: sonnet",
 		"---",
 		"",
-		shared.ExecutorInstructions(commandPrefix),
+		preamble + shared.ExecutorInstructions(commandPrefix),
 	}
 	content := strings.Join(lines, "\n") + "\n"
 
 	return os.WriteFile(filepath.Join(agentDir, "tddmaster-executor.md"), []byte(content), 0o644)
 }
 
-func generateClaudeCodeTestWriterFile(root string) error {
+func generateClaudeCodeTestWriterFile(root string, rules []string, manifest *state.Manifest) error {
 	agentDir := filepath.Join(root, ".claude", "agents")
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		return err
 	}
+
+	preamble := shared.ConventionsPreamble(root, claudeCodeConventionSources(), rules, manifest.ShouldInjectConventions())
 
 	lines := []string{
 		"---",
@@ -255,7 +262,7 @@ func generateClaudeCodeTestWriterFile(root string) error {
 		"model: sonnet",
 		"---",
 		"",
-		shared.TestWriterInstructions("`.claude/rules/`"),
+		preamble + shared.TestWriterInstructions("`.claude/rules/`"),
 		"",
 	}
 	content := strings.Join(lines, "\n")
@@ -263,7 +270,7 @@ func generateClaudeCodeTestWriterFile(root string) error {
 	return os.WriteFile(filepath.Join(agentDir, "test-writer.md"), []byte(content), 0o644)
 }
 
-func generateVerifierFile(root string, manifest *state.Manifest) error {
+func generateVerifierFile(root string, rules []string, manifest *state.Manifest) error {
 	agentDir := filepath.Join(root, ".claude", "agents")
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		return err
@@ -271,9 +278,6 @@ func generateVerifierFile(root string, manifest *state.Manifest) error {
 
 	typeCheckCmd, testCmd := resolveVerifierCommands(manifest)
 
-	// TDD mode guard: only inject RED/GREEN/REFACTOR phase blocks when TDD is enabled.
-	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
-	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
 	skipVerify := manifest != nil && manifest.SkipVerify
 	var verifierInstructions string
@@ -283,6 +287,8 @@ func generateVerifierFile(root string, manifest *state.Manifest) error {
 		verifierInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}
 
+	preamble := shared.ConventionsPreamble(root, claudeCodeConventionSources(), rules, manifest.ShouldInjectConventions())
+
 	lines := []string{
 		"---",
 		"name: tddmaster-verifier",
@@ -291,7 +297,7 @@ func generateVerifierFile(root string, manifest *state.Manifest) error {
 		"model: sonnet",
 		"---",
 		"",
-		verifierInstructions,
+		preamble + verifierInstructions,
 		"",
 		"The orchestrator will use your report for the tddmaster status report.",
 		"",

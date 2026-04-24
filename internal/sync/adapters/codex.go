@@ -106,7 +106,7 @@ func (a *CodexAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.SyncOp
 
 	if err := os.WriteFile(
 		filepath.Join(agentsDir, "tddmaster-executor.toml"),
-		[]byte(buildCodexExecutorAgentToml(ctx.CommandPrefix)),
+		[]byte(buildCodexExecutorAgentToml(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest)),
 		0o644,
 	); err != nil {
 		return err
@@ -114,7 +114,7 @@ func (a *CodexAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.SyncOp
 
 	if err := os.WriteFile(
 		filepath.Join(agentsDir, "tddmaster-verifier.toml"),
-		[]byte(buildCodexVerifierAgentToml(ctx.Manifest)),
+		[]byte(buildCodexVerifierAgentToml(ctx.Root, ctx.Rules, ctx.Manifest)),
 		0o644,
 	); err != nil {
 		return err
@@ -123,7 +123,7 @@ func (a *CodexAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.SyncOp
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
 		return os.WriteFile(
 			filepath.Join(agentsDir, "test-writer.toml"),
-			[]byte(buildCodexTestWriterAgentToml()),
+			[]byte(buildCodexTestWriterAgentToml(ctx.Root, ctx.Rules, ctx.Manifest)),
 			0o644,
 		)
 	}
@@ -171,8 +171,16 @@ func buildCodexHooksConfig(commandPrefix string) []map[string]interface{} {
 	}
 }
 
-func buildCodexExecutorAgentToml(commandPrefix string) string {
-	instructions := shared.ExecutorInstructions(commandPrefix)
+func codexConventionSources() shared.ConventionSources {
+	return shared.ConventionSources{
+		ProjectFile: "AGENTS.md",
+		HomeFile:    "~/.codex/AGENTS.md",
+	}
+}
+
+func buildCodexExecutorAgentToml(root, commandPrefix string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, codexConventionSources(), rules, manifest.ShouldInjectConventions())
+	instructions := preamble + shared.ExecutorInstructions(commandPrefix)
 
 	return strings.Join([]string{
 		`name = "tddmaster-executor"`,
@@ -184,12 +192,9 @@ func buildCodexExecutorAgentToml(commandPrefix string) string {
 	}, "\n")
 }
 
-func buildCodexVerifierAgentToml(manifest *state.Manifest) string {
+func buildCodexVerifierAgentToml(root string, rules []string, manifest *state.Manifest) string {
 	typeCheckCmd, testCmd := resolveVerifierCommands(manifest)
 
-	// TDD mode guard: only inject RED/GREEN/REFACTOR phase blocks when TDD is enabled.
-	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
-	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
 	skipVerify := manifest != nil && manifest.SkipVerify
 	var baseInstructions string
@@ -198,7 +203,8 @@ func buildCodexVerifierAgentToml(manifest *state.Manifest) string {
 	} else {
 		baseInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}
-	instructions := baseInstructions + "\n\nThe orchestrator will use this report for the tddmaster status report."
+	preamble := shared.ConventionsPreamble(root, codexConventionSources(), rules, manifest.ShouldInjectConventions())
+	instructions := preamble + baseInstructions + "\n\nThe orchestrator will use this report for the tddmaster status report."
 
 	return strings.Join([]string{
 		`name = "tddmaster-verifier"`,
@@ -210,8 +216,9 @@ func buildCodexVerifierAgentToml(manifest *state.Manifest) string {
 	}, "\n")
 }
 
-func buildCodexTestWriterAgentToml() string {
-	instructions := shared.TestWriterInstructions("the `AGENTS.md` file")
+func buildCodexTestWriterAgentToml(root string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, codexConventionSources(), rules, manifest.ShouldInjectConventions())
+	instructions := preamble + shared.TestWriterInstructions("the `AGENTS.md` file")
 
 	return strings.Join([]string{
 		`name = "test-writer"`,

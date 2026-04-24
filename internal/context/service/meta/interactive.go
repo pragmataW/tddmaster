@@ -226,10 +226,9 @@ func buildDiscoveryOptions(r Renderer, st state.StateFile) []model.InteractiveOp
 	mode := st.Discovery.Mode
 	hasUserContext := st.Discovery.UserContext != nil && len(*st.Discovery.UserContext) > 0
 	hasDescription := st.SpecDescription != nil && len(*st.SpecDescription) > 0
-	hasPlan := st.Discovery.PlanPath != nil
 	answeredCount := len(st.Discovery.Answers)
 
-	if mode == nil && hasDescription && answeredCount == 0 && !hasPlan && hasUserContext {
+	if mode == nil && hasDescription && answeredCount == 0 && hasUserContext {
 		modes := model.DiscoveryModeOptions()
 		opts := make([]model.InteractiveOption, 0, len(modes))
 		for _, m := range modes {

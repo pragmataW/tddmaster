@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -37,27 +36,6 @@ func buildPreDiscoveryResearch(description string) *model.PreDiscoveryResearch {
 		Required:       true,
 		Instruction:    model.PreDiscoveryResearchInstruction,
 		ExtractedTerms: terms,
-	}
-}
-
-func buildPlanContext(planPath string) *model.PlanContext {
-	if planPath == "" {
-		return nil
-	}
-	data, err := os.ReadFile(planPath)
-	if err != nil {
-		return nil
-	}
-	if len(data) > model.MaxPlanSize {
-		return &model.PlanContext{
-			Provided:    false,
-			Instruction: model.PlanContextOversizedInstruction,
-		}
-	}
-	return &model.PlanContext{
-		Provided:    true,
-		Content:     string(data),
-		Instruction: model.PlanContextInstruction,
 	}
 }
 

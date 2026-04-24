@@ -26,7 +26,7 @@ func expectToolsBlock(t *testing.T, content string, tools ...string) {
 func TestOpenCodeExecutorAgentMd_UsesYamlToolsMap(t *testing.T) {
 	t.Parallel()
 
-	got := buildOpenCodeExecutorAgentMd("tddmaster")
+	got := buildOpenCodeExecutorAgentMd(t.TempDir(), "tddmaster", nil, nil)
 
 	expectToolsBlock(t, got, "read", "write", "glob", "grep", "shell", "delegate")
 }
@@ -34,7 +34,7 @@ func TestOpenCodeExecutorAgentMd_UsesYamlToolsMap(t *testing.T) {
 func TestOpenCodeVerifierAgentMd_UsesYamlToolsMap(t *testing.T) {
 	t.Parallel()
 
-	got := buildOpenCodeVerifierAgentMd(nil)
+	got := buildOpenCodeVerifierAgentMd(t.TempDir(), nil, nil)
 
 	expectToolsBlock(t, got, "read", "glob", "grep", "shell")
 }
@@ -42,7 +42,7 @@ func TestOpenCodeVerifierAgentMd_UsesYamlToolsMap(t *testing.T) {
 func TestOpenCodeTestWriterAgentMd_UsesYamlToolsMap(t *testing.T) {
 	t.Parallel()
 
-	got := buildOpenCodeTestWriterAgentMd()
+	got := buildOpenCodeTestWriterAgentMd(t.TempDir(), nil, nil)
 
 	expectToolsBlock(t, got, "read", "write", "glob", "grep", "shell")
 }

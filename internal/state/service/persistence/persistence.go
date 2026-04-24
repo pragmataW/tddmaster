@@ -31,7 +31,6 @@ func CreateInitialState() model.StateFile {
 			CurrentQuestion: 0,
 			Audience:        "human",
 			Approved:        false,
-			PlanPath:        nil,
 		},
 		SpecState: model.SpecState{Path: nil, Status: "none"},
 		Execution: model.ExecutionState{

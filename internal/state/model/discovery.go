@@ -83,7 +83,6 @@ type DiscoveryState struct {
 	CurrentQuestion       int                        `json:"currentQuestion"`
 	Audience              string                     `json:"audience"`
 	Approved              bool                       `json:"approved"`
-	PlanPath              *string                    `json:"planPath"`
 	Mode                  *DiscoveryMode             `json:"mode,omitempty"`
 	Premises              []Premise                  `json:"premises,omitempty"`
 	SelectedApproach      *SelectedApproach          `json:"selectedApproach,omitempty"`

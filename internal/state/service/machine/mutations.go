@@ -24,7 +24,6 @@ func freshDiscovery() model.DiscoveryState {
 		CurrentQuestion: 0,
 		Audience:        "human",
 		Approved:        false,
-		PlanPath:        nil,
 	}
 }
 

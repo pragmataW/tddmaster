@@ -18,13 +18,6 @@ type PreDiscoveryResearch struct {
 	ExtractedTerms []string `json:"extractedTerms"`
 }
 
-// PlanContext provides plan document content for discovery.
-type PlanContext struct {
-	Provided    bool   `json:"provided"`
-	Content     string `json:"content"`
-	Instruction string `json:"instruction"`
-}
-
 // PreviousProgress summarises prior work for revisit states.
 type PreviousProgress struct {
 	CompletedTasks []string `json:"completedTasks"`
@@ -80,7 +73,6 @@ type DiscoveryOutput struct {
 	RevisitReason        *string                 `json:"revisitReason,omitempty"`
 	PreviousProgress     *PreviousProgress       `json:"previousProgress,omitempty"`
 	PreDiscoveryResearch *PreDiscoveryResearch   `json:"preDiscoveryResearch,omitempty"`
-	PlanContext          *PlanContext            `json:"planContext,omitempty"`
 	CurrentUser          *CurrentUser            `json:"currentUser,omitempty"`
 	Notes                []SpecNote              `json:"notes,omitempty"`
 	ModeSelection        *ModeSelectionOutput    `json:"modeSelection,omitempty"`

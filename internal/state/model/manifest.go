@@ -27,13 +27,26 @@ type UserConfig struct {
 
 // Manifest is the TDD-specific subschema of NosManifest. It lives at
 // manifest.yml → tddmaster.tdd and controls verifier retries, refactor round
-// caps, and whether TDD enforcement is globally enabled.
+// caps, whether TDD enforcement is globally enabled, and whether sync injects
+// project conventions into generated subagent files.
 type Manifest struct {
-	TddMode                bool    `json:"tddMode" yaml:"tddMode"`
-	TestRunner             *string `json:"testRunner,omitempty" yaml:"testRunner"`
-	MaxVerificationRetries int     `json:"maxVerificationRetries" yaml:"maxVerificationRetries"`
-	MaxRefactorRounds      int     `json:"maxRefactorRounds,omitempty" yaml:"maxRefactorRounds,omitempty"`
-	SkipVerify             bool    `json:"skipVerify,omitempty" yaml:"skipVerify,omitempty"`
+	TddMode                  bool    `json:"tddMode" yaml:"tddMode"`
+	TestRunner               *string `json:"testRunner,omitempty" yaml:"testRunner"`
+	MaxVerificationRetries   int     `json:"maxVerificationRetries" yaml:"maxVerificationRetries"`
+	MaxRefactorRounds        int     `json:"maxRefactorRounds,omitempty" yaml:"maxRefactorRounds,omitempty"`
+	SkipVerify               bool    `json:"skipVerify,omitempty" yaml:"skipVerify,omitempty"`
+	InjectProjectConventions *bool   `json:"injectProjectConventions,omitempty" yaml:"injectProjectConventions,omitempty"`
+}
+
+// ShouldInjectConventions reports whether sync should inject project
+// conventions (CLAUDE.md/AGENTS.md minus the tddmaster block plus rules) into
+// generated subagent prompts. A nil manifest, nil pointer, or absent key
+// defaults to true so existing projects get the feature automatically.
+func (m *Manifest) ShouldInjectConventions() bool {
+	if m == nil || m.InjectProjectConventions == nil {
+		return true
+	}
+	return *m.InjectProjectConventions
 }
 
 // NosManifest is the root `tddmaster:` section persisted in manifest.yml. It

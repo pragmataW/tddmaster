@@ -42,7 +42,7 @@ func TestClaudeCode_GenerateVerifierFile_PassesSkipVerify(t *testing.T) {
 	dir := t.TempDir()
 
 	m := manifestWithTDD(true, true) // TDD on, skipVerify on
-	if err := generateVerifierFile(dir, m); err != nil {
+	if err := generateVerifierFile(dir, nil, m); err != nil {
 		t.Fatalf("generateVerifierFile returned unexpected error: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestClaudeCode_GenerateVerifierFile_SkipVerifyFalse_NoMandatoryLanguage(t *
 	dir := t.TempDir()
 
 	m := manifestWithTDD(true, false) // TDD on, skipVerify off
-	if err := generateVerifierFile(dir, m); err != nil {
+	if err := generateVerifierFile(dir, nil, m); err != nil {
 		t.Fatalf("generateVerifierFile returned unexpected error: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestCodex_BuildVerifierAgentToml_PassesSkipVerify(t *testing.T) {
 	t.Parallel()
 
 	m := manifestWithTDD(true, true)
-	got := buildCodexVerifierAgentToml(m)
+	got := buildCodexVerifierAgentToml(t.TempDir(), nil, m)
 
 	if !containsMandatory(got) {
 		t.Errorf(
@@ -116,7 +116,7 @@ func TestCodex_BuildVerifierAgentToml_SkipVerifyFalse_Regression(t *testing.T) {
 	t.Parallel()
 
 	m := manifestWithTDD(true, false)
-	got := buildCodexVerifierAgentToml(m)
+	got := buildCodexVerifierAgentToml(t.TempDir(), nil, m)
 
 	for _, kw := range []string{"ZORUNLU", "MANDATORY"} {
 		if strings.Contains(got, kw) {
@@ -138,7 +138,7 @@ func TestOpenCode_BuildVerifierAgentMd_PassesSkipVerify(t *testing.T) {
 	t.Parallel()
 
 	m := manifestWithTDD(true, true)
-	got := buildOpenCodeVerifierAgentMd(m)
+	got := buildOpenCodeVerifierAgentMd(t.TempDir(), nil, m)
 
 	if !containsMandatory(got) {
 		t.Errorf(
@@ -154,7 +154,7 @@ func TestOpenCode_BuildVerifierAgentMd_SkipVerifyFalse_Regression(t *testing.T) 
 	t.Parallel()
 
 	m := manifestWithTDD(true, false)
-	got := buildOpenCodeVerifierAgentMd(m)
+	got := buildOpenCodeVerifierAgentMd(t.TempDir(), nil, m)
 
 	for _, kw := range []string{"ZORUNLU", "MANDATORY"} {
 		if strings.Contains(got, kw) {

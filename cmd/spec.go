@@ -178,18 +178,15 @@ func specNew(args []string) error {
 		return fmt.Errorf("tddmaster is not initialized. Run: %s", output.Cmd("init"))
 	}
 
-	// Parse positional args: spec new [name] "description" [--from-plan=path]
+	// Parse positional args: spec new [name] "description"
 	var specName string
 	var descWords []string
-	var planPath string
 	var nameConsumed bool
 
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--name=") {
 			specName = arg[len("--name="):]
 			nameConsumed = true
-		} else if strings.HasPrefix(arg, "--from-plan=") {
-			planPath = arg[len("--from-plan="):]
 		} else if !strings.HasPrefix(arg, "-") {
 			descWords = append(descWords, arg)
 		}
@@ -250,17 +247,6 @@ func specNew(args []string) error {
 		return fmt.Errorf("please provide a description:\n  %s spec new \"Add photo upload support\"", output.CmdPrefix())
 	}
 
-	// Check plan file
-	if planPath != "" {
-		info, err := os.Stat(planPath)
-		if err != nil {
-			return fmt.Errorf("plan file not found: %s", planPath)
-		}
-		if info.Size() > 50*1024 {
-			return fmt.Errorf("plan file too large. Maximum 50KB")
-		}
-	}
-
 	branch := "spec/" + specName
 
 	// Check if spec already exists
@@ -282,11 +268,6 @@ func specNew(args []string) error {
 	user, _ := state.ResolveUser(root)
 	userInfo := &state.UserInfo{Name: user.Name, Email: user.Email}
 	newState = state.RecordTransition(newState, state.PhaseIdle, state.PhaseDiscovery, userInfo, nil)
-
-	// Inject plan path if provided
-	if planPath != "" {
-		newState.Discovery.PlanPath = &planPath
-	}
 
 	// Create spec directory and save state
 	if err := os.MkdirAll(specDir, 0o755); err != nil {

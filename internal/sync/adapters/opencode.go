@@ -70,16 +70,16 @@ func (a *OpenCodeAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.Syn
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-executor.md"), []byte(buildOpenCodeExecutorAgentMd(ctx.CommandPrefix)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-executor.md"), []byte(buildOpenCodeExecutorAgentMd(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest)), 0o644); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-verifier.md"), []byte(buildOpenCodeVerifierAgentMd(ctx.Manifest)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-verifier.md"), []byte(buildOpenCodeVerifierAgentMd(ctx.Root, ctx.Rules, ctx.Manifest)), 0o644); err != nil {
 		return err
 	}
 
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
-		return os.WriteFile(filepath.Join(agentsDir, "test-writer.md"), []byte(buildOpenCodeTestWriterAgentMd()), 0o644)
+		return os.WriteFile(filepath.Join(agentsDir, "test-writer.md"), []byte(buildOpenCodeTestWriterAgentMd(ctx.Root, ctx.Rules, ctx.Manifest)), 0o644)
 	}
 	return nil
 }
@@ -182,21 +182,26 @@ func buildOpenCodeAgentMd(name, description string, tools []string, body ...stri
 	return strings.Join(lines, "\n")
 }
 
-func buildOpenCodeExecutorAgentMd(commandPrefix string) string {
+func openCodeConventionSources() shared.ConventionSources {
+	return shared.ConventionSources{
+		ProjectFile: "AGENTS.md",
+		HomeFile:    "~/.config/opencode/AGENTS.md",
+	}
+}
+
+func buildOpenCodeExecutorAgentMd(root, commandPrefix string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, openCodeConventionSources(), rules, manifest.ShouldInjectConventions())
 	return buildOpenCodeAgentMd(
 		"tddmaster-executor",
 		`description: "Executes a single tddmaster task. Follows spec behavioral rules and reports structured results."`,
 		[]string{"read", "write", "glob", "grep", "shell", "delegate"},
-		shared.ExecutorInstructions(commandPrefix),
+		preamble+shared.ExecutorInstructions(commandPrefix),
 	)
 }
 
-func buildOpenCodeVerifierAgentMd(manifest *state.Manifest) string {
+func buildOpenCodeVerifierAgentMd(root string, rules []string, manifest *state.Manifest) string {
 	typeCheckCmd, testCmd := resolveVerifierCommands(manifest)
 
-	// TDD mode guard: only inject RED/GREEN/REFACTOR phase blocks when TDD is enabled.
-	// Non-TDD projects must use VerifierInstructions — sending TDD phase blocks to a
-	// non-TDD verifier causes confusion and incorrect phase-specific behavior.
 	tddMode := manifest != nil && manifest.TddMode
 	skipVerify := manifest != nil && manifest.SkipVerify
 	var verifierInstructions string
@@ -206,21 +211,24 @@ func buildOpenCodeVerifierAgentMd(manifest *state.Manifest) string {
 		verifierInstructions = shared.VerifierInstructions(typeCheckCmd, testCmd)
 	}
 
+	preamble := shared.ConventionsPreamble(root, openCodeConventionSources(), rules, manifest.ShouldInjectConventions())
+
 	return buildOpenCodeAgentMd(
 		"tddmaster-verifier",
 		`description: "Independently verifies completed task work. Read-only. Never sees the executor's context."`,
 		[]string{"read", "glob", "grep", "shell"},
-		verifierInstructions,
+		preamble+verifierInstructions,
 		"The orchestrator will use this report for the tddmaster status report.",
 	)
 }
 
-func buildOpenCodeTestWriterAgentMd() string {
+func buildOpenCodeTestWriterAgentMd(root string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, openCodeConventionSources(), rules, manifest.ShouldInjectConventions())
 	return buildOpenCodeAgentMd(
 		"test-writer",
 		`description: "Writes tests FIRST following TDD principles. Reads the project rule set from .opencode/skills/ and AGENTS.md before writing any test."`,
 		[]string{"read", "write", "glob", "grep", "shell"},
-		shared.TestWriterInstructions("`.opencode/skills/` and `AGENTS.md`"),
+		preamble+shared.TestWriterInstructions("`.opencode/skills/` and `AGENTS.md`"),
 	)
 }
 

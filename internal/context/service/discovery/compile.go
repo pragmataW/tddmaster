@@ -86,14 +86,13 @@ func Compile(
 
 	hasUserContext := st.Discovery.UserContext != nil && len(*st.Discovery.UserContext) > 0
 	hasDescription := st.SpecDescription != nil && len(*st.SpecDescription) > 0
-	hasPlan := st.Discovery.PlanPath != nil
 	mode := st.Discovery.Mode
 
 	reminders := concerns.GetReminders(activeConcerns, nil)
 	baseCtx := model.ContextBlock{Rules: rules, ConcernReminders: reminders}
 
 	// Listen-first step.
-	if mode == nil && !hasUserContext && answeredCount == 0 && !hasPlan && hasDescription {
+	if mode == nil && !hasUserContext && answeredCount == 0 && hasDescription {
 		out := model.DiscoveryOutput{
 			Phase:         "DISCOVERY",
 			Instruction:   model.DiscoveryListenFirstInstruction,
@@ -107,7 +106,7 @@ func Compile(
 	}
 
 	// Mode selection step.
-	if mode == nil && hasDescription && answeredCount == 0 && !hasPlan {
+	if mode == nil && hasDescription && answeredCount == 0 {
 		ms := &model.ModeSelectionOutput{
 			Required:    true,
 			Instruction: model.ModeSelectionOutputInstruction,
@@ -129,10 +128,6 @@ func Compile(
 	// Premise challenge step.
 	premisesCompleted := st.Discovery.PremisesCompleted != nil && *st.Discovery.PremisesCompleted
 	if mode != nil && !premisesCompleted && !allAnswered {
-		planNote := ""
-		if st.Discovery.PlanPath != nil {
-			planNote = " and the plan document"
-		}
 		out := model.DiscoveryOutput{
 			Phase:         "DISCOVERY",
 			Instruction:   model.DiscoveryPremiseInstruction,
@@ -142,7 +137,7 @@ func Compile(
 			Transition:    model.TransitionOnComplete{OnComplete: r.CS("next --answer='{\"premises\":[]}'", st.Spec)},
 			PremiseChallenge: &model.PremiseChallengeOutput{
 				Required:    true,
-				Instruction: fmt.Sprintf(model.PremiseChallengeInstructionFmt, planNote),
+				Instruction: model.PremiseChallengeInstruction,
 				Prompts:     model.PremiseChallengePrompts,
 			},
 		}
@@ -235,13 +230,7 @@ func Compile(
 			if research := buildPreDiscoveryResearch(specDescription); research != nil {
 				agentOut.PreDiscoveryResearch = research
 			}
-			planPath := ""
-			if st.Discovery.PlanPath != nil {
-				planPath = *st.Discovery.PlanPath
-			}
-			if planCtx := buildPlanContext(planPath); planCtx != nil {
-				agentOut.PlanContext = planCtx
-			} else if isRichDescription && !hasPersistedPrefills {
+			if isRichDescription && !hasPersistedPrefills {
 				agentOut.RichDescription = &model.RichDescriptionOutput{
 					Provided:    true,
 					Length:      len(specDescription),
@@ -319,13 +308,7 @@ func Compile(
 		if research := buildPreDiscoveryResearch(specDescription); research != nil {
 			out.PreDiscoveryResearch = research
 		}
-		planPath := ""
-		if st.Discovery.PlanPath != nil {
-			planPath = *st.Discovery.PlanPath
-		}
-		if planCtx := buildPlanContext(planPath); planCtx != nil {
-			out.PlanContext = planCtx
-		} else if isRichDescription && !hasPersistedPrefills {
+		if isRichDescription && !hasPersistedPrefills {
 			out.RichDescription = &model.RichDescriptionOutput{
 				Provided:    true,
 				Length:      len(specDescription),
