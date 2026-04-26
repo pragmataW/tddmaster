@@ -122,6 +122,7 @@ func Compile(in model.CompileInput) model.NextOutput {
 			failCount := st.Execution.LastVerification.VerificationFailCount
 			exec.TDDFailureReport = &model.TDDFailureReport{
 				Reason:             "verification-failed",
+				FailedACs:          st.Execution.LastVerification.FailedACs,
 				UncoveredEdgeCases: st.Execution.LastVerification.UncoveredEdgeCases,
 				RetryCount:         failCount,
 				MaxRetries:         maxRetries,

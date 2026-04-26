@@ -20,6 +20,7 @@ type VerificationResult struct {
 	VerificationFailCount int            `json:"verificationFailCount,omitempty"`
 	RefactorNotes         []RefactorNote `json:"refactorNotes,omitempty"`
 	Phase                 string         `json:"phase,omitempty"`
+	FailedACs             []string       `json:"failedACs,omitempty"`
 }
 
 type StatusReport struct {

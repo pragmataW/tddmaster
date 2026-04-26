@@ -142,23 +142,10 @@ func RecordTDDVerificationFull(
 		VerificationFailCount: newFailCount,
 		RefactorNotes:         refactorNotes,
 		Phase:                 phaseSnapshot,
+		FailedACs:             failedACs,
 	}
 
 	if !passed {
-		if len(failedACs) > 0 {
-			failSet := make(map[string]bool, len(failedACs))
-			for _, ac := range failedACs {
-				failSet[ac] = true
-			}
-			kept := st.Execution.CompletedTasks[:0]
-			for _, id := range st.Execution.CompletedTasks {
-				if !failSet[id] {
-					kept = append(kept, id)
-				}
-			}
-			st.Execution.CompletedTasks = kept
-		}
-
 		if maxRetries > 0 && newFailCount >= maxRetries {
 			reason := fmt.Sprintf("verifier max retry reached (%d/%d)", newFailCount, maxRetries)
 			return machine.BlockExecution(st, reason)

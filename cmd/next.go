@@ -149,7 +149,7 @@ func runNextCore(specPtr *string, answerText string) error {
 			st.LastAnswer.Hash == hash {
 			// Return the current compiled context with an idempotent flag.
 			tier1, hints, tier2Count, _ := loadRulesAndHints(root, st, config)
-			if tddModeActive {
+			if state.ShouldRunTDDForCurrentTask(st, config) {
 				tier1 = ctxpkg.InjectTDDRules(tier1)
 			}
 			var parsedSpec *spec.ParsedSpec
@@ -218,7 +218,7 @@ func runNextCore(specPtr *string, answerText string) error {
 
 		// Compile output
 		tier1, hints, tier2Count, _ := loadRulesAndHints(root, newState, config)
-		if tddModeActive {
+		if state.ShouldRunTDDForCurrentTask(newState, config) {
 			tier1 = ctxpkg.InjectTDDRules(tier1)
 		}
 		var parsedSpec *spec.ParsedSpec
@@ -299,7 +299,7 @@ func runNextCore(specPtr *string, answerText string) error {
 	}
 
 	tier1, hints, tier2Count, _ := loadRulesAndHints(root, st, config)
-	if tddModeActive {
+	if state.ShouldRunTDDForCurrentTask(st, config) {
 		tier1 = ctxpkg.InjectTDDRules(tier1)
 	}
 	var parsedSpec *spec.ParsedSpec
@@ -1594,11 +1594,13 @@ func applyExecutorReport(st state.StateFile, config *state.NosManifest, report m
 	return newState, nil
 }
 
-// clearTDDRefactorState resets all three TDD/refactor tracking fields on st.
+// clearTDDRefactorState resets the TDD/refactor tracking fields on st,
+// including any pending refactor notes that belonged to the cleared cycle.
 func clearTDDRefactorState(st *state.StateFile) {
 	st.Execution.TDDCycle = ""
 	st.Execution.RefactorRounds = 0
 	st.Execution.RefactorApplied = false
+	st.Execution.PendingRefactorNotes = nil
 }
 
 // reseedTDDCycleIfNeeded sets or clears Execution.TDDCycle based on whether
