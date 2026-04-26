@@ -4,6 +4,7 @@ package tdd
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/pragmataW/tddmaster/internal/state/model"
@@ -212,11 +213,31 @@ func shouldPopulatePendingNotes(cfg *model.NosManifest) bool {
 	return cfg != nil && cfg.IsVerifierSkipped() && cfg.IsTDDEnabled()
 }
 
-// resetCycleForNextTask clears per-task TDD cycle state.
+// resetCycleForNextTask marks the current task as completed and clears per-task
+// TDD cycle state. Called from RecordTDDVerificationFull when the verifier signals
+// that the cycle is finished (GREEN with empty refactor notes, REFACTOR with no
+// notes, or refactor-round cap reached). Without the completion step the
+// downstream reseed in cmd/next.go would pick the same task and loop it back to
+// RED instead of advancing.
 func resetCycleForNextTask(st *model.StateFile) {
+	if id := CurrentTaskID(*st); id != "" {
+		if !taskInCompletedList(*st, id) {
+			st.Execution.CompletedTasks = append(st.Execution.CompletedTasks, id)
+		}
+		for i := range st.OverrideTasks {
+			if st.OverrideTasks[i].ID == id {
+				st.OverrideTasks[i].Completed = true
+				break
+			}
+		}
+	}
 	st.Execution.TDDCycle = ""
 	st.Execution.RefactorRounds = 0
 	st.Execution.RefactorApplied = false
+}
+
+func taskInCompletedList(st model.StateFile, id string) bool {
+	return slices.Contains(st.Execution.CompletedTasks, id)
 }
 
 // StartTDDCycleForTask initializes the TDD cycle at RED for the current task

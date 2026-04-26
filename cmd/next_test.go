@@ -409,6 +409,87 @@ func TestApplyExecutorReport_RefactorBypassGuard_VerifyMode_ErrorMessage(t *test
 	}
 }
 
+// TestAdvanceWithoutVerification_TDDOn_SkipVerify_RefactorPending_BareCompleted_Blocks
+// asserts that the refactor-bypass guard fires on the skip-verify routing path
+// (verifierPayloadGuard → advanceWithoutVerification), not just inside
+// applyExecutorReport. Without this guard, an executor in REFACTOR phase with
+// pending refactor notes can complete a task by submitting `completed:[task-1]`
+// alone (no `refactorApplied:true`), silently skipping the refactor round.
+func TestAdvanceWithoutVerification_TDDOn_SkipVerify_RefactorPending_BareCompleted_Blocks(t *testing.T) {
+	cfg := skipVerifyManifest(true, true)
+	st := refactorStateWithPendingNotes()
+	report := executorReport("task-1") // no refactorApplied flag
+
+	newSt, err := advanceWithoutVerification(st, cfg, report)
+
+	if err == nil {
+		t.Fatal("expected guard error for bare completed submit during REFACTOR with pending notes on skip-verify path, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "cannot complete task while in REFACTOR phase with pending notes") {
+		t.Errorf("guard message should match the canonical wording; got %q", msg)
+	}
+	if !strings.Contains(msg, "refactorApplied: true") {
+		t.Errorf("guard message should instruct to submit refactorApplied: true; got %q", msg)
+	}
+	if len(newSt.Execution.CompletedTasks) != 0 {
+		t.Errorf("CompletedTasks must remain empty when guard rejects, got %v", newSt.Execution.CompletedTasks)
+	}
+	if newSt.Execution.Iteration != st.Execution.Iteration {
+		t.Errorf("Iteration must not advance when guard rejects, before=%d after=%d",
+			st.Execution.Iteration, newSt.Execution.Iteration)
+	}
+}
+
+// TestVerifierPayloadGuard_SkipVerify_RefactorPending_BareCompleted_Blocks
+// closes the routing-level gap: it exercises the real entry point used by
+// answerNext when skipVerify=true, proving the guard fires through the actual
+// dispatch (verifierPayloadGuard → advanceWithoutVerification) and not only
+// against the leaf function.
+func TestVerifierPayloadGuard_SkipVerify_RefactorPending_BareCompleted_Blocks(t *testing.T) {
+	cfg := skipVerifyManifest(true, true)
+	st := refactorStateWithPendingNotes()
+	report := executorReport("task-1")
+
+	_, err := verifierPayloadGuard(st, cfg, report)
+
+	if err == nil {
+		t.Fatal("expected guard error through verifierPayloadGuard routing, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot complete task while in REFACTOR phase with pending notes") {
+		t.Errorf("routing-level guard error should carry canonical wording; got %q", err.Error())
+	}
+}
+
+// TestAdvanceWithoutVerification_TDDOn_SkipVerify_RefactorPending_RefactorAppliedTrue_Succeeds
+// is the positive-path regression: with `refactorApplied:true` AND
+// `completed:[task-1]`, the same skip-verify route must complete the task,
+// flip RefactorApplied, and clear refactor state. This guards against an
+// over-eager guard that would block legitimate combined submits.
+func TestAdvanceWithoutVerification_TDDOn_SkipVerify_RefactorPending_RefactorAppliedTrue_Succeeds(t *testing.T) {
+	cfg := skipVerifyManifest(true, true)
+	st := refactorStateWithPendingNotes()
+	tddEnabled := true
+	st.OverrideTasks = append(st.OverrideTasks,
+		state.SpecTask{ID: "task-2", Title: "second task", TDDEnabled: &tddEnabled})
+	report := map[string]interface{}{
+		"completed":       []interface{}{"task-1"},
+		"refactorApplied": true,
+	}
+
+	newSt, err := advanceWithoutVerification(st, cfg, report)
+
+	if err != nil {
+		t.Fatalf("combined submit on skip-verify path must pass; got error: %v", err)
+	}
+	if !contains(newSt.Execution.CompletedTasks, "task-1") {
+		t.Errorf("expected task-1 in CompletedTasks, got %v", newSt.Execution.CompletedTasks)
+	}
+	if newSt.Execution.TDDCycle == state.TDDCycleRefactor {
+		t.Errorf("TDDCycle should be cleared/reseeded after combined submit, got %q", newSt.Execution.TDDCycle)
+	}
+}
+
 // TestApplyExecutorReport_RefactorBypassGuard_CombinedSubmit_PassesGuard
 // asserts the positive case: REFACTOR phase + pending notes, a single submit
 // carrying BOTH refactorApplied:true AND completed:[task-1] passes the guard
@@ -818,6 +899,72 @@ func TestNegative_SkipVerifyFalse_IsVerifierSkipped_ReturnsFalse(t *testing.T) {
 			// does NOT call verifierPayloadGuard, so verifier reports are accepted.
 			if cfg.IsVerifierSkipped() {
 				t.Errorf("expected IsVerifierSkipped()=false for skipVerify=false manifest in phase %q, got true", tc.phase)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression: GREEN pass + empty refactorNotes must advance the task, not loop
+// it back to RED. Without the fix in resetCycleForNextTask the verifier-cleared
+// TDDCycle and the subsequent reseedTDDCycleIfNeeded would re-pick the same
+// pending task and set TDDCycle=RED, trapping the spec on task-1 forever.
+// ---------------------------------------------------------------------------
+
+func TestApplyVerifierReport_Green_EmptyNotes_AdvancesToNextTaskRed_NotSameTaskRed(t *testing.T) {
+	tddEnabled := true
+	for _, tc := range []struct {
+		name       string
+		skipVerify bool
+	}{
+		{"skipVerify=false", false},
+		{"skipVerify=true", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := skipVerifyManifest(true /*TDD=on*/, tc.skipVerify)
+			st := state.StateFile{
+				Phase: state.PhaseExecuting,
+				OverrideTasks: []state.SpecTask{
+					{ID: "task-1", Title: "first", TDDEnabled: &tddEnabled},
+					{ID: "task-2", Title: "second", TDDEnabled: &tddEnabled},
+				},
+				Execution: state.ExecutionState{
+					TDDCycle:  state.TDDCycleGreen,
+					Iteration: 1,
+				},
+			}
+
+			report := map[string]interface{}{
+				"passed":        true,
+				"output":        "all green",
+				"refactorNotes": []interface{}{},
+			}
+
+			got, err := applyVerifierReport(st, cfg, report)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !contains(got.Execution.CompletedTasks, "task-1") {
+				t.Errorf("CompletedTasks: got %v, want to contain task-1 (verifier-passed GREEN with no notes must complete task-1)", got.Execution.CompletedTasks)
+			}
+			if contains(got.Execution.CompletedTasks, "task-2") {
+				t.Errorf("CompletedTasks must NOT contain task-2 yet, got %v", got.Execution.CompletedTasks)
+			}
+			if !got.OverrideTasks[0].Completed {
+				t.Error("OverrideTasks[0].Completed: got false, want true (task-1 done)")
+			}
+			if got.OverrideTasks[1].Completed {
+				t.Error("OverrideTasks[1].Completed: got true, want false (task-2 still pending)")
+			}
+
+			// After reseed, current task is task-2 and its cycle is RED — NOT
+			// task-1 looping back to RED (the bug being prevented).
+			if got.Execution.TDDCycle != state.TDDCycleRed {
+				t.Errorf("TDDCycle: got %q, want %q (next task must seed at RED)", got.Execution.TDDCycle, state.TDDCycleRed)
+			}
+			if state.CurrentTaskID(got) != "task-2" {
+				t.Errorf("CurrentTaskID after reseed: got %q, want task-2 (advance, not loop)", state.CurrentTaskID(got))
 			}
 		})
 	}

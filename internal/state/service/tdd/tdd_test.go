@@ -74,6 +74,10 @@ func TestRecordTDDVerificationFull_SkipVerify_Green_WithRefactorNotes_Transition
 
 func TestRecordTDDVerificationFull_SkipVerify_Green_EmptyRefactorNotes_ClearsToNextTask(t *testing.T) {
 	st := execState(model.TDDCycleGreen)
+	st.OverrideTasks = []model.SpecTask{
+		{ID: "task-1", Title: "first", Completed: false},
+		{ID: "task-2", Title: "second", Completed: false},
+	}
 	cfg := manifest(true, true)
 
 	got, err := tdd.RecordTDDVerificationFull(st, 0, 0, true, "ok", nil, nil, nil, cfg)
@@ -85,6 +89,15 @@ func TestRecordTDDVerificationFull_SkipVerify_Green_EmptyRefactorNotes_ClearsToN
 	}
 	if len(got.Execution.PendingRefactorNotes) != 0 {
 		t.Errorf("PendingRefactorNotes should be empty, got %v", got.Execution.PendingRefactorNotes)
+	}
+	if len(got.Execution.CompletedTasks) != 1 || got.Execution.CompletedTasks[0] != "task-1" {
+		t.Errorf("CompletedTasks: got %v, want [task-1] (verifier-passed GREEN with no notes must complete current task)", got.Execution.CompletedTasks)
+	}
+	if !got.OverrideTasks[0].Completed {
+		t.Error("OverrideTasks[0].Completed: got false, want true")
+	}
+	if got.OverrideTasks[1].Completed {
+		t.Error("OverrideTasks[1].Completed: got true, want false (next task must remain pending)")
 	}
 }
 
@@ -151,6 +164,10 @@ func TestRecordTDDVerificationFull_NoSkip_Green_WithNotes_TransitionsToRefactor(
 // GREEN with no notes, skipVerify=false → task completes.
 func TestRecordTDDVerificationFull_NoSkip_Green_EmptyNotes_ClearsToNextTask(t *testing.T) {
 	st := execState(model.TDDCycleGreen)
+	st.OverrideTasks = []model.SpecTask{
+		{ID: "task-1", Title: "first", Completed: false},
+		{ID: "task-2", Title: "second", Completed: false},
+	}
 	cfg := manifest(true, false)
 
 	got, err := tdd.RecordTDDVerificationFull(st, 0, 0, true, "ok", nil, nil, nil, cfg)
@@ -160,6 +177,80 @@ func TestRecordTDDVerificationFull_NoSkip_Green_EmptyNotes_ClearsToNextTask(t *t
 	if got.Execution.TDDCycle != "" {
 		t.Errorf("TDDCycle: got %q, want empty", got.Execution.TDDCycle)
 	}
+	if len(got.Execution.CompletedTasks) != 1 || got.Execution.CompletedTasks[0] != "task-1" {
+		t.Errorf("CompletedTasks: got %v, want [task-1]", got.Execution.CompletedTasks)
+	}
+	if !got.OverrideTasks[0].Completed {
+		t.Error("OverrideTasks[0].Completed: got false, want true")
+	}
+}
+
+// Regression: GREEN+empty notes must mark the current task complete so the
+// downstream cmd/next.go reseed picks the NEXT task. Before the fix, only
+// TDDCycle cleared and reseed looped the same task back to RED.
+func TestRecordTDDVerificationFull_Green_EmptyNotes_CompletesCurrentTask_NotJustCycleReset(t *testing.T) {
+	st := execState(model.TDDCycleGreen)
+	st.OverrideTasks = []model.SpecTask{
+		{ID: "task-1", Title: "first", Completed: false},
+		{ID: "task-2", Title: "second", Completed: false},
+	}
+	cfg := manifest(true, false)
+
+	got, err := tdd.RecordTDDVerificationFull(st, 0, 0, true, "ok", nil, nil, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got.Execution.TDDCycle != "" {
+		t.Errorf("TDDCycle: got %q, want empty", got.Execution.TDDCycle)
+	}
+	if got.Execution.RefactorRounds != 0 {
+		t.Errorf("RefactorRounds: got %d, want 0", got.Execution.RefactorRounds)
+	}
+	if got.Execution.RefactorApplied {
+		t.Error("RefactorApplied: got true, want false")
+	}
+	if !slicesEqual(got.Execution.CompletedTasks, []string{"task-1"}) {
+		t.Errorf("CompletedTasks: got %v, want [task-1]", got.Execution.CompletedTasks)
+	}
+	if !got.OverrideTasks[0].Completed {
+		t.Error("OverrideTasks[0].Completed: got false, want true")
+	}
+	if got.OverrideTasks[1].Completed {
+		t.Error("OverrideTasks[1].Completed: got true, want false")
+	}
+}
+
+// Idempotency: if the current task is already in CompletedTasks (defensive
+// scenario), resetCycleForNextTask must not append a duplicate.
+func TestRecordTDDVerificationFull_Green_EmptyNotes_AlreadyCompleted_NoDuplicate(t *testing.T) {
+	st := execState(model.TDDCycleGreen)
+	st.OverrideTasks = []model.SpecTask{
+		{ID: "task-1", Title: "first", Completed: true},
+		{ID: "task-2", Title: "second", Completed: false},
+	}
+	st.Execution.CompletedTasks = []string{"task-1"}
+	cfg := manifest(true, false)
+
+	got, err := tdd.RecordTDDVerificationFull(st, 0, 0, true, "ok", nil, nil, nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !slicesEqual(got.Execution.CompletedTasks, []string{"task-1", "task-2"}) {
+		t.Errorf("CompletedTasks: got %v, want [task-1 task-2] (task-2 is now CurrentTaskID and gets completed once)", got.Execution.CompletedTasks)
+	}
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // RED → GREEN transition still works with skipVerify=false.

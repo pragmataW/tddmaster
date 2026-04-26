@@ -1408,6 +1408,9 @@ func advanceWithoutVerification(st state.StateFile, config *state.NosManifest, r
 
 	if config.IsTDDEnabled() && phase == state.TDDCycleRefactor {
 		// REFACTOR → task-complete + reseed next-task RED.
+		if err := enforceRefactorBypassGuard(st, config, report); err != nil {
+			return st, err
+		}
 		newState.Execution.Iteration++
 		if completed, ok := report["completed"].([]interface{}); ok {
 			for _, c := range completed {
@@ -1502,38 +1505,52 @@ func extractVerifierPayload(report map[string]interface{}) (map[string]interface
 	return nil, false
 }
 
+// enforceRefactorBypassGuard returns a non-nil error when the cycle is parked
+// in REFACTOR with pending refactor notes and the executor is trying to
+// complete a task without first reporting `refactorApplied:true`. Allowing
+// such a bare `completed` submit would silently skip the refactor round and
+// re-seed the next task's RED — the exact regression covered by this guard.
+//
+// The check is invariant across both routing paths (`applyExecutorReport`
+// for the verifier-active flow, `advanceWithoutVerification` for the
+// skipVerify flow), so this helper is the single source of truth and is
+// called from both. config may be nil; when non-nil and IsVerifierSkipped()
+// returns true, the error wording is tailored to skip-verify mode.
+func enforceRefactorBypassGuard(st state.StateFile, config *state.NosManifest, report map[string]interface{}) error {
+	if st.Execution.TDDCycle != state.TDDCycleRefactor {
+		return nil
+	}
+	if st.Execution.RefactorApplied || getBoolField(report, "refactorApplied") {
+		return nil
+	}
+	completedLen := 0
+	if c, ok := report["completed"].([]interface{}); ok {
+		completedLen = len(c)
+	}
+	if completedLen == 0 || !hasPendingRefactorNotes(st) {
+		return nil
+	}
+	if config != nil && config.IsVerifierSkipped() {
+		return fmt.Errorf(
+			"cannot complete task while in REFACTOR phase with pending notes; " +
+				"apply the refactor notes and resubmit with BOTH `refactorApplied: true` " +
+				"AND `completed: [<task-id>]` in the same status report — " +
+				"in skip-verify mode this single report advances the task",
+		)
+	}
+	return fmt.Errorf(
+		"cannot complete task while in REFACTOR phase with pending notes; " +
+			"apply the refactor notes first and report `refactorApplied: true`, " +
+			"or submit a verifier report (not an executor report) to advance the cycle",
+	)
+}
+
 // applyExecutorReport processes a report from the executor (or test-writer)
 // sub-agent: it appends completed task IDs, flips RefactorApplied when the
 // executor signals it, and advances the iteration counter.
 func applyExecutorReport(st state.StateFile, config *state.NosManifest, report map[string]interface{}) (state.StateFile, error) {
-	// Refactor-bypass guard: while the cycle is parked in REFACTOR with pending
-	// notes from the GREEN scan, the executor must either apply the notes
-	// (reporting refactorApplied:true) or defer to the verifier. Allowing a
-	// bare `completed` submit here would silently skip the refactor round and
-	// re-seed the next task's RED, which is exactly the regression we saw.
-	if st.Execution.TDDCycle == state.TDDCycleRefactor &&
-		!st.Execution.RefactorApplied &&
-		!getBoolField(report, "refactorApplied") {
-		completedLen := 0
-		if c, ok := report["completed"].([]interface{}); ok {
-			completedLen = len(c)
-		}
-		if completedLen > 0 && hasPendingRefactorNotes(st) {
-			skipVerify := config != nil && config.IsVerifierSkipped()
-			if skipVerify {
-				return st, fmt.Errorf(
-					"cannot complete task while in REFACTOR phase with pending notes; " +
-						"apply the refactor notes and resubmit with BOTH `refactorApplied: true` " +
-						"AND `completed: [<task-id>]` in the same status report — " +
-						"in skip-verify mode this single report advances the task",
-				)
-			}
-			return st, fmt.Errorf(
-				"cannot complete task while in REFACTOR phase with pending notes; " +
-					"apply the refactor notes first and report `refactorApplied: true`, " +
-					"or submit a verifier report (not an executor report) to advance the cycle",
-			)
-		}
+	if err := enforceRefactorBypassGuard(st, config, report); err != nil {
+		return st, err
 	}
 
 	newState := st
