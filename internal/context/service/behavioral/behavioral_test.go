@@ -472,3 +472,49 @@ func TestBehavioral_VerifierRequired_False_AllSubAgentMethods_NoSpawnVerifier(t 
 		})
 	}
 }
+
+// TestCoreReminderPresentInAllPhases asserts that every phase returned by
+// behavioral.Build carries the cross-phase CoreReminder slice. This guards
+// against regressions where a future phase function forgets to inherit the
+// reminder from Build's post-switch assignment.
+func TestCoreReminderPresentInAllPhases(t *testing.T) {
+	t.Parallel()
+	phases := []state.Phase{
+		state.PhaseIdle,
+		state.PhaseDiscovery,
+		state.PhaseDiscoveryRefinement,
+		state.PhaseSpecProposal,
+		state.PhaseSpecApproved,
+		state.PhaseExecuting,
+		state.PhaseBlocked,
+		state.PhaseCompleted,
+	}
+	for _, phase := range phases {
+		phase := phase
+		t.Run(string(phase), func(t *testing.T) {
+			t.Parallel()
+			st := state.CreateInitialState()
+			st.Phase = phase
+			block := behavioral.Build(
+				fakeRenderer{},
+				st,
+				10,
+				false,
+				nil,
+				nil,
+				model.DefaultHints,
+				true,
+			)
+			if len(block.CoreReminder) != len(model.CoreReminderItems) {
+				t.Fatalf("phase=%s: CoreReminder length %d, want %d",
+					phase, len(block.CoreReminder), len(model.CoreReminderItems))
+			}
+			for i, want := range model.CoreReminderItems {
+				if block.CoreReminder[i] != want {
+					t.Errorf("phase=%s: CoreReminder[%d]=%q, want %q",
+						phase, i, block.CoreReminder[i], want)
+				}
+			}
+		})
+	}
+}

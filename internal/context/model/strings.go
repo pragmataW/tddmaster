@@ -18,6 +18,22 @@ const (
 	MandatoryRuleConfidence     = "Confidence scoring: every technical finding needs a confidence score (1-10). 9-10: verified (read code, ran test). 7-8: strong evidence. 5-6: reasonable inference. 3-4: guess. 1-2: speculation. State basis ('read X', 'inferred from Y'). If confidence < 5, prefix with '\u26A0 Unverified:'."
 )
 
+// CoreReminderItems is the static cross-phase reminder list injected into every
+// `next` output's BehavioralBlock.CoreReminder. These rules summarise the core
+// tddmaster protocol that the orchestrator agent must remember on every turn,
+// independent of the current phase. They guard against context bloat in long
+// specs, where the CLAUDE.md preamble loaded once at session start may drift
+// out of the agent's working attention as the conversation grows.
+var CoreReminderItems = []string{
+	"ALWAYS spawn tddmaster-executor via Agent tool for code edits — never edit project code yourself.",
+	"Report exactly ONE task per status update; never batch multiple tasks into a single completed array.",
+	"Discovery phase is READ-ONLY for project code; only ask, propose, or run read-only spikes.",
+	"Respect TDD phase order: red writes failing tests only, green implements, refactor preserves behavior.",
+	"Verifier runs by default after a task; skip only when --skip-verify is explicitly set on the spec.",
+	"Use the Agent tool for delegation; do not paste task content into your own response.",
+	"If unsure of protocol, re-read the tddmaster section of CLAUDE.md before acting.",
+}
+
 // AskUserStrategy-specific ask method templates for mandatoryRules second entry.
 const (
 	AskMethodBlock    = "Do not ask the user inline. Instead, use `tddmaster block \"question\"` at every decision point — the orchestrator will pause for human input."
@@ -131,9 +147,28 @@ const (
 
 	SpecApprovedWaitingInstruction = "Spec is approved and ready. When the user is ready to start, begin execution."
 
-	SpecApprovedTDDInstruction = "Select TDD scope for this spec before starting execution. Some tasks (infrastructure setup, module downloads) often do not benefit from red/green/refactor."
+	SpecApprovedTDDInstruction = "Select TDD scope for this spec before starting execution.\n\n" +
+		"How TDD execution works in tddmaster:\n" +
+		"- For each TDD-enabled task, the runtime cycles RED → GREEN → REFACTOR.\n" +
+		"- RED: a `test-writer` sub-agent writes FAILING tests only — no implementation, no test execution.\n" +
+		"- GREEN: the `tddmaster-executor` sub-agent writes a clean, working implementation that makes the failing tests pass.\n" +
+		"- REFACTOR: the executor applies verifier-issued refactor notes; tests must still pass.\n\n" +
+		"You do NOT need to add separate \"write tests\" tasks — the cycle handles them. " +
+		"Some tasks (infrastructure setup, module downloads, scaffolding) often do not benefit from RGR; deselect those."
 
 	TaskTDDSelectionInstruction = "Choose which tasks run with TDD. 'All' keeps current behavior; 'None' skips red/green/refactor for every task; 'Custom' lets you pick task-by-task."
+
+	TDDPhaseRedInstruction = "TDD RED phase active. Spawn the `test-writer` sub-agent. " +
+		"It writes FAILING tests only — no implementation, no test execution. " +
+		"Pass `edgeCases` from this `next` output verbatim. After the test-writer reports, run `tddmaster spec <name> next` again."
+
+	TDDPhaseGreenInstruction = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
+		"It writes a clean, working implementation that makes the existing failing tests pass. " +
+		"It does NOT write new tests and does NOT run tests."
+
+	TDDPhaseRefactorInstruction = "TDD REFACTOR phase active. " +
+		"If `refactorInstructions` is present, spawn `tddmaster-executor` to apply each note verbatim and report `refactorApplied: true`. " +
+		"If absent, spawn `tddmaster-verifier` for a regression re-check; tests must still pass."
 )
 
 // Spec draft self-review checks.

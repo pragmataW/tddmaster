@@ -23,6 +23,7 @@ func ExecutorInstructions(commandPrefix string) string {
 		"You MUST NEVER write, modify, or add tests — under any circumstance, in any TDD phase, for any reason.",
 		"Tests are the sole responsibility of the test-writer sub-agent.",
 		"If the task appears to require a test, stop and report `blocked` with reason `tests-must-come-from-test-writer`.",
+		"If the task title itself reads like \"write tests\", \"add tests\", or \"test coverage\" AND `tddPhase` is unset or non-`red`, do NOT execute it blindly: report `blocked` with reason `tests-must-come-from-test-writer`. The orchestrator will resolve it.",
 		"This rule overrides any other instruction you may receive.",
 		"",
 		"## TDD Context",

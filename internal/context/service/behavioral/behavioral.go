@@ -73,21 +73,22 @@ func Build(
 		scopeItems = parsedSpec.OutOfScope
 	}
 
+	var block model.BehavioralBlock
 	switch st.Phase {
 	case state.PhaseIdle:
-		return phaseIdleBehavioral(r, st, mandatory, hints)
+		block = phaseIdleBehavioral(r, st, mandatory, hints)
 	case state.PhaseDiscovery:
-		return phaseDiscoveryBehavioral(mandatory, activeConcerns, hints)
+		block = phaseDiscoveryBehavioral(mandatory, activeConcerns, hints)
 	case state.PhaseDiscoveryRefinement:
-		return phaseDiscoveryRefinementBehavioral(mandatory, hints)
+		block = phaseDiscoveryRefinementBehavioral(mandatory, hints)
 	case state.PhaseSpecProposal:
-		return phaseSpecProposalBehavioral(r, st, mandatory, hints)
+		block = phaseSpecProposalBehavioral(r, st, mandatory, hints)
 	case state.PhaseSpecApproved:
-		return phaseSpecApprovedBehavioral(mandatory, hints)
+		block = phaseSpecApprovedBehavioral(mandatory, hints)
 	case state.PhaseExecuting:
-		return phaseExecutingBehavioral(r, st, mandatory, scopeItems, hints, stale, verifierRequired)
+		block = phaseExecutingBehavioral(r, st, mandatory, scopeItems, hints, stale, verifierRequired)
 	case state.PhaseBlocked:
-		return model.BehavioralBlock{
+		block = model.BehavioralBlock{
 			Rules: append(mandatory,
 				"Present the decision to the user exactly as described.",
 				"Do not suggest a preferred option unless the user asks for your opinion.",
@@ -96,7 +97,7 @@ func Build(
 			Tone: model.ToneBlocked,
 		}
 	case state.PhaseCompleted:
-		return model.BehavioralBlock{
+		block = model.BehavioralBlock{
 			Rules: append(mandatory,
 				"Report the completion summary. Do not start new work.",
 				"If the user wants to continue, they start a new spec.",
@@ -104,7 +105,7 @@ func Build(
 			Tone: model.ToneCompleted,
 		}
 	default:
-		return model.BehavioralBlock{
+		block = model.BehavioralBlock{
 			Rules: append(mandatory,
 				fmt.Sprintf("Run `%s` to get your instructions.", r.CS("next", st.Spec)),
 				"Do not take action without tddmaster guidance.",
@@ -112,6 +113,9 @@ func Build(
 			Tone: model.ToneDefault,
 		}
 	}
+
+	block.CoreReminder = model.CoreReminderItems
+	return block
 }
 
 func phaseIdleBehavioral(_ Renderer, _ state.StateFile, mandatory []string, hints model.InteractionHints) model.BehavioralBlock {

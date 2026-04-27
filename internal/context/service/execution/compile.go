@@ -217,6 +217,10 @@ func compileNormal(
 		baseInstruction = taskInstruction
 	}
 
+	if phaseHint := tddPhaseInstruction(st.Execution.TDDCycle); phaseHint != "" {
+		baseInstruction = phaseHint + "\n\n" + baseInstruction
+	}
+
 	out := model.ExecutionOutput{
 		Phase:       "EXECUTING",
 		Instruction: baseInstruction,
@@ -329,4 +333,20 @@ func compileNormal(
 	}
 
 	return out
+}
+
+// tddPhaseInstruction returns the per-phase reminder for the active TDD cycle,
+// or "" when no TDD phase is set. Prepended to the EXECUTING instruction so
+// the orchestrator gets a fresh reminder of which sub-agent to spawn.
+func tddPhaseInstruction(cycle string) string {
+	switch cycle {
+	case state.TDDCycleRed:
+		return model.TDDPhaseRedInstruction
+	case state.TDDCycleGreen:
+		return model.TDDPhaseGreenInstruction
+	case state.TDDCycleRefactor:
+		return model.TDDPhaseRefactorInstruction
+	default:
+		return ""
+	}
 }

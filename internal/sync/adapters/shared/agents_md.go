@@ -107,6 +107,8 @@ func BuildProtocol(commandPrefix string, options *statesync.SyncOptions) string 
 		"",
 		"Include `tddPhase` in your status report when it is set.",
 		"When `tddFailureReport` is present, address `failedACs` before reporting done.",
+		"",
+		"Do NOT add a separate \"write tests\" task — the RGR cycle already produces tests for every TDD-enabled task via the `test-writer` sub-agent. A duplicate task collides with the executor's never-write-tests rule.",
 	}
 
 	if !allowGit {

@@ -23,9 +23,15 @@ func isTestTask(task string) bool {
 	return strings.Contains(strings.ToLower(task), "test")
 }
 
-// deriveTasks derives tasks from discovery answers and decisions. When tddMode
-// is true, test-related tasks are moved to the beginning of the list to enforce
-// test-first ordering.
+// deriveTasks derives tasks from discovery answers and decisions.
+//
+// When tddMode is true:
+//   - the hard-coded "Write or update tests" task is omitted, because the
+//     red-green-refactor cycle already produces tests for every implementation
+//     task and a duplicate task collides with the executor's "never write
+//     tests" rule;
+//   - any test-related task that did come from discovery is moved to the
+//     beginning of the list to enforce test-first ordering.
 func deriveTasks(answers []state.DiscoveryAnswer, decisions []state.Decision, tddMode bool) []string {
 	var tasks []string
 
@@ -58,7 +64,9 @@ func deriveTasks(answers []state.DiscoveryAnswer, decisions []state.Decision, td
 		tasks = append(tasks, "_Tasks need to be defined before execution. Add tasks manually or run discovery with more detail._")
 	}
 
-	tasks = append(tasks, "Write or update tests for all new and changed behavior")
+	if !tddMode {
+		tasks = append(tasks, "Write or update tests for all new and changed behavior")
+	}
 	tasks = append(tasks, "Update documentation for all public-facing changes (README, API docs, CHANGELOG)")
 
 	if tddMode {

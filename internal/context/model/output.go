@@ -43,6 +43,7 @@ type MetaBlock struct {
 type BehavioralBlock struct {
 	ModeOverride *string  `json:"modeOverride,omitempty"`
 	Rules        []string `json:"rules"`
+	CoreReminder []string `json:"coreReminder,omitempty"`
 	Tone         string   `json:"tone"`
 	Urgency      *string  `json:"urgency,omitempty"`
 	OutOfScope   []string `json:"outOfScope,omitempty"`
