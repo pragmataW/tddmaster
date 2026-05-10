@@ -84,7 +84,7 @@ var TDDBehavioralRules = []string{
 	"TDD REQUIRED: Sub-agent selection for each task follows the cycle. Do NOT conflate roles — test-writer writes tests only, tddmaster-executor writes implementation or applies refactor notes only, tddmaster-verifier is read-only and evaluates each step. Delegation table (drive it by `tddPhase`, `lastVerification.phase`, and `refactorInstructions`):\n" +
 		"  - tddPhase='red' && no verifier result yet OR lastVerification.phase!='red' → spawn `test-writer`. Pass the spec's edge cases explicitly.\n" +
 		"  - tddPhase='red' && lastVerification.phase='red' && lastVerification.passed=false → spawn `tddmaster-verifier` with phase='red'. It reads test files without running them and confirms they are well-formed (readOnly: true).\n" +
-		"  - tddPhase='green' && (no verifier result OR lastVerification.phase!='green') → spawn `tddmaster-executor` with the task; executor writes a clean, working implementation that makes the failing tests pass (does NOT run tests, does NOT artificially minimise the solution).\n" +
+		"  - tddPhase='green' && (no verifier result OR lastVerification.phase!='green') → FIRST spawn `tddmaster-executor` with the task; executor writes a clean, working implementation that makes the failing tests pass (does NOT run tests, does NOT artificially minimise the solution). THEN, after the executor reports back, you MUST spawn `tddmaster-verifier` with phase='green' to run tests and emit `refactorNotes`. The verifier is mandatory in GREEN even when skipVerify=true — never advance the cycle by submitting an executor self-report. Submit only the verifier's structured report (with `passed` and `refactorNotes`) to `next`.\n" +
 		"  - tddPhase='green' && lastVerification.phase='green' && lastVerification.passed=false → spawn `tddmaster-verifier` with phase='green' to run and re-check tests.\n" +
 		"  - tddPhase='green' && lastVerification.phase='green' && lastVerification.passed=true → tddmaster already advanced to the next phase; no action needed here — run `next`.\n" +
 		"  - tddPhase='refactor' && refactorInstructions is present → spawn `tddmaster-executor` to apply the notes (from the GREEN scan or a prior REFACTOR re-check) verbatim and report `refactorApplied: true` (does NOT run tests).\n" +
@@ -162,9 +162,12 @@ const (
 		"It writes FAILING tests only — no implementation, no test execution. " +
 		"Pass `edgeCases` from this `next` output verbatim. After the test-writer reports, run `tddmaster spec <name> next` again."
 
-	TDDPhaseGreenInstruction = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
+	TDDPhaseGreenInstruction = "TDD GREEN phase active. Step 1: spawn the `tddmaster-executor` sub-agent. " +
 		"It writes a clean, working implementation that makes the existing failing tests pass. " +
-		"It does NOT write new tests and does NOT run tests."
+		"It does NOT write new tests and does NOT run tests. " +
+		"Step 2 (mandatory, even when skipVerify=true): after the executor reports, spawn `tddmaster-verifier` with phase='green'. " +
+		"The verifier runs the tests and produces `refactorNotes`. " +
+		"Submit ONLY the verifier's structured report (with `passed` and `refactorNotes`) to `next` — never the executor self-report; GREEN phase always requires the verifier's independent scan."
 
 	TDDPhaseRefactorInstruction = "TDD REFACTOR phase active. " +
 		"If `refactorInstructions` is present, spawn `tddmaster-executor` to apply each note verbatim and report `refactorApplied: true`. " +
