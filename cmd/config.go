@@ -33,8 +33,10 @@ func runConfig(_ *cobra.Command, args []string) error {
 		return configGetUser()
 	case "clear-user":
 		return configClearUser()
+	case "important-gate":
+		return configImportantGate(args[1:])
 	default:
-		printErr(fmt.Sprintf("Usage: %s config <set-user | get-user | clear-user>", output.CmdPrefix()))
+		printErr(fmt.Sprintf("Usage: %s config <set-user | get-user | clear-user | important-gate>", output.CmdPrefix()))
 		return nil
 	}
 }
@@ -96,4 +98,45 @@ func configClearUser() error {
 		printErr("No user configured.")
 	}
 	return nil
+}
+
+func configImportantGate(args []string) error {
+	if len(args) == 0 {
+		printErr(fmt.Sprintf("Usage: %s config important-gate <on | off | status>", output.CmdPrefix()))
+		return nil
+	}
+
+	root := "."
+	manifest, err := state.ReadManifest(root)
+	if err != nil || manifest == nil {
+		return fmt.Errorf("read manifest: %w (run `%s init` first)", err, output.CmdPrefix())
+	}
+
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		if manifest.IsImportantTaskGateEnabled() {
+			printErr("Important Task Gate: on")
+		} else {
+			printErr("Important Task Gate: off")
+		}
+		return nil
+	case "on", "enable", "true":
+		manifest.ImportantTaskGate = true
+		if err := state.WriteManifest(root, *manifest); err != nil {
+			return fmt.Errorf("write manifest: %w", err)
+		}
+		printErr("Important Task Gate: on")
+		printErr("Run `" + output.CmdPrefix() + " sync` (or `init`) to regenerate the tddmaster-planner subagent files.")
+		return nil
+	case "off", "disable", "false":
+		manifest.ImportantTaskGate = false
+		if err := state.WriteManifest(root, *manifest); err != nil {
+			return fmt.Errorf("write manifest: %w", err)
+		}
+		printErr("Important Task Gate: off")
+		return nil
+	default:
+		printErr(fmt.Sprintf("Usage: %s config important-gate <on | off | status>", output.CmdPrefix()))
+		return nil
+	}
 }

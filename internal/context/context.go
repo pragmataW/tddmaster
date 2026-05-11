@@ -50,6 +50,14 @@ func InjectTDDRules(rules []string) []string {
 	return tdd.InjectRules(rules)
 }
 
+// InjectImportantTaskGateRules appends the Important Task Gate behavioural
+// rules to the supplied rule list without mutating the original slice.
+// Callers should invoke this only when manifest.IsImportantTaskGateEnabled()
+// returns true.
+func InjectImportantTaskGateRules(rules []string) []string {
+	return tdd.InjectImportantTaskGateRules(rules)
+}
+
 // LoadDefaultConcerns returns the embedded default concern definitions.
 func LoadDefaultConcerns() []state.ConcernDefinition {
 	return concerns.LoadDefault()

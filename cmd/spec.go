@@ -479,9 +479,62 @@ func specTask(specName string, args []string) error {
 		printErr(fmt.Sprintf("Task '%s' marked as incomplete.", taskID))
 		return nil
 
+	case "mark-important":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: tddmaster spec %s task mark-important <task-id>", specName)
+		}
+		return setTaskImportant(root, specName, args[1], true)
+
+	case "unmark-important":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: tddmaster spec %s task unmark-important <task-id>", specName)
+		}
+		return setTaskImportant(root, specName, args[1], false)
+
 	default:
-		return fmt.Errorf("unknown task subcommand: %s (use list, current, or undo)", sub)
+		return fmt.Errorf("unknown task subcommand: %s (use list, current, undo, mark-important, unmark-important)", sub)
 	}
+}
+
+// setTaskImportant flips the Important flag on a single task. Mutates both
+// state (OverrideTasks[].Important) and progress.json (tasks[].important) so
+// the next compile sees the change immediately.
+func setTaskImportant(root, specName, taskID string, important bool) error {
+	st, err := state.ResolveState(root, &specName)
+	if err != nil {
+		return err
+	}
+
+	found := false
+	for i := range st.OverrideTasks {
+		if st.OverrideTasks[i].ID == taskID {
+			if important {
+				v := true
+				st.OverrideTasks[i].Important = &v
+			} else {
+				st.OverrideTasks[i].Important = nil
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("task '%s' not found in spec '%s'", taskID, specName)
+	}
+
+	if err := state.WriteSpecState(root, specName, st); err != nil {
+		return err
+	}
+	if err := specp.MarkTaskImportant(root, specName, taskID, important); err != nil {
+		printErr(fmt.Sprintf("warning: state updated but progress.json sync failed: %v", err))
+	}
+
+	if important {
+		printErr(fmt.Sprintf("Task '%s' marked important.", taskID))
+	} else {
+		printErr(fmt.Sprintf("Task '%s' unmarked.", taskID))
+	}
+	return nil
 }
 
 // specNote adds a note to a spec.

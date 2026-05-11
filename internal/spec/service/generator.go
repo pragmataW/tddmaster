@@ -50,7 +50,8 @@ func Generate(root string, st *state.StateFile, concerns []state.ConcernDefiniti
 	parsed := parseContent(*st.Spec, content)
 	progressPath := filepath.Join(specDir, "progress.json")
 
-	progress := buildProgress(*st.Spec, parsed.Tasks, st.OverrideTasks, st.Decisions, readExistingStatuses(progressPath))
+	existing := readExistingProgress(progressPath)
+	progress := buildProgress(*st.Spec, parsed.Tasks, st.OverrideTasks, st.Decisions, existing)
 
 	progressBytes, err := json.MarshalIndent(progress, "", "  ")
 	if err != nil {
@@ -65,47 +66,76 @@ func Generate(root string, st *state.StateFile, concerns []state.ConcernDefiniti
 	return specFile, nil
 }
 
-func readExistingStatuses(path string) map[string]string {
-	statuses := map[string]string{}
+// existingProgressData captures fields preserved across progress.json regenerations:
+// per-task status + important flag, and the full TaskPlans slice (user-approved
+// plans must survive regen so the executor keeps receiving them).
+type existingProgressData struct {
+	Statuses   map[string]string
+	Importants map[string]bool
+	TaskPlans  []model.ProgressTaskPlan
+}
+
+func readExistingProgress(path string) existingProgressData {
+	out := existingProgressData{
+		Statuses:   map[string]string{},
+		Importants: map[string]bool{},
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return statuses
+		return out
 	}
 	var existing struct {
 		Tasks []struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
+			ID        string `json:"id"`
+			Status    string `json:"status"`
+			Important bool   `json:"important"`
 		} `json:"tasks"`
+		TaskPlans []model.ProgressTaskPlan `json:"taskPlans"`
 	}
 	if json.Unmarshal(data, &existing) != nil {
-		return statuses
+		return out
 	}
 	for _, t := range existing.Tasks {
 		if t.Status != "" {
-			statuses[t.ID] = t.Status
+			out.Statuses[t.ID] = t.Status
+		}
+		if t.Important {
+			out.Importants[t.ID] = true
 		}
 	}
-	return statuses
+	out.TaskPlans = existing.TaskPlans
+	return out
 }
 
-func buildProgress(specName string, parsedTasks []model.ParsedTask, overrides []state.SpecTask, decisions []state.Decision, existing map[string]string) model.ProgressFile {
+func buildProgress(specName string, parsedTasks []model.ParsedTask, overrides []state.SpecTask, decisions []state.Decision, existing existingProgressData) model.ProgressFile {
 	overrideCompleted := map[string]bool{}
+	overrideImportant := map[string]*bool{}
 	for _, ot := range overrides {
 		if ot.Completed {
 			overrideCompleted[ot.ID] = true
+		}
+		if ot.Important != nil {
+			overrideImportant[ot.ID] = ot.Important
 		}
 	}
 
 	tasks := make([]model.ProgressTask, len(parsedTasks))
 	for i, t := range parsedTasks {
 		status := "pending"
-		if s, ok := existing[t.ID]; ok {
+		if s, ok := existing.Statuses[t.ID]; ok {
 			status = s
 		}
 		if overrideCompleted[t.ID] {
 			status = "done"
 		}
-		tasks[i] = model.ProgressTask{ID: t.ID, Title: t.Title, Status: status}
+
+		// Override (state) wins over previous progress.json snapshot.
+		important := existing.Importants[t.ID]
+		if v, ok := overrideImportant[t.ID]; ok && v != nil {
+			important = *v
+		}
+
+		tasks[i] = model.ProgressTask{ID: t.ID, Title: t.Title, Status: status, Important: important}
 	}
 
 	decisionsCopy := make([]model.ProgressDecision, len(decisions))
@@ -123,6 +153,7 @@ func buildProgress(specName string, parsedTasks []model.ParsedTask, overrides []
 		Tasks:     tasks,
 		Decisions: decisionsCopy,
 		Debt:      []any{},
+		TaskPlans: existing.TaskPlans,
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 }

@@ -120,6 +120,16 @@ func (a *CodexAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.SyncOp
 		return err
 	}
 
+	if ctx.NosManifest != nil && ctx.NosManifest.IsImportantTaskGateEnabled() {
+		if err := os.WriteFile(
+			filepath.Join(agentsDir, "tddmaster-planner.toml"),
+			[]byte(buildCodexPlannerAgentToml(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest)),
+			0o644,
+		); err != nil {
+			return err
+		}
+	}
+
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
 		return os.WriteFile(
 			filepath.Join(agentsDir, "test-writer.toml"),
@@ -209,6 +219,20 @@ func buildCodexVerifierAgentToml(root string, rules []string, manifest *state.Ma
 	return strings.Join([]string{
 		`name = "tddmaster-verifier"`,
 		`description = "Independently verifies completed task work. Read-only. Never sees the executor's context."`,
+		`developer_instructions = """`,
+		instructions,
+		`"""`,
+		"",
+	}, "\n")
+}
+
+func buildCodexPlannerAgentToml(root, commandPrefix string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, codexConventionSources(), rules, manifest.ShouldInjectConventions())
+	instructions := preamble + shared.PlannerInstructions(commandPrefix)
+
+	return strings.Join([]string{
+		`name = "tddmaster-planner"`,
+		`description = "Produces a structured implementation plan for an important tddmaster task. Read-only — does not edit code."`,
 		`developer_instructions = """`,
 		instructions,
 		`"""`,

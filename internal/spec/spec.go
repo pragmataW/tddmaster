@@ -51,3 +51,23 @@ func UpdateSpecStatus(root, specName, newStatus string) error {
 func UpdateProgressStatus(root, specName, status string) error {
 	return service.UpdateProgressStatus(root, specName, status)
 }
+
+// MarkTaskImportant toggles the `important` flag on a task row in progress.json.
+func MarkTaskImportant(root, specName, taskID string, important bool) error {
+	return service.MarkTaskImportant(root, specName, taskID, important)
+}
+
+// AppendTaskPlan persists a user-approved plan to progress.json TaskPlans[].
+// An existing plan for the same TaskID is overwritten.
+func AppendTaskPlan(root, specName string, plan model.ProgressTaskPlan) error {
+	return service.AppendTaskPlan(root, specName, plan)
+}
+
+// LoadTaskPlan returns the user-approved plan for the given taskID, or nil
+// when none is recorded.
+func LoadTaskPlan(root, specName, taskID string) (*model.ProgressTaskPlan, error) {
+	return service.LoadTaskPlan(root, specName, taskID)
+}
+
+// ProgressTaskPlan re-exports the plan type for callers of the root spec package.
+type ProgressTaskPlan = model.ProgressTaskPlan

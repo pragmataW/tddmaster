@@ -109,7 +109,19 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().Bool("non-interactive", false, "Skip interactive prompts")
 	cmd.Flags().Bool("skip-verify", false, "Skip verifier sub-agent (GREEN-only if TDD enabled)")
 	cmd.Flags().Bool("tdd-enabled", true, "Enable TDD (test-first) workflow")
+	cmd.Flags().Bool("important-task-gate", false, "Pause for design-plan approval on tasks flagged important (spawns tddmaster-planner subagent)")
 	return cmd
+}
+
+func resolveImportantGate(cmd *cobra.Command, existing *state.NosManifest) bool {
+	val := false
+	if existing != nil {
+		val = existing.ImportantTaskGate
+	}
+	if cmd.Flags().Changed("important-task-gate") {
+		val, _ = cmd.Flags().GetBool("important-task-gate")
+	}
+	return val
 }
 
 func resolveTddSettings(cmd *cobra.Command, existing *state.NosManifest) (tddMode, skipVerify bool) {
@@ -258,10 +270,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Step 6: Ask TDD mode preference
 	tddMode, skipVerify := resolveTddSettings(cmd, existingManifest)
+	importantGate := resolveImportantGate(cmd, existingManifest)
 
 	if !nonInteractive {
 		tddEnabled := tddMode
 		skipVerifyVal := skipVerify
+		importantGateVal := importantGate
 		form := huh.NewForm(
 			huh.NewGroup(
 				huh.NewConfirm().
@@ -272,11 +286,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 					Title("Skip verifier sub-agent?").
 					Description("When enabled, verification step is skipped (GREEN-only mode).").
 					Value(&skipVerifyVal),
+				huh.NewConfirm().
+					Title("Enable Important Task Gate?").
+					Description("Pause for plan-first review (tddmaster-planner subagent) on tasks flagged important.").
+					Value(&importantGateVal),
 			),
 		)
 		if err := form.Run(); err == nil {
 			tddMode = tddEnabled
 			skipVerify = skipVerifyVal
+			importantGate = importantGateVal
 		}
 	}
 
@@ -298,6 +317,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		tdd.InjectProjectConventions = prev.InjectProjectConventions
 	}
 	config.Tdd = tdd
+
+	// Important Task Gate — value already resolved (flag > form > existing > default).
+	config.ImportantTaskGate = importantGate
 
 	if err := state.WriteManifest(root, config); err != nil {
 		return fmt.Errorf("write manifest: %w", err)

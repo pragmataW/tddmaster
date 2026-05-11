@@ -7,6 +7,7 @@ package execution
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/context/model"
@@ -23,6 +24,10 @@ type Renderer interface {
 
 // Compile renders the EXECUTING phase. Dispatches across the
 // awaiting-status-report branch and the normal-execution branch.
+//
+// importantGateEnabled toggles the Important Task Gate short-circuit; when
+// true and the current task is flagged Important with no approved plan,
+// compileNormal emits an ImportantTaskGateBlock and skips TDD phase wiring.
 func Compile(
 	r Renderer,
 	st state.StateFile,
@@ -30,6 +35,7 @@ func Compile(
 	rules []string,
 	maxIterationsBeforeRestart int,
 	parsedSpec *spec.ParsedSpec,
+	importantGateEnabled bool,
 ) model.ExecutionOutput {
 	edgeCases := spec.DeriveEdgeCases(st.Discovery.Answers, st.Discovery.Premises)
 	tensions := concerns.DetectTensions(activeConcerns)
@@ -99,7 +105,8 @@ func Compile(
 
 	return compileNormal(
 		r, st, rules, shouldRestart, verifyFailed, verifyOutputStr,
-		taskBlock, edgeCases, taskEdgeCases, tier1Reminders, tensions, activeConcerns,
+		taskBlock, nextTask, edgeCases, taskEdgeCases, tier1Reminders, tensions, activeConcerns,
+		importantGateEnabled,
 	)
 }
 
@@ -186,9 +193,11 @@ func compileNormal(
 	shouldRestart, verifyFailed bool,
 	verifyOutputStr string,
 	taskBlock *model.TaskBlock,
+	nextTask *spec.ParsedTask,
 	edgeCases, taskEdgeCases, tier1Reminders []string,
 	tensions []model.ConcernTension,
 	activeConcerns []state.ConcernDefinition,
+	importantGateEnabled bool,
 ) model.ExecutionOutput {
 	wasRejected := st.Execution.LastProgress != nil && strings.Contains(*st.Execution.LastProgress, "Task not accepted")
 	var debtItems []state.DebtItem
@@ -217,7 +226,10 @@ func compileNormal(
 		baseInstruction = taskInstruction
 	}
 
-	if phaseHint := tddPhaseInstruction(st.Execution.TDDCycle); phaseHint != "" {
+	gateBlock := maybeImportantTaskGate(importantGateEnabled, nextTask, st)
+	if gateBlock != nil {
+		baseInstruction = importantGateInstruction(gateBlock) + "\n\n" + baseInstruction
+	} else if phaseHint := tddPhaseInstruction(st.Execution.TDDCycle); phaseHint != "" {
 		baseInstruction = phaseHint + "\n\n" + baseInstruction
 	}
 
@@ -284,6 +296,10 @@ func compileNormal(
 		out.Instruction = fmt.Sprintf("TENSION GATE: %d concern tension(s) detected: %s. You MUST present these to the user and get explicit resolution for each before proceeding. Use AskUserQuestion to ask which side to prioritize.", len(tensions), strings.Join(tensionParts, "; "))
 	}
 
+	if gateBlock != nil {
+		out.ImportantTaskGate = gateBlock
+	}
+
 	if shouldRestart {
 		trueVal := true
 		name := ""
@@ -333,6 +349,82 @@ func compileNormal(
 	}
 
 	return out
+}
+
+// maybeImportantTaskGate returns a populated gate block when the current task
+// is flagged Important, the gate is enabled, and no plan has been approved
+// for this task yet. Otherwise returns nil — caller proceeds with normal TDD
+// flow. The returned gate carries the prior-feedback string and attempt count
+// so the planner subagent can address rejection reasons on retry.
+func maybeImportantTaskGate(
+	enabled bool,
+	nextTask *spec.ParsedTask,
+	st state.StateFile,
+) *model.ImportantTaskGateBlock {
+	if !enabled || nextTask == nil {
+		return nil
+	}
+	if !taskFlaggedImportant(nextTask.ID, st.OverrideTasks) {
+		return nil
+	}
+	if slices.Contains(st.Execution.ApprovedImportantPlans, nextTask.ID) {
+		return nil
+	}
+	attempt := 0
+	if st.Execution.PendingPlanAttempts != nil {
+		attempt = st.Execution.PendingPlanAttempts[nextTask.ID]
+	}
+	var feedback *string
+	if st.Execution.LastPlanFeedback != nil {
+		if f, ok := st.Execution.LastPlanFeedback[nextTask.ID]; ok && f != "" {
+			feedback = &f
+		}
+	}
+	phase := "planning"
+	if attempt > 0 {
+		phase = "review"
+	}
+	return &model.ImportantTaskGateBlock{
+		TaskID:            nextTask.ID,
+		Phase:             phase,
+		PlanSchema:        model.DefaultImportantPlanShape,
+		AttemptCount:      attempt,
+		PriorFeedback:     feedback,
+		DelegateAgent:     "tddmaster-planner",
+		UserReviewOptions: []string{"accept", "revise", "reject"},
+	}
+}
+
+// taskFlaggedImportant reports whether the given task ID has Important=true
+// in the state-level SpecTask overrides. Nil pointers and missing entries
+// default to false.
+func taskFlaggedImportant(taskID string, overrides []state.SpecTask) bool {
+	for _, t := range overrides {
+		if t.ID == taskID && t.Important != nil && *t.Important {
+			return true
+		}
+	}
+	return false
+}
+
+// importantGateInstruction renders the orchestrator-facing instruction string
+// for the gate. Carries the prior rejection reason verbatim into the next
+// planner spawn.
+func importantGateInstruction(gate *model.ImportantTaskGateBlock) string {
+	feedbackSuffix := ""
+	if gate.PriorFeedback != nil && *gate.PriorFeedback != "" {
+		feedbackSuffix = fmt.Sprintf(" Prior plan was rejected with feedback: %q — address every point in the revised plan.", *gate.PriorFeedback)
+	}
+	return fmt.Sprintf(
+		"IMPORTANT TASK GATE: This task is flagged 'important'. Do NOT edit files. "+
+			"Spawn the `tddmaster-planner` subagent (read-only) and pass it the task scope.%s "+
+			"When the planner returns a plan JSON {assumptions, touchedFiles, designPatterns, bestPractices, approach}, "+
+			"present it to the user via AskUserQuestion with options [accept, revise, reject]. "+
+			"On accept → submit `next --answer='{\"plan\":{...},\"accepted\":true}'`. "+
+			"On revise/reject → submit `next --answer='{\"planFeedback\":\"<reason>\"}'` to loop back. "+
+			"Attempt #%d.",
+		feedbackSuffix, gate.AttemptCount+1,
+	)
 }
 
 // tddPhaseInstruction returns the per-phase reminder for the active TDD cycle,

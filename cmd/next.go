@@ -152,6 +152,9 @@ func runNextCore(specPtr *string, answerText string) error {
 			if state.ShouldRunTDDForCurrentTask(st, config) {
 				tier1 = ctxpkg.InjectTDDRules(tier1)
 			}
+			if config != nil && config.IsImportantTaskGateEnabled() {
+				tier1 = ctxpkg.InjectImportantTaskGateRules(tier1)
+			}
 			var parsedSpec *spec.ParsedSpec
 			if st.Spec != nil {
 				parsedSpec, _ = spec.ParseSpec(root, *st.Spec)
@@ -166,6 +169,7 @@ func runNextCore(specPtr *string, answerText string) error {
 				InteractionHints: hints,
 				CurrentUser:      &model.CurrentUser{Name: u.Name, Email: u.Email},
 				Tier2Count:       tier2Count,
+				Root:             root,
 			})
 			result := compiledToMap(compiled)
 			result["idempotent"] = true
@@ -221,6 +225,9 @@ func runNextCore(specPtr *string, answerText string) error {
 		if state.ShouldRunTDDForCurrentTask(newState, config) {
 			tier1 = ctxpkg.InjectTDDRules(tier1)
 		}
+		if config != nil && config.IsImportantTaskGateEnabled() {
+			tier1 = ctxpkg.InjectImportantTaskGateRules(tier1)
+		}
 		var parsedSpec *spec.ParsedSpec
 		if newState.Spec != nil {
 			parsedSpec, _ = spec.ParseSpec(root, *newState.Spec)
@@ -235,6 +242,7 @@ func runNextCore(specPtr *string, answerText string) error {
 			InteractionHints: hints,
 			CurrentUser:      &model.CurrentUser{Name: user.Name, Email: user.Email},
 			Tier2Count:       tier2Count,
+			Root:             root,
 		})
 
 		// Inject "saved" flag when "save" was the answer and phase didn't change
@@ -302,6 +310,9 @@ func runNextCore(specPtr *string, answerText string) error {
 	if state.ShouldRunTDDForCurrentTask(st, config) {
 		tier1 = ctxpkg.InjectTDDRules(tier1)
 	}
+	if config != nil && config.IsImportantTaskGateEnabled() {
+		tier1 = ctxpkg.InjectImportantTaskGateRules(tier1)
+	}
 	var parsedSpec *spec.ParsedSpec
 	if st.Spec != nil {
 		parsedSpec, _ = spec.ParseSpec(root, *st.Spec)
@@ -318,6 +329,7 @@ func runNextCore(specPtr *string, answerText string) error {
 		InteractionHints: hints,
 		CurrentUser:      &model.CurrentUser{Name: user.Name, Email: user.Email},
 		Tier2Count:       tier2Count,
+		Root:             root,
 	})
 
 	// Pre-execution TDD mode prompt: when tddMode is active and the spec is
@@ -1190,6 +1202,34 @@ func handleSpecApprovedAnswer(root string, st state.StateFile, config *state.Nos
 		return st, nil
 	}
 
+	// Important Task Gate: bulk-mark step (gate enabled and not yet reviewed).
+	if specApprovedImportantSelectionPending(st, config) {
+		if ids, ok, err := parseImportantTaskIdsAnswer(trimmed); ok {
+			if err != nil {
+				return st, err
+			}
+			tasks, terr := resolveSelectionTasks(root, st)
+			if terr != nil {
+				return st, terr
+			}
+			newSt := applyImportantSelectionToOverrides(st, tasks, ids)
+			tr := true
+			newSt.ImportantTasksReviewed = &tr
+			// Mirror onto progress.json.
+			if newSt.Spec != nil {
+				selected := map[string]bool{}
+				for _, id := range ids {
+					selected[id] = true
+				}
+				for _, t := range tasks {
+					_ = spec.MarkTaskImportant(root, *newSt.Spec, t.ID, selected[t.ID])
+				}
+			}
+			return newSt, nil
+		}
+		// Not an important-selection answer — fall through to TDD/start handling.
+	}
+
 	if specApprovedTDDSelectionPending(st, config) {
 		choice, err := parseTDDSelectionAnswer(trimmed)
 		if err != nil {
@@ -1206,6 +1246,80 @@ func handleSpecApprovedAnswer(root string, st state.StateFile, config *state.Nos
 	}
 
 	return startExecutionFromApproved(st, config)
+}
+
+func specApprovedImportantSelectionPending(st state.StateFile, config *state.NosManifest) bool {
+	if config == nil || !config.IsImportantTaskGateEnabled() {
+		return false
+	}
+	return st.ImportantTasksReviewed == nil || !*st.ImportantTasksReviewed
+}
+
+// parseImportantTaskIdsAnswer recognizes {"importantTaskIds":["task-1",...]}.
+// Returns ok=true if the payload has the shape (even with an empty array — an
+// empty list is a valid "skip without flagging" choice).
+func parseImportantTaskIdsAnswer(answer string) (ids []string, ok bool, err error) {
+	var obj map[string]any
+	if e := json.Unmarshal([]byte(answer), &obj); e != nil {
+		return nil, false, nil
+	}
+	raw, present := obj["importantTaskIds"]
+	if !present {
+		return nil, false, nil
+	}
+	arr, isArr := raw.([]any)
+	if !isArr {
+		return nil, true, fmt.Errorf("importantTaskIds must be an array of task IDs")
+	}
+	out := make([]string, 0, len(arr))
+	for _, v := range arr {
+		s, isStr := v.(string)
+		if !isStr {
+			continue
+		}
+		if !taskIDRe.MatchString(s) {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out, true, nil
+}
+
+// applyImportantSelectionToOverrides sets Important=true on the listed tasks
+// and clears it on the rest. Tasks discovered but not yet in OverrideTasks
+// are appended so the flag persists across regen.
+func applyImportantSelectionToOverrides(st state.StateFile, tasks []state.SpecTask, importantIDs []string) state.StateFile {
+	selected := make(map[string]bool, len(importantIDs))
+	for _, id := range importantIDs {
+		selected[id] = true
+	}
+
+	existing := make(map[string]int, len(st.OverrideTasks))
+	for i, ot := range st.OverrideTasks {
+		existing[ot.ID] = i
+	}
+
+	newSt := st
+	for _, t := range tasks {
+		idx, found := existing[t.ID]
+		isImportant := selected[t.ID]
+		if found {
+			if isImportant {
+				v := true
+				newSt.OverrideTasks[idx].Important = &v
+			} else {
+				newSt.OverrideTasks[idx].Important = nil
+			}
+			continue
+		}
+		row := state.SpecTask{ID: t.ID, Title: t.Title, Covers: t.Covers}
+		if isImportant {
+			v := true
+			row.Important = &v
+		}
+		newSt.OverrideTasks = append(newSt.OverrideTasks, row)
+	}
+	return newSt
 }
 
 // tddSelectionChoice captures the user's intent from the TDD selection
@@ -1317,6 +1431,12 @@ func applyTDDSelectionToOverrides(st state.StateFile, tasks []state.SpecTask, ch
 }
 
 func handleExecutingAnswer(root string, st state.StateFile, config *state.NosManifest, answer string) (state.StateFile, error) {
+	// Important Task Gate: intercept plan/planFeedback payloads before the
+	// status-report routing. These are gate responses, not status reports.
+	if newState, handled, err := tryHandleImportantPlanAnswer(root, st, config, answer); handled {
+		return newState, err
+	}
+
 	// Parse the answer once; if it's already a structured status report we skip
 	// the "claim-then-report" two-step handshake and process it directly.
 	structured, parseOK := parseStructuredReport(answer)

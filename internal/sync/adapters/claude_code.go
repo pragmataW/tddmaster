@@ -54,6 +54,11 @@ func (a *ClaudeCodeAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.S
 	if err := generateVerifierFile(ctx.Root, ctx.Rules, ctx.Manifest); err != nil {
 		return err
 	}
+	if ctx.NosManifest != nil && ctx.NosManifest.IsImportantTaskGateEnabled() {
+		if err := generatePlannerFile(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest); err != nil {
+			return err
+		}
+	}
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
 		return generateClaudeCodeTestWriterFile(ctx.Root, ctx.Rules, ctx.Manifest)
 	}
@@ -122,6 +127,28 @@ func buildClaudeSection(rules []string, options *statesync.SyncOptions, commandP
 		"If you accidentally ended the whole spec, use `" + commandPrefix + " spec <name> reopen --resume-execution`.",
 		"Plain `reopen` returns to DISCOVERY for revision; `--resume-execution` restores EXECUTING/BLOCKED progress.",
 		"`done` and `cancel` act on the ENTIRE spec, not a single task — never call them to \"undo a task\".",
+		"",
+		"### Important task gate",
+		"",
+		"Optional gate behind manifest `tddmaster.importantTaskGate`. When enabled, tasks flagged `important` pause before execution for a plan-first review by the `tddmaster-planner` subagent.",
+		"",
+		"Mark / unmark tasks (also offered as a bulk multiSelect during SPEC_APPROVED when the gate is on):",
+		"",
+		"    " + commandPrefix + " spec <name> task mark-important <id>",
+		"    " + commandPrefix + " spec <name> task unmark-important <id>",
+		"",
+		"When the active task is important and has no approved plan, `next` returns an `importantTaskGate` block with `delegateAgent: \"tddmaster-planner\"`. Required behavior:",
+		"",
+		"- Spawn `tddmaster-planner` (read-only: Read/Grep/Glob/LS) with task scope plus `priorFeedback` when present. Do NOT edit files in this phase.",
+		"- Present planner output via AskUserQuestion with options `accept | revise | reject`.",
+		"- On accept: submit `" + commandPrefix + ` spec <name> next --answer='{"plan":{...},"accepted":true}'` + "`.",
+		"- On revise/reject: submit `" + commandPrefix + ` spec <name> next --answer='{"planFeedback":"<reason>"}'` + "` — gate re-fires with `priorFeedback` populated and `attemptCount` incremented. Address every point in the next planner spawn.",
+		"",
+		"Once approved, the plan is persisted to `progress.json` (`taskPlans[]`) and embedded as `approvedPlan` in every subsequent executor spawn for that task. `touchedFiles` is binding — if work needs a file outside the list, STOP and report.",
+		"",
+		"Toggle outside init/sync:",
+		"",
+		"    " + commandPrefix + " config important-gate on|off|status",
 		"",
 		"### Interactive choices",
 		"",
@@ -304,4 +331,27 @@ func generateVerifierFile(root string, rules []string, manifest *state.Manifest)
 	}
 
 	return os.WriteFile(filepath.Join(agentDir, "tddmaster-verifier.md"), []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func generatePlannerFile(root, commandPrefix string, rules []string, manifest *state.Manifest) error {
+	agentDir := filepath.Join(root, ".claude", "agents")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		return err
+	}
+
+	preamble := shared.ConventionsPreamble(root, claudeCodeConventionSources(), rules, manifest.ShouldInjectConventions())
+
+	lines := []string{
+		"---",
+		"name: tddmaster-planner",
+		`description: "Produces a structured implementation plan for an important tddmaster task. Read-only — does not edit code."`,
+		"tools: Read, Grep, Glob, LS",
+		"model: sonnet",
+		"---",
+		"",
+		preamble + shared.PlannerInstructions(commandPrefix),
+		"",
+	}
+
+	return os.WriteFile(filepath.Join(agentDir, "tddmaster-planner.md"), []byte(strings.Join(lines, "\n")), 0o644)
 }

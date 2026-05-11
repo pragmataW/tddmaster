@@ -63,6 +63,7 @@ type NosManifest struct {
 	AllowGit                   bool           `json:"allowGit"                   yaml:"allowGit"`
 	Command                    string         `json:"command"                    yaml:"command"`
 	User                       *UserConfig    `json:"user,omitempty"             yaml:"user,omitempty"`
+	ImportantTaskGate          bool           `json:"importantTaskGate,omitempty" yaml:"importantTaskGate,omitempty"`
 }
 
 // IsTDDEnabled returns true when the TDD workflow is enabled in this manifest.
@@ -75,4 +76,10 @@ func (m NosManifest) IsTDDEnabled() bool {
 // Returns false when Tdd is nil or when SkipVerify is not set.
 func (m NosManifest) IsVerifierSkipped() bool {
 	return m.Tdd != nil && m.Tdd.SkipVerify
+}
+
+// IsImportantTaskGateEnabled reports whether the Important Task Gate
+// (plan-first flow for tasks flagged "important") is enabled for this project.
+func (m NosManifest) IsImportantTaskGateEnabled() bool {
+	return m.ImportantTaskGate
 }

@@ -17,6 +17,15 @@ func InjectRules(rules []string) []string {
 	return append(combined, model.TDDBehavioralRules...)
 }
 
+// InjectImportantTaskGateRules appends the plan-first gate rules to rules and
+// returns the combined slice. Callers should invoke this only when the
+// manifest has the Important Task Gate enabled, otherwise the rules add noise.
+func InjectImportantTaskGateRules(rules []string) []string {
+	combined := make([]string, len(rules), len(rules)+len(model.ImportantTaskGateRules))
+	copy(combined, rules)
+	return append(combined, model.ImportantTaskGateRules...)
+}
+
 // BuildVerificationContext returns phase-specific verification instructions
 // for the verifier. Each phase spells out the expected exit-code contract and
 // the JSON output shape the verifier must return so RecordTDDVerificationFull

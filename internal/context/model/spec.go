@@ -58,12 +58,30 @@ type TaskTDDSelectionOutput struct {
 	Answers     TaskTDDSelectionAnswers `json:"answers"`
 }
 
+// ImportantTaskSelectionEntry describes a single task offered in the bulk
+// "mark important?" review step.
+type ImportantTaskSelectionEntry struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// ImportantTaskSelectionOutput describes the discovery bulk-mark sub-step
+// shown after a spec is approved when the Important Task Gate is enabled and
+// the user has not yet reviewed the task list.
+type ImportantTaskSelectionOutput struct {
+	Required    bool                          `json:"required"`
+	Instruction string                        `json:"instruction"`
+	Tasks       []ImportantTaskSelectionEntry `json:"tasks"`
+	AnswerShape string                        `json:"answerShape"` // e.g. `{"importantTaskIds":["task-1","task-3"]}`
+}
+
 // SpecApprovedOutput is the output for the SPEC_APPROVED phase.
 type SpecApprovedOutput struct {
-	Phase            string                  `json:"phase"`
-	Instruction      string                  `json:"instruction"`
-	SpecPath         string                  `json:"specPath"`
-	Transition       TransitionStart         `json:"transition"`
-	Saved            *bool                   `json:"saved,omitempty"`
-	TaskTDDSelection *TaskTDDSelectionOutput `json:"taskTDDSelection,omitempty"`
+	Phase                  string                        `json:"phase"`
+	Instruction            string                        `json:"instruction"`
+	SpecPath               string                        `json:"specPath"`
+	Transition             TransitionStart               `json:"transition"`
+	Saved                  *bool                         `json:"saved,omitempty"`
+	TaskTDDSelection       *TaskTDDSelectionOutput       `json:"taskTDDSelection,omitempty"`
+	ImportantTaskSelection *ImportantTaskSelectionOutput `json:"importantTaskSelection,omitempty"`
 }

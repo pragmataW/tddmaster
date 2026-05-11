@@ -12,6 +12,7 @@ import (
 	"github.com/pragmataW/tddmaster/internal/context/service/phases"
 	"github.com/pragmataW/tddmaster/internal/context/service/tdd"
 	"github.com/pragmataW/tddmaster/internal/defaults"
+	specservice "github.com/pragmataW/tddmaster/internal/spec/service"
 	"github.com/pragmataW/tddmaster/internal/state"
 )
 
@@ -96,7 +97,13 @@ func Compile(in model.CompileInput) model.NextOutput {
 
 	case state.PhaseExecuting:
 		phase = "EXECUTING"
-		exec := execution.Compile(r, st, activeConcerns, in.Rules, maxIter, in.ParsedSpec)
+		gateEnabled := in.Config != nil && in.Config.IsImportantTaskGateEnabled()
+		exec := execution.Compile(r, st, activeConcerns, in.Rules, maxIter, in.ParsedSpec, gateEnabled)
+		if gateEnabled && in.Root != "" && st.Spec != nil && exec.Task != nil {
+			if plan, err := specservice.LoadTaskPlan(in.Root, *st.Spec, exec.Task.ID); err == nil && plan != nil {
+				exec.ApprovedPlan = plan
+			}
+		}
 		currentTaskUsesTDD := state.ShouldRunTDDForCurrentTask(st, in.Config)
 		if currentTaskUsesTDD && st.Execution.TDDCycle != "" {
 			cycle := st.Execution.TDDCycle

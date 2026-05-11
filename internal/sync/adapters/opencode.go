@@ -78,6 +78,12 @@ func (a *OpenCodeAdapter) SyncAgents(ctx statesync.SyncContext, _ *statesync.Syn
 		return err
 	}
 
+	if ctx.NosManifest != nil && ctx.NosManifest.IsImportantTaskGateEnabled() {
+		if err := os.WriteFile(filepath.Join(agentsDir, "tddmaster-planner.md"), []byte(buildOpenCodePlannerAgentMd(ctx.Root, ctx.CommandPrefix, ctx.Rules, ctx.Manifest)), 0o644); err != nil {
+			return err
+		}
+	}
+
 	if ctx.Manifest != nil && ctx.Manifest.TddMode {
 		return os.WriteFile(filepath.Join(agentsDir, "test-writer.md"), []byte(buildOpenCodeTestWriterAgentMd(ctx.Root, ctx.Rules, ctx.Manifest)), 0o644)
 	}
@@ -219,6 +225,16 @@ func buildOpenCodeVerifierAgentMd(root string, rules []string, manifest *state.M
 		[]string{"read", "glob", "grep", "shell"},
 		preamble+verifierInstructions,
 		"The orchestrator will use this report for the tddmaster status report.",
+	)
+}
+
+func buildOpenCodePlannerAgentMd(root, commandPrefix string, rules []string, manifest *state.Manifest) string {
+	preamble := shared.ConventionsPreamble(root, openCodeConventionSources(), rules, manifest.ShouldInjectConventions())
+	return buildOpenCodeAgentMd(
+		"tddmaster-planner",
+		`description: "Produces a structured implementation plan for an important tddmaster task. Read-only — does not edit code."`,
+		[]string{"read", "glob", "grep", "ls"},
+		preamble+shared.PlannerInstructions(commandPrefix),
 	)
 }
 

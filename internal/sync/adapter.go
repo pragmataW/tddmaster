@@ -46,6 +46,9 @@ type SyncContext struct {
 	// Manifest holds TDD-specific project settings (e.g. TestRunner).
 	// May be nil when no manifest is present; adapters must handle nil gracefully.
 	Manifest *state.Manifest
+	// NosManifest is the full root manifest (concerns, tools, gates).
+	// May be nil when no manifest is present.
+	NosManifest *state.NosManifest
 }
 
 // SyncOptions holds tool-specific options (e.g. Claude Code's AllowGit).

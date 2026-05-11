@@ -49,6 +49,7 @@ type SpecTask struct {
 	Completed  bool     `json:"completed"`
 	Covers     []string `json:"covers,omitempty"`
 	TDDEnabled *bool    `json:"tddEnabled,omitempty"`
+	Important  *bool    `json:"important,omitempty"`
 }
 
 type SpecClassification struct {
@@ -74,6 +75,10 @@ type ExecutionState struct {
 	RefactorRounds       int                 `json:"refactorRounds,omitempty"`
 	RefactorApplied      bool                `json:"refactorApplied,omitempty"`
 	PendingRefactorNotes []RefactorNote      `json:"pendingRefactorNotes,omitempty"`
+
+	ApprovedImportantPlans []string          `json:"approvedImportantPlans,omitempty"`
+	PendingPlanAttempts    map[string]int    `json:"pendingPlanAttempts,omitempty"`
+	LastPlanFeedback       map[string]string `json:"lastPlanFeedback,omitempty"`
 }
 
 type SpecState struct {

@@ -31,7 +31,10 @@ type StateFile struct {
 	OverrideTasks      []SpecTask          `json:"overrideTasks,omitempty"`
 	OverrideOutOfScope []string            `json:"overrideOutOfScope,omitempty"`
 	TaskTDDSelected    *bool               `json:"taskTDDSelected,omitempty"`
-	LastAnswer         *AnswerFingerprint  `json:"lastAnswer,omitempty"`
+	// ImportantTasksReviewed flags that the user has performed the discovery
+	// bulk-mark step for tasks. Subsequent gate-enabled runs skip the prompt.
+	ImportantTasksReviewed *bool              `json:"importantTasksReviewed,omitempty"`
+	LastAnswer             *AnswerFingerprint `json:"lastAnswer,omitempty"`
 }
 
 // AnswerFingerprint records the last successfully processed answer so that

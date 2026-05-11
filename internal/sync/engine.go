@@ -328,7 +328,7 @@ func SyncAll(root string, tools []state.CodingToolId, config *state.NosManifest)
 			continue
 		}
 
-		ctx := SyncContext{Root: root, Rules: rules, CommandPrefix: commandPrefix, Manifest: tddManifest}
+		ctx := SyncContext{Root: root, Rules: rules, CommandPrefix: commandPrefix, Manifest: tddManifest, NosManifest: config}
 
 		if err := found.SyncRules(ctx, syncOptions); err != nil {
 			return nil, err

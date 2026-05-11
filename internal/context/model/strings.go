@@ -92,6 +92,18 @@ var TDDBehavioralRules = []string{
 		"Pass the full tddmaster `next` output to whichever sub-agent you spawn. If `edgeCases` is non-empty, pass them explicitly to test-writer.",
 }
 
+// ImportantTaskGateRules govern the plan-first flow for tasks flagged
+// "important". They are injected only when `importantTaskGate` is present
+// in the output and route the orchestrator through the tddmaster-planner
+// subagent + user review loop before any TDD phase runs.
+var ImportantTaskGateRules = []string{
+	"IMPORTANT TASK GATE: When `importantTaskGate` is present in the output, you MUST NOT spawn test-writer, tddmaster-executor, or tddmaster-verifier. You MUST NOT edit any file. The gate runs BEFORE the TDD cycle.",
+	"IMPORTANT TASK GATE: importantTaskGate.phase='planning' → spawn `tddmaster-planner` (read-only). Pass the task scope (taskId, title, files, edge cases, acceptance criteria) AND, when importantTaskGate.priorFeedback is set, the user's rejection reason verbatim. The planner MUST address every prior-feedback point in its revised plan.",
+	"IMPORTANT TASK GATE: importantTaskGate.phase='review' → the planner has produced a plan. Present it to the user via AskUserQuestion with options [accept, revise, reject]. Do NOT proceed without explicit user input.",
+	"IMPORTANT TASK GATE: On user accept → submit `next --answer='{\"plan\":{\"assumptions\":[...],\"touchedFiles\":[...],\"designPatterns\":[...],\"bestPractices\":[...],\"approach\":\"...\"},\"accepted\":true}'`. On revise/reject → submit `next --answer='{\"planFeedback\":\"<user reason>\"}'` to loop back to the planner with the feedback attached.",
+	"IMPORTANT TASK GATE: When `approvedPlan` is present in the output (gate cleared), the TDD cycle resumes normally — but you MUST pass the approvedPlan contents verbatim to every subagent you spawn under a heading '## Approved plan'. The executor treats `touchedFiles` as binding; if work requires a file outside the list, STOP and report.",
+}
+
 // Discovery / prefill instructions.
 const (
 	PreDiscoveryResearchInstruction = "Before asking discovery questions, research the current state of all platforms, runtimes, libraries, and APIs mentioned in the spec description. Use web search and Context7 MCP if available. Report findings as a pre-discovery brief to the user. Do NOT assume your training data is current — versions change, APIs get added, features get deprecated."

@@ -1,6 +1,9 @@
 package model
 
-import "github.com/pragmataW/tddmaster/internal/state"
+import (
+	specmodel "github.com/pragmataW/tddmaster/internal/spec/model"
+	"github.com/pragmataW/tddmaster/internal/state"
+)
 
 // AcceptanceCriterion is a single AC in the status report.
 type AcceptanceCriterion struct {
@@ -90,6 +93,35 @@ type RefactorInstructions struct {
 	MaxRounds   int                  `json:"maxRounds"`
 }
 
+// ImportantPlanShape describes the schema the tddmaster-planner subagent must
+// produce. Surfaced in the gate payload so the orchestrator can prime the
+// planner prompt with the expected fields and a canned instruction.
+type ImportantPlanShape struct {
+	Fields      []string `json:"fields"`
+	Instruction string   `json:"instruction"`
+}
+
+// DefaultImportantPlanShape is the canonical schema for plans produced by the
+// tddmaster-planner subagent. Field order matches ProgressTaskPlan and the
+// planner subagent's instructions.
+var DefaultImportantPlanShape = ImportantPlanShape{
+	Fields:      []string{"assumptions", "touchedFiles", "designPatterns", "bestPractices", "approach"},
+	Instruction: "Read the codebase as needed (read-only). Return ONLY a JSON object with the listed fields. Be concrete and falsifiable.",
+}
+
+// ImportantTaskGateBlock pauses execution before any code edits when the
+// current task is flagged "important" and no user-approved plan exists yet.
+// Phase progresses: "planning" → "review" → "approved".
+type ImportantTaskGateBlock struct {
+	TaskID            string             `json:"taskId"`
+	Phase             string             `json:"phase"`
+	PlanSchema        ImportantPlanShape `json:"planSchema"`
+	AttemptCount      int                `json:"attemptCount"`
+	PriorFeedback     *string            `json:"priorFeedback,omitempty"`
+	DelegateAgent     string             `json:"delegateAgent"`
+	UserReviewOptions []string           `json:"userReviewOptions"`
+}
+
 // ExecutionOutput is the output for the EXECUTING phase.
 type ExecutionOutput struct {
 	Phase                  string                  `json:"phase"`
@@ -118,4 +150,7 @@ type ExecutionOutput struct {
 	TDDFailureReport       *TDDFailureReport       `json:"tddFailureReport,omitempty"`
 	RefactorInstructions   *RefactorInstructions   `json:"refactorInstructions,omitempty"`
 	VerifierRequired       bool                    `json:"verifierRequired"`
+
+	ImportantTaskGate *ImportantTaskGateBlock     `json:"importantTaskGate,omitempty"`
+	ApprovedPlan      *specmodel.ProgressTaskPlan `json:"approvedPlan,omitempty"`
 }

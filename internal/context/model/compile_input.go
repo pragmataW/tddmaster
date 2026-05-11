@@ -19,4 +19,10 @@ type CompileInput struct {
 	CurrentUser      *CurrentUser
 	Tier2Count       int
 	CommandPrefix    string
+
+	// Root is the project root path. Optional. When provided, the compiler can
+	// load per-task artifacts from disk (e.g. ProgressTaskPlan from progress.json
+	// for the Important Task Gate flow). Tests that don't touch the gate can
+	// leave it empty.
+	Root string
 }
