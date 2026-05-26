@@ -24,6 +24,7 @@ func pickCodingTools(preselected []state.CodingToolId) []state.CodingToolId {
 		{Value: "claude-code", Label: "Claude Code"},
 		{Value: "opencode", Label: "OpenCode"},
 		{Value: "codex", Label: "Codex CLI"},
+		{Value: "antigravity", Label: "Antigravity CLI"},
 	}
 
 	preselectedSet := make(map[state.CodingToolId]bool)
@@ -166,7 +167,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	var parsedTools []state.CodingToolId
 	if toolsFlag != "" {
 		validTools := map[string]bool{
-			"claude-code": true, "opencode": true, "codex": true,
+			"claude-code": true, "opencode": true, "codex": true, "antigravity": true,
 		}
 		for _, t := range strings.Split(toolsFlag, ",") {
 			t = strings.TrimSpace(t)

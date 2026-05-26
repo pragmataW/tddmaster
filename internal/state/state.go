@@ -125,6 +125,7 @@ const (
 	CodingToolClaudeCode = model.CodingToolClaudeCode
 	CodingToolOpencode   = model.CodingToolOpencode
 	CodingToolCodex      = model.CodingToolCodex
+	CodingToolAntigravity = model.CodingToolAntigravity
 
 	ReviewDimensionScopeAll  = model.ReviewDimensionScopeAll
 	ReviewDimensionScopeUI   = model.ReviewDimensionScopeUI

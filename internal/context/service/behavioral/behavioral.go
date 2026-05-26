@@ -317,6 +317,11 @@ func phaseExecutingBehavioral(
 		if verifierRequired {
 			verifyInstruction = fmt.Sprintf("After executor completes, delegate to tddmaster-verifier with changed files + ACs + test commands. %s", verifierScope)
 		}
+	case "invoke_subagent":
+		spawnInstruction = fmt.Sprintf("Invoke tddmaster-executor via invoke_subagent tool. Pass: task title, description, ACs, rules, scope constraints, concern reminders, file paths. Report via `%s`.", reportCmd)
+		if verifierRequired {
+			verifyInstruction = fmt.Sprintf("After executor completes, invoke tddmaster-verifier with changed files + ACs + test commands. Never trust executor self-report alone. %s", verifierScope)
+		}
 	default:
 		spawnInstruction = fmt.Sprintf("Execute tasks sequentially yourself. Verify (type-check + tests) after each. Report via `%s`.", reportCmd)
 		verifyInstruction = ""

@@ -301,7 +301,7 @@ Useful supporting commands:
 | `--tdd-enabled` | bool | Enable TDD (test-first) workflow |
 | `--skip-verify` | bool | Skip verifier sub-agent (GREEN-only if TDD enabled) |
 
-### `init` usage with new flags
+### Execution with flags
 
 ```bash
 tddmaster init
@@ -348,6 +348,18 @@ Important generated files:
 - `.tddmaster/.state/state.json`: active state machine snapshot
 - `.tddmaster/specs/<spec>/spec.md`: execution contract for a spec
 - `.tddmaster/specs/<spec>/progress.json`: task/progress state
+
+## Visualize
+
+To see a live dashboard of your spec's execution, run:
+
+```bash
+tddmaster visualize <slug>
+```
+
+This command runs a local development server on a random port, opens the browser automatically, and uses a dynamic dashboard with real-time polling to display live progress, stats, specs, and state transitions. At runtime when the server starts, the dashboard template `index.html` is generated/written in the spec's `dashboard/` directory.
+
+To stop/terminate the visualize server, use `Ctrl+C`.
 
 ## Development
 

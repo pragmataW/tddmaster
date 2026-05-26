@@ -7,5 +7,7 @@ CLAUDE.md
 .codex
 .venv
 .opencode.json
+.tddmaster
+.agents
 
 /docs

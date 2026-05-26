@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tddmaster Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #080c14;
+      --bg-secondary: #0f1626;
+      --bg-card: rgba(22, 28, 45, 0.6);
+      --bg-card-hover: rgba(28, 36, 58, 0.8);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-indigo: #6366f1;
+      --accent-purple: #8b5cf6;
+      --accent-cyan: #06b6d4;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+      overflow-x: hidden;
+      transition: background-color 0.3s;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(8, 12, 20, 0.85);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.025em;
+    }
+    .spec-badge {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-family: 'Fira Code', monospace;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--success);
+      text-transform: uppercase;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid rgba(16, 185, 129, 0.15);
+    }
+    .live-pulse {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background-color: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse-green 2s infinite;
+    }
+    @keyframes pulse-green {
+      0 {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      }
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+      }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
+    }
+    .phase-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+    .phase-discovery {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .phase-execution {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    .phase-review {
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-indigo);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .phase-completed {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+      width: 100%;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Card Styling */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .card:hover {
+      border-color: var(--border-hover);
+    }
+
+    /* Progress Tracker Section */
+    .progress-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .progress-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .progress-percentage {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-indigo);
+    }
+    .progress-bar-container {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 9999px;
+      height: 12px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-indigo), var(--accent-purple));
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    
+    @keyframes stripe-move {
+      0% { background-position: 0 0; }
+      100% { background-position: 40px 0; }
+    }
+    .progress-bar-fill.animated::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.15) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.15) 75%,
+        transparent 75%,
+        transparent
+      );
+      background-size: 20px 20px;
+      animation: stripe-move 1.5s linear infinite;
+    }
+
+    /* Stepper (Horizontal Task List) */
+    .stepper-container {
+      overflow-x: auto;
+      padding: 0.5rem 0;
+    }
+    .stepper {
+      display: flex;
+      gap: 1.5rem;
+      min-width: max-content;
+      padding-bottom: 0.5rem;
+    }
+    .task-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.3s, box-shadow 0.3s;
+      position: relative;
+    }
+    .task-node:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hover);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 0 0 5px rgba(139, 92, 246, 0.2), inset 0 0 5px rgba(139, 92, 246, 0.1);
+        border-color: rgba(139, 92, 246, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 15px rgba(139, 92, 246, 0.5), inset 0 0 8px rgba(139, 92, 246, 0.2);
+        border-color: rgba(139, 92, 246, 0.8);
+      }
+    }
+    .task-node.active {
+      animation: pulse-glow 2s infinite;
+      border-color: var(--accent-purple);
+      background: rgba(139, 92, 246, 0.05);
+    }
+    .task-node.selected {
+      border-color: var(--accent-indigo);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+    }
+    .task-node-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .task-id {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .task-status-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .task-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      word-break: break-word;
+      line-height: 1.4;
+      height: 2.8rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .task-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: auto;
+    }
+    .badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .badge-important {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+    .badge-tdd {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+    }
+    .badge-active {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+    }
+
+    /* Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+    }
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Spec Markdown Styling (Github Dark style) */
+    .spec-container {
+      min-height: 500px;
+    }
+    .markdown-body {
+      color: #adbac7;
+    }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      line-height: 1.25;
+      color: var(--text-primary);
+    }
+    .markdown-body h1 { font-size: 1.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3rem; }
+    .markdown-body h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3rem; }
+    .markdown-body h3 { font-size: 1.2rem; }
+    .markdown-body p { margin-bottom: 1rem; color: #adbac7; line-height: 1.6; }
+    .markdown-body ul, .markdown-body ol { padding-left: 2rem; margin-bottom: 1rem; }
+    .markdown-body li { margin-top: 0.25rem; margin-bottom: 0.25rem; color: #adbac7; }
+    .markdown-body code {
+      font-family: 'Fira Code', monospace;
+      font-size: 85%;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+    }
+    .markdown-body pre {
+      padding: 1rem;
+      background: #161b22;
+      border-radius: 8px;
+      overflow: auto;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border-color);
+    }
+    .markdown-body pre code {
+      background: transparent;
+      color: #e6edf3;
+      padding: 0;
+      font-size: 0.9rem;
+    }
+    .markdown-body blockquote {
+      padding: 0 1rem;
+      color: #768390;
+      border-left: .25em solid var(--accent-indigo);
+      margin-bottom: 1rem;
+      background: rgba(99, 102, 241, 0.03);
+      padding: 0.5rem 1rem;
+      border-radius: 0 8px 8px 0;
+    }
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    .markdown-body th, .markdown-body td {
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 0.75rem;
+    }
+    .markdown-body th {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .markdown-body tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Sidebar Styling */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    .sidebar-section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-indigo);
+    }
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 0.25rem;
+    }
+
+    /* Details Panel for clicked tasks */
+    .detail-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .detail-lbl {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .detail-val {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      padding: 0.6rem;
+      border-radius: 6px;
+      word-break: break-word;
+    }
+    .detail-list {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .detail-list li {
+      font-size: 0.85rem;
+      background: rgba(99, 102, 241, 0.05);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Decisions */
+    .decisions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .decision-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .decision-q {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .decision-a {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--success);
+      align-self: flex-start;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    /* Debt items */
+    .debt-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .debt-item-card {
+      background: rgba(239, 68, 68, 0.05);
+      border: 1px solid rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      padding: 0.6rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Flash effect on update */
+    @keyframes flash-update {
+      0% { background-color: rgba(99, 102, 241, 0.2); }
+      100% { background-color: transparent; }
+    }
+    .updated-flash {
+      animation: flash-update 0.8s ease-out;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <span class="logo">tddmaster</span>
+      <span class="spec-badge" id="spec-name">...</span>
+    </div>
+    <div class="header-right">
+      <div class="live-indicator">
+        <span class="live-pulse"></span>
+        <span>Live Sync</span>
+      </div>
+      <div class="phase-badge phase-discovery" id="phase-badge">Discovery</div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Progress Section -->
+    <div class="card progress-section">
+      <div class="progress-header">
+        <span class="progress-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+          Task Completion
+        </span>
+        <span class="progress-percentage" id="progress-percentage">0%</span>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill animated" id="progress-fill"></div>
+      </div>
+      <div class="stepper-container">
+        <div class="stepper" id="stepper">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid Layout -->
+    <div class="dashboard-grid">
+      <!-- Left Column: Spec Markdown -->
+      <div class="card spec-container">
+        <div class="sidebar-section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Specification (spec.md)
+        </div>
+        <div class="markdown-body" id="spec-markdown">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Right Column: Sidebar -->
+      <div class="sidebar">
+        <!-- Stats Section -->
+        <div class="card">
+          <div class="sidebar-section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Session Execution Stats
+          </div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-val" id="stat-iteration">-</div>
+              <div class="stat-lbl">Iteration</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="stat-completed">-</div>
+              <div class="stat-lbl">Completed</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="stat-refactors">-</div>
+              <div class="stat-lbl">Refactors</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="stat-debt">-</div>
+              <div class="stat-lbl">Debt Items</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Task Plan details section -->
+        <div class="card" id="task-detail-card" style="display: none;">
+          <div class="sidebar-section-title" id="task-detail-title">
+            Task Details
+          </div>
+          <div class="detail-panel" id="task-detail-panel">
+            <!-- Dynamically populated when task node is clicked or active -->
+          </div>
+        </div>
+
+        <!-- Decisions -->
+        <div class="card" id="decisions-card" style="display: none;">
+          <div class="sidebar-section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Architectural Decisions
+          </div>
+          <div class="decisions-list" id="decisions-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Technical Debt -->
+        <div class="card" id="debt-card" style="display: none;">
+          <div class="sidebar-section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Technical Debt
+          </div>
+          <div class="debt-list" id="debt-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentHash = '';
+    let activeTaskID = '';
+    let progressData = null;
+    let stateData = null;
+    let selectedTaskID = null;
+
+    function getCompletedIcon() {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    }
+
+    function getWontfixIcon() {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    }
+
+    function getActiveIcon() {
+      return "<span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--accent-purple); box-shadow:0 0 8px var(--accent-purple); animation:pulse-glow 1s infinite alternate;'></span>";
+    }
+
+    function getDefaultIcon() {
+      return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
+    }
+
+    async function loadData() {
+      try {
+        const [progressRes, specRes, stateRes] = await Promise.all([
+          fetch('/progress.json').then(r => r.ok ? r.json() : null),
+          fetch('/spec.md').then(r => r.ok ? r.text() : ''),
+          fetch('/state.json').then(r => r.ok ? r.json() : null)
+        ]);
+
+        progressData = progressRes;
+        stateData = stateRes;
+
+        renderHeader();
+        renderProgressBar();
+        renderStepper();
+        renderMarkdown(specRes);
+        renderSidebar();
+
+        document.body.classList.add('updated-flash');
+        setTimeout(() => document.body.classList.remove('updated-flash'), 800);
+      } catch (err) {
+        console.error('Error loading dynamic data:', err);
+      }
+    }
+
+    function renderHeader() {
+      if (!progressData && !stateData) return;
+      const specName = progressData?.spec || stateData?.spec || 'Unknown Spec';
+      document.getElementById('spec-name').textContent = specName;
+
+      const phase = stateData?.phase || 'unknown';
+      const badge = document.getElementById('phase-badge');
+      badge.textContent = phase;
+      badge.className = 'phase-badge phase-' + phase.toLowerCase();
+    }
+
+    function renderProgressBar() {
+      if (!progressData) return;
+      const tasks = progressData.tasks || [];
+      if (tasks.length === 0) return;
+
+      const completed = tasks.filter(t => t.status === 'done').length;
+      const percentage = Math.round((completed / tasks.length) * 100);
+
+      document.getElementById('progress-percentage').textContent = percentage + '%';
+      const fill = document.getElementById('progress-fill');
+      fill.style.width = percentage + '%';
+
+      if (percentage < 100) {
+        fill.classList.add('animated');
+      } else {
+        fill.classList.remove('animated');
+      }
+    }
+
+    function renderStepper() {
+      if (!progressData && !stateData) return;
+      
+      const progressTasks = progressData?.tasks || [];
+      const stateTasks = stateData?.overrideTasks || [];
+      
+      const combinedTasks = [];
+      const taskMap = new Map();
+
+      progressTasks.forEach(pt => {
+        taskMap.set(pt.id, {
+          id: pt.id,
+          title: pt.title,
+          status: pt.status,
+          important: pt.important || false,
+          tddEnabled: false
+        });
+      });
+
+      stateTasks.forEach(st => {
+        let t = taskMap.get(st.id);
+        if (!t) {
+          t = {
+            id: st.id,
+            title: st.title,
+            status: st.completed ? 'done' : 'todo',
+            important: false,
+            tddEnabled: false
+          };
+          taskMap.set(st.id, t);
+        }
+        if (st.important !== undefined && st.important !== null) {
+          t.important = st.important;
+        }
+        if (st.tddEnabled !== undefined && st.tddEnabled !== null) {
+          t.tddEnabled = st.tddEnabled;
+        }
+        if (st.completed && t.status !== 'done') {
+          t.status = 'done';
+        }
+      });
+
+      const sortedTasks = Array.from(taskMap.values()).sort((a, b) => {
+        const aNum = parseInt(a.id.replace('task-', '')) || 0;
+        const bNum = parseInt(b.id.replace('task-', '')) || 0;
+        return aNum - bNum;
+      });
+
+      activeTaskID = '';
+      for (const t of sortedTasks) {
+        if (t.status !== 'done' && t.status !== 'wontfix') {
+          activeTaskID = t.id;
+          break;
+        }
+      }
+
+      const stepper = document.getElementById('stepper');
+      stepper.innerHTML = '';
+
+      sortedTasks.forEach(t => {
+        const node = document.createElement('div');
+        node.className = 'task-node';
+        if (t.id === activeTaskID) {
+          node.classList.add('active');
+        }
+        if (t.id === selectedTaskID) {
+          node.classList.add('selected');
+        }
+
+        const isCompleted = t.status === 'done';
+        const isWontfix = t.status === 'wontfix';
+        const isActive = t.id === activeTaskID;
+
+        let statusIcon = '';
+        if (isCompleted) {
+          statusIcon = getCompletedIcon();
+        } else if (isWontfix) {
+          statusIcon = getWontfixIcon();
+        } else if (isActive) {
+          statusIcon = getActiveIcon();
+        } else {
+          statusIcon = getDefaultIcon();
+        }
+
+        let titleStyle = '';
+        if (isWontfix) {
+          titleStyle = 'text-decoration: line-through; color: var(--text-muted);';
+        }
+
+        node.innerHTML = `
+          <div class="task-node-header">
+            <span class="task-id">${t.id}</span>
+            <div class="task-status-icon">${statusIcon}</div>
+          </div>
+          <div class="task-title" style="${titleStyle}">${t.title}</div>
+          <div class="task-badges">
+            ${t.important ? `<span class="badge badge-important"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg> Important</span>` : ''}
+            ${t.tddEnabled ? `<span class="badge badge-tdd"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 22H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2zM12 18v-6M12 6h.01"></path></svg> TDD</span>` : ''}
+            ${isActive ? `<span class="badge badge-active">Active</span>` : ''}
+          </div>
+        `;
+
+        node.addEventListener('click', () => {
+          selectedTaskID = t.id;
+          renderStepper();
+          showTaskDetails(t);
+        });
+
+        stepper.appendChild(node);
+      });
+
+      if (!selectedTaskID && activeTaskID) {
+        const activeTask = sortedTasks.find(t => t.id === activeTaskID);
+        if (activeTask) {
+          showTaskDetails(activeTask);
+        }
+      }
+    }
+
+    function showTaskDetails(task) {
+      const card = document.getElementById('task-detail-card');
+      const panel = document.getElementById('task-detail-panel');
+      document.getElementById('task-detail-title').innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        Details for ${task.id}
+      `;
+
+      card.style.display = 'block';
+
+      const plan = progressData?.taskPlans?.find(p => p.taskId === task.id);
+
+      let html = `
+        <div class="detail-item">
+          <div class="detail-lbl">Title</div>
+          <div class="detail-val">${task.title}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-lbl">Status</div>
+          <div class="detail-val" style="text-transform: capitalize; color: ${task.status === 'done' ? 'var(--success)' : (task.status === 'wontfix' ? 'var(--text-muted)' : 'var(--warning)')}">${task.status}</div>
+        </div>
+      `;
+
+      if (plan) {
+        html += `
+          <div class="detail-item">
+            <div class="detail-lbl">Implementation Plan (Approved)</div>
+            <div class="detail-val" style="white-space: pre-wrap; font-family: inherit;">${plan.approach}</div>
+          </div>
+        `;
+
+        if (plan.touchedFiles && plan.touchedFiles.length > 0) {
+          html += `
+            <div class="detail-item">
+              <div class="detail-lbl">Touched Files</div>
+              <ul class="detail-list">
+                ${plan.touchedFiles.map(f => `<li><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg> ${f}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        }
+
+        if (plan.assumptions && plan.assumptions.length > 0) {
+          html += `
+            <div class="detail-item">
+              <div class="detail-lbl">Assumptions</div>
+              <ul class="detail-list" style="opacity: 0.85;">
+                ${plan.assumptions.map(a => `<li>${a}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        }
+      } else if (task.important) {
+        html += `
+          <div class="detail-item">
+            <div class="detail-lbl">Plan Status</div>
+            <div class="detail-val" style="color: var(--warning);">This task is flagged as important but does not have an approved implementation plan yet. Run <code>tddmaster next</code> to create one.</div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="detail-item">
+            <div class="detail-lbl">Implementation Plan</div>
+            <div class="detail-val" style="color: var(--text-muted); font-style: italic;">No plan is required for this standard task.</div>
+          </div>
+        `;
+      }
+
+      panel.innerHTML = html;
+    }
+
+    function renderMarkdown(md) {
+      const container = document.getElementById('spec-markdown');
+      if (!md) {
+        container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No specification document found.</p>';
+        return;
+      }
+
+      if (window.marked) {
+        container.innerHTML = marked.parse(md);
+      } else {
+        const html = md
+          .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+          .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+          .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+          .replace(/^\s*\-\s*\[x\]\s*(.*$)/gim, '<li><input type="checkbox" checked disabled> $1</li>')
+          .replace(/^\s*\-\s*\[\s*\]\s*(.*$)/gim, '<li><input type="checkbox" disabled> $1</li>')
+          .replace(/^\s*\-\s*(.*$)/gim, '<li>$1</li>')
+          .replace(/\\`([^\\`]+)\\`/g, '<code>$1</code>')
+          .replace(/\n$/gim, '<br />');
+        container.innerHTML = html;
+      }
+    }
+
+    function renderSidebar() {
+      document.getElementById('stat-iteration').textContent = stateData?.execution?.iteration || '0';
+      
+      const completedCount = progressData?.tasks?.filter(t => t.status === 'done').length || 0;
+      const totalCount = progressData?.tasks?.length || 0;
+      document.getElementById('stat-completed').textContent = `${completedCount}/${totalCount}`;
+      
+      document.getElementById('stat-refactors').textContent = stateData?.execution?.refactorRounds || '0';
+      
+      const debtCount = progressData?.debt?.length || 0;
+      document.getElementById('stat-debt').textContent = debtCount;
+
+      const decisionsCard = document.getElementById('decisions-card');
+      const decisionsList = document.getElementById('decisions-list');
+      const decisions = progressData?.decisions || [];
+      if (decisions.length > 0) {
+        decisionsCard.style.display = 'block';
+        decisionsList.innerHTML = decisions.map(d => `
+          <div class="decision-card">
+            <div class="decision-q">${d.question}</div>
+            <div class="decision-a">${d.choice}</div>
+          </div>
+        `).join('');
+      } else {
+        decisionsCard.style.display = 'none';
+      }
+
+      const debtCard = document.getElementById('debt-card');
+      const debtList = document.getElementById('debt-list');
+      const debt = progressData?.debt || [];
+      if (debt.length > 0) {
+        debtCard.style.display = 'block';
+        debtList.innerHTML = debt.map(d => {
+          const text = typeof d === 'string' ? d : (d.text || JSON.stringify(d));
+          return `
+            <div class="debt-item-card">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              ${text}
+            </div>
+          `;
+        }).join('');
+      } else {
+        debtCard.style.display = 'none';
+      }
+    }
+
+    async function checkUpdates() {
+      try {
+        const r = await fetch("/api/status");
+        if (!r.ok) return;
+        const data = await r.json();
+        if (currentHash && data.hash !== currentHash) {
+          console.log('Update detected, reloading...');
+          await loadData();
+        }
+        currentHash = data.hash;
+      } catch (err) {
+        console.error('Update check failed:', err);
+      }
+    }
+
+    loadData().then(() => {
+      setInterval(checkUpdates, 1000);
+    });
+  </script>
+</body>
+</html>

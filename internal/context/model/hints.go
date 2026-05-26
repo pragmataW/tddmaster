@@ -7,7 +7,7 @@ type InteractionHints struct {
 	HasAskUserTool        bool   `json:"hasAskUserTool"`
 	OptionPresentation    string `json:"optionPresentation"` // "tool" | "prose"
 	HasSubAgentDelegation bool   `json:"hasSubAgentDelegation"`
-	SubAgentMethod        string `json:"subAgentMethod"`  // "task" | "delegation" | "spawn" | "fleet" | "none"
+	SubAgentMethod        string `json:"subAgentMethod"`  // "task" | "delegation" | "spawn" | "fleet" | "invoke_subagent" | "none"
 	AskUserStrategy       string `json:"askUserStrategy"` // "ask_user_question" | "tddmaster_block"
 }
 

@@ -232,3 +232,85 @@ func TestOpenCode_Verifier_InjectsPreamble(t *testing.T) {
 		t.Fatalf("preamble content missing: %s", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Antigravity — preamble presence/absence across executor, verifier, test-writer
+// ---------------------------------------------------------------------------
+
+func TestAntigravity_Executor_InjectsPreamble(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "AGENTS.md", "Project rule A\n<!-- tddmaster:start -->\nTDDMASTER\n<!-- tddmaster:end -->\nProject rule B")
+
+	if err := generateAntigravityAgentFile(dir, "tddmaster", []string{"rule-X"}, manifestInject(true)); err != nil {
+		t.Fatalf("generateAntigravityAgentFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "agents", "tddmaster-executor.md"))
+	content := string(data)
+
+	if !strings.Contains(content, preambleHeader) {
+		t.Fatalf("preamble header missing: %s", content)
+	}
+	if strings.Contains(content, "TDDMASTER") {
+		t.Fatalf("tddmaster block leaked into preamble: %s", content)
+	}
+	if !strings.Contains(content, "Project rule A") || !strings.Contains(content, "Project rule B") {
+		t.Fatalf("project content not injected: %s", content)
+	}
+	if !strings.Contains(content, "- rule-X") {
+		t.Fatalf("rules not injected: %s", content)
+	}
+}
+
+func TestAntigravity_Executor_RespectsInjectFalse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "AGENTS.md", "whatever")
+
+	if err := generateAntigravityAgentFile(dir, "tddmaster", []string{"rule-X"}, manifestInject(false)); err != nil {
+		t.Fatalf("generateAntigravityAgentFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "agents", "tddmaster-executor.md"))
+	content := string(data)
+
+	if strings.Contains(content, preambleHeader) {
+		t.Fatalf("preamble should be absent: %s", content)
+	}
+}
+
+func TestAntigravity_TestWriter_InjectsPreamble(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "AGENTS.md", "AG tw body")
+
+	if err := generateAntigravityTestWriterFile(dir, []string{"rule-Y"}, manifestInject(true)); err != nil {
+		t.Fatalf("generateAntigravityTestWriterFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "agents", "test-writer.md"))
+	content := string(data)
+
+	if !strings.Contains(content, preambleHeader) || !strings.Contains(content, "- rule-Y") {
+		t.Fatalf("preamble content missing: %s", content)
+	}
+}
+
+func TestAntigravity_Verifier_InjectsPreamble(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "AGENTS.md", "AG verifier body")
+
+	if err := generateAntigravityVerifierFile(dir, []string{"rule-Z"}, manifestInject(true)); err != nil {
+		t.Fatalf("generateAntigravityVerifierFile: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "agents", "tddmaster-verifier.md"))
+	content := string(data)
+
+	if !strings.Contains(content, preambleHeader) || !strings.Contains(content, "- rule-Z") {
+		t.Fatalf("preamble content missing: %s", content)
+	}
+}
+

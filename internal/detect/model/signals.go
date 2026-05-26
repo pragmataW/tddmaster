@@ -107,4 +107,5 @@ var ToolSignals = []ToolSignal{
 	{ID: state.CodingToolClaudeCode, Paths: []string{"CLAUDE.md", ".claude"}},
 	{ID: state.CodingToolCodex, Paths: []string{".codex", ".codex/config.toml"}},
 	{ID: state.CodingToolOpencode, Paths: []string{".opencode", "opencode.json"}},
+	{ID: state.CodingToolAntigravity, Paths: []string{"AGENTS.md", ".agents"}},
 }

@@ -46,5 +46,6 @@ func init() {
 		newFollowupCmd(),
 		newDelegateCmd(),
 		newReviewCmd(),
+		newVisualizeCmd(),
 	)
 }

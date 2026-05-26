@@ -9,4 +9,5 @@ func init() {
 	statesync.RegisterAdapter(&ClaudeCodeAdapter{})
 	statesync.RegisterAdapter(&OpenCodeAdapter{})
 	statesync.RegisterAdapter(&CodexAdapter{})
+	statesync.RegisterAdapter(&AntigravityAdapter{})
 }

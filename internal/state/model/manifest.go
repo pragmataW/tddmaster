@@ -17,6 +17,7 @@ const (
 	CodingToolClaudeCode CodingToolId = "claude-code"
 	CodingToolOpencode   CodingToolId = "opencode"
 	CodingToolCodex      CodingToolId = "codex"
+	CodingToolAntigravity CodingToolId = "antigravity"
 )
 
 // UserConfig is the optional per-project user override persisted in manifest.yml.
