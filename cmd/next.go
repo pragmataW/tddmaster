@@ -109,6 +109,8 @@ func runNextCore(specPtr *string, answerText string) error {
 		return writeJSON(map[string]string{"error": "No config found"})
 	}
 
+	state.ReseedTDDCycleIfNeeded(&st, config)
+
 	// Set command prefix from manifest
 	if config.Command != "" {
 		output.SetCommandPrefix(config.Command)
@@ -1550,8 +1552,8 @@ func advanceWithoutVerification(st state.StateFile, config *state.NosManifest, r
 		if getBoolField(report, "refactorApplied") {
 			state.MarkRefactorApplied(&newState)
 		}
-		clearTDDRefactorState(&newState)
-		reseedTDDCycleIfNeeded(&newState, config)
+		state.ClearTDDRefactorState(&newState)
+		state.ReseedTDDCycleIfNeeded(&newState, config)
 		return newState, nil
 	}
 
@@ -1708,32 +1710,13 @@ func applyExecutorReport(st state.StateFile, config *state.NosManifest, report m
 	// non-TDD tasks we leave TDDCycle empty so the compiler emits the plain
 	// executor→verifier flow.
 	if taskCompleted {
-		reseedTDDCycleIfNeeded(&newState, config)
+		state.ReseedTDDCycleIfNeeded(&newState, config)
 	}
 
 	return newState, nil
 }
 
-// clearTDDRefactorState resets the TDD/refactor tracking fields on st,
-// including any pending refactor notes that belonged to the cleared cycle.
-func clearTDDRefactorState(st *state.StateFile) {
-	st.Execution.TDDCycle = ""
-	st.Execution.RefactorRounds = 0
-	st.Execution.RefactorApplied = false
-	st.Execution.PendingRefactorNotes = nil
-}
 
-// reseedTDDCycleIfNeeded sets or clears Execution.TDDCycle based on whether
-// the current task (after any CompletedTasks append) should run under TDD.
-func reseedTDDCycleIfNeeded(st *state.StateFile, config *state.NosManifest) {
-	if state.ShouldRunTDDForCurrentTask(*st, config) {
-		if st.Execution.TDDCycle == "" {
-			state.StartTDDCycleForTask(st)
-		}
-		return
-	}
-	clearTDDRefactorState(st)
-}
 
 // applyVerifierReport routes a verifier report through RecordTDDVerificationFull
 // so the TDD cycle transitions and refactor-round bookkeeping run.
@@ -1780,7 +1763,7 @@ func applyVerifierReport(st state.StateFile, config *state.NosManifest, report m
 	// When RecordTDDVerificationFull cleared the cycle (task advancing), seed
 	// the next task's cycle according to its per-task TDD flag.
 	if newState.Execution.TDDCycle == "" {
-		reseedTDDCycleIfNeeded(&newState, config)
+		state.ReseedTDDCycleIfNeeded(&newState, config)
 	}
 
 	return newState, nil

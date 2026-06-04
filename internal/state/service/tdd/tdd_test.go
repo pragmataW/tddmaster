@@ -369,3 +369,69 @@ func TestRecordTDDVerificationFull_NonExecutingPhase_ReturnsError(t *testing.T) 
 		t.Error("expected error for non-executing phase, got nil")
 	}
 }
+
+func TestReseedTDDCycleIfNeeded(t *testing.T) {
+	t.Run("seeding red when empty and TDD is enabled", func(t *testing.T) {
+		st := model.StateFile{
+			Phase: model.PhaseExecuting,
+			OverrideTasks: []model.SpecTask{
+				{ID: "task-1", Title: "task 1", Completed: false},
+			},
+		}
+		cfg := manifest(true, false) // TDD enabled
+
+		tdd.ReseedTDDCycleIfNeeded(&st, cfg)
+		if st.Execution.TDDCycle != model.TDDCycleRed {
+			t.Errorf("expected TDDCycle to be %q, got %q", model.TDDCycleRed, st.Execution.TDDCycle)
+		}
+	})
+
+	t.Run("preserving existing cycle phase when TDD is enabled", func(t *testing.T) {
+		st := model.StateFile{
+			Phase: model.PhaseExecuting,
+			OverrideTasks: []model.SpecTask{
+				{ID: "task-1", Title: "task 1", Completed: false},
+			},
+			Execution: model.ExecutionState{
+				TDDCycle: model.TDDCycleGreen,
+			},
+		}
+		cfg := manifest(true, false) // TDD enabled
+
+		tdd.ReseedTDDCycleIfNeeded(&st, cfg)
+		if st.Execution.TDDCycle != model.TDDCycleGreen {
+			t.Errorf("expected TDDCycle to remain %q, got %q", model.TDDCycleGreen, st.Execution.TDDCycle)
+		}
+	})
+
+	t.Run("clearing cycle when TDD is disabled", func(t *testing.T) {
+		st := model.StateFile{
+			Phase: model.PhaseExecuting,
+			OverrideTasks: []model.SpecTask{
+				{ID: "task-1", Title: "task 1", Completed: false},
+			},
+			Execution: model.ExecutionState{
+				TDDCycle:             model.TDDCycleGreen,
+				RefactorRounds:       2,
+				RefactorApplied:      true,
+				PendingRefactorNotes: []model.RefactorNote{{Suggestion: "foo"}},
+			},
+		}
+		cfg := manifest(false, false) // TDD disabled
+
+		tdd.ReseedTDDCycleIfNeeded(&st, cfg)
+		if st.Execution.TDDCycle != "" {
+			t.Errorf("expected TDDCycle to be cleared, got %q", st.Execution.TDDCycle)
+		}
+		if st.Execution.RefactorRounds != 0 {
+			t.Errorf("expected RefactorRounds to be 0, got %d", st.Execution.RefactorRounds)
+		}
+		if st.Execution.RefactorApplied {
+			t.Error("expected RefactorApplied to be false")
+		}
+		if st.Execution.PendingRefactorNotes != nil {
+			t.Error("expected PendingRefactorNotes to be nil")
+		}
+	})
+}
+

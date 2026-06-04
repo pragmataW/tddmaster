@@ -90,6 +90,7 @@ func runUndoWithArgs(args []string) error {
 
 	// Regenerate spec.md and update state files (pattern from approve.go:86-87).
 	config, _ := state.ReadManifest(root)
+	state.ReseedTDDCycleIfNeeded(&newState, config)
 	allConcerns, _ := state.ListConcerns(root)
 	activeConcerns := filterConcerns(allConcerns, config.Concerns)
 

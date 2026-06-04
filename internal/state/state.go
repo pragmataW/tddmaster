@@ -505,6 +505,14 @@ func StartTDDCycleForTask(st *StateFile) { tdd.StartTDDCycleForTask(st) }
 
 func MarkRefactorApplied(st *StateFile) { tdd.MarkRefactorApplied(st) }
 
+func ReseedTDDCycleIfNeeded(st *StateFile, config *NosManifest) {
+	tdd.ReseedTDDCycleIfNeeded(st, config)
+}
+
+func ClearTDDRefactorState(st *StateFile) {
+	tdd.ClearTDDRefactorState(st)
+}
+
 // -----------------------------------------------------------------------------
 // Identity
 // -----------------------------------------------------------------------------

@@ -460,6 +460,7 @@ func specTask(specName string, args []string) error {
 		}
 
 		config, _ := state.ReadManifest(root)
+		state.ReseedTDDCycleIfNeeded(&newState, config)
 		allConcerns, _ := state.ListConcerns(root)
 		activeConcerns := filterConcerns(allConcerns, config.Concerns)
 

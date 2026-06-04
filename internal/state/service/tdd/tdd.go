@@ -240,3 +240,24 @@ func StartTDDCycleForTask(st *model.StateFile) {
 func MarkRefactorApplied(st *model.StateFile) {
 	st.Execution.RefactorApplied = true
 }
+
+// ReseedTDDCycleIfNeeded sets or clears Execution.TDDCycle based on whether
+// the current task (after any CompletedTasks append) should run under TDD.
+func ReseedTDDCycleIfNeeded(st *model.StateFile, config *model.NosManifest) {
+	if ShouldRunTDDForCurrentTask(*st, config) {
+		if st.Execution.TDDCycle == "" {
+			StartTDDCycleForTask(st)
+		}
+		return
+	}
+	ClearTDDRefactorState(st)
+}
+
+// ClearTDDRefactorState resets the TDD/refactor tracking fields on st,
+// including any pending refactor notes that belonged to the cleared cycle.
+func ClearTDDRefactorState(st *model.StateFile) {
+	st.Execution.TDDCycle = ""
+	st.Execution.RefactorRounds = 0
+	st.Execution.RefactorApplied = false
+	st.Execution.PendingRefactorNotes = nil
+}
