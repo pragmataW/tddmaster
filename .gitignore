@@ -1,3 +1,11 @@
 pentestmaster/
 tddmaster/
 .DS_Store
+
+.tddmaster/
+.agents/
+.claude/
+AGENTS.md
+CLAUDE.md
+
+plans/
