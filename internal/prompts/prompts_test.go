@@ -47,6 +47,19 @@ func TestRender_CommandSubstitution_OutputContainsCommand(t *testing.T) {
 	}
 }
 
+func TestRender_ClaudeMd_UsesStartSlugNotSpecNew(t *testing.T) {
+	out, err := Render("claude_md", RenderData{Command: "tddmaster"})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !strings.Contains(out, "start <slug>") {
+		t.Fatalf("expected output to contain %q", "start <slug>")
+	}
+	if strings.Contains(out, "spec new") {
+		t.Fatalf("expected output to NOT contain %q", "spec new")
+	}
+}
+
 func TestRender_AgentTemplates_StartsWithFrontmatterDelimiter(t *testing.T) {
 	agentNames := []string{"executor", "verifier", "planner", "test-writer"}
 	for _, name := range agentNames {

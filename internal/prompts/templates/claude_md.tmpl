@@ -6,7 +6,7 @@ State-driven orchestration. Do NOT read `.tddmaster/` files directly — tddmast
 
     {{.Command}} spec <name> next                           # get instruction
     {{.Command}} spec <name> next --answer="response"       # submit and advance
-    {{.Command}} spec new "description"                     # create spec (name auto-generated)
+    {{.Command}} start <slug>                               # start a new spec
 
 Every spec command MUST include `spec <name>`. Use `{{.Command}} spec list` for available specs.
 
@@ -17,7 +17,7 @@ Every spec command MUST include `spec <name>`. Use `{{.Command}} spec list` for 
 - Never batch-submit. Never answer discovery questions yourself.
 - Never skip steps or infer decisions. Ask first. Explicit > Clever.
 - NEVER suggest bypassing or skipping tddmaster. Discovery is not overhead.
-- NEVER ask permission to run the next tddmaster command. After spec new → run next. After approve → run next. Each step has one next step. Just run it.
+- NEVER ask permission to run the next tddmaster command. After start → run next. After approve → run next. Each step has one next step. Just run it.
 - Execute tddmaster commands IMMEDIATELY — the output has all context needed.
 - Display `roadmap` before content. Display `gate` prominently.
 
@@ -69,7 +69,7 @@ Read-only: log, diff, status, show, blame. No write commands (commit, push, chec
 
 ### Discovery
 
-Listen first: after spec creation, ask user to share context before mode selection.
+Listen first: after `start <slug>`, ask user to share context before mode selection.
 Modes: full (default), validate, technical-depth, ship-fast, explore.
 Pre-scan codebase before questions. Challenge premises. Propose alternatives.
 

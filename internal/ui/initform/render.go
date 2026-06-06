@@ -48,7 +48,7 @@ func RenderSummary(res scaffold.Result, command string) string {
 
 	if command != "" {
 		sb.WriteString("\n")
-		sb.WriteString(greenStyle.Render(fmt.Sprintf("Next step: %s spec new \"description\"", command)))
+		sb.WriteString(greenStyle.Render(fmt.Sprintf("Next step: %s start <slug>", command)))
 	}
 
 	return borderStyle.Render(sb.String())

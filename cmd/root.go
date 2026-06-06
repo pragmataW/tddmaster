@@ -8,6 +8,7 @@ func newRootCmd() *cobra.Command {
 		Short: "TDD-driven spec orchestration tool",
 	}
 	root.AddCommand(newInitCmd())
+	root.AddCommand(newStartCmd())
 	return root
 }
 
