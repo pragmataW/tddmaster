@@ -235,3 +235,69 @@ func TestLoadState_MissingReturnsError(t *testing.T) {
 		t.Error("expected error when loading state for non-existent spec, got nil")
 	}
 }
+
+func TestSaveLoadProgress_WithExecState_RoundTrip(t *testing.T) {
+	root := t.TempDir()
+	slug := "exec-state-spec"
+	exec := &ExecState{
+		Iteration:       3,
+		TDDCycle:        "green",
+		RefactorRounds:  2,
+		RefactorApplied: true,
+		ApprovedPlans:   []string{"plan-a", "plan-b"},
+		PlanAttempts:    map[string]int{"task-1": 2, "task-2": 1},
+		PlanFeedback:    map[string]string{"task-1": "needs more detail"},
+	}
+	original := Progress{
+		Spec:      slug,
+		Status:    "executing",
+		Tasks:     []Task{},
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
+		Execution: exec,
+	}
+
+	err := SaveProgress(root, slug, original)
+	if err != nil {
+		t.Fatalf("SaveProgress returned error: %v", err)
+	}
+
+	loaded, err := LoadProgress(root, slug)
+	if err != nil {
+		t.Fatalf("LoadProgress returned error: %v", err)
+	}
+
+	if loaded.Execution == nil {
+		t.Fatal("expected Execution to be non-nil after round-trip")
+	}
+	if !reflect.DeepEqual(loaded.Execution, original.Execution) {
+		t.Errorf("Execution mismatch: got %+v, want %+v", loaded.Execution, original.Execution)
+	}
+}
+
+func TestLoadProgress_OldFormatWithoutExecutionKey_ReturnsNilExecution(t *testing.T) {
+	root := t.TempDir()
+	slug := "old-format-spec"
+
+	oldJSON := []byte(`{
+  "spec": "old-format-spec",
+  "status": "draft",
+  "tasks": [],
+  "updatedAt": "2024-01-01T00:00:00Z"
+}`)
+
+	dir := paths.SpecDir(root, slug)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(paths.SpecProgress(root, slug), oldJSON, 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	loaded, err := LoadProgress(root, slug)
+	if err != nil {
+		t.Fatalf("LoadProgress returned error: %v", err)
+	}
+	if loaded.Execution != nil {
+		t.Errorf("expected Execution to be nil for old-format file, got %+v", loaded.Execution)
+	}
+}

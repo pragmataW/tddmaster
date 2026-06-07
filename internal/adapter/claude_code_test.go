@@ -84,7 +84,7 @@ func TestClaudeCodeAdapter_Sync_WritesAllAgentFiles(t *testing.T) {
 		{"tddmaster-executor.md", "tddmaster-executor"},
 		{"tddmaster-verifier.md", "tddmaster-verifier"},
 		{"tddmaster-planner.md", "tddmaster-planner"},
-		{"tddmaster-test-writer.md", "test-writer"},
+		{"tddmaster-test-writer.md", "tddmaster-test-writer"},
 	}
 
 	for _, af := range agentFiles {

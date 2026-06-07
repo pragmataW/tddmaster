@@ -4,21 +4,52 @@ State-driven orchestration. Do NOT read `.tddmaster/` files directly — tddmast
 
 ### Protocol
 
-    {{.Command}} spec <name> next                           # get instruction
-    {{.Command}} spec <name> next --answer="response"       # submit and advance
-    {{.Command}} start <slug>                               # start a new spec
+    {{.Command}} start <slug>                         # create and start a new spec
+    {{.Command}} next <slug>                          # get or advance the next action
+    {{.Command}} next <slug> --answer="response"      # submit an answer and advance
 
-Every spec command MUST include `spec <name>`. Use `{{.Command}} spec list` for available specs.
+`next <slug>` is the single master-loop command. Call it to receive a JSON `Action` object, act on it, then call it again with `--answer` to submit your response and receive the next action. Everything the agent needs is in the JSON output.
+
+### JSON contract
+
+Every `{{.Command}} next` call returns an `Action` object:
+
+```json
+{
+  "action": "ask|instruct|notify|terminal|error",
+  "instruction": "...",
+  "delegateAgent": "tddmaster-executor|tddmaster-planner|tddmaster-test-writer|tddmaster-verifier",
+  "expectedInput": {
+    "format": "json|text|flag",
+    "submitCmd": "{{.Command}} next <slug> --answer='...'",
+    "example": "..."
+  },
+  "interactiveOptions": [
+    { "label": "...", "description": "..." }
+  ],
+  "commandMap": { "label": "{{.Command}} next <slug> --answer='...'" },
+  "multiSelect": false
+}
+```
+
+Drive entirely off the JSON:
+
+- `action: "ask"` — present the question or delegate to `delegateAgent` if set; submit the answer via `--answer`.
+- `action: "instruct"` — spawn the `delegateAgent` sub-agent with the `instruction`; submit its status report via `--answer`.
+- `action: "notify"` — display to the user; call `next` again (no `--answer` needed).
+- `action: "terminal"` — spec is complete or cancelled; stop the loop.
+- `action: "error"` — surface the error to the user; do not advance.
+- `interactiveOptions` — use AskUserQuestion; resolve selection via `commandMap`.
+- `expectedInput.submitCmd` — use this exact command shape to submit.
 
 ### Core rules
 
-- Call tddmaster ONCE per interaction. One question, one answer, one submit.
-- Call `next` at: conversation start, before file edits, after completing work, at decisions.
+- Call `{{.Command}} next` ONCE per interaction. One action, one response, one submit.
 - Never batch-submit. Never answer discovery questions yourself.
 - Never skip steps or infer decisions. Ask first. Explicit > Clever.
 - NEVER suggest bypassing or skipping tddmaster. Discovery is not overhead.
-- NEVER ask permission to run the next tddmaster command. After start → run next. After approve → run next. Each step has one next step. Just run it.
-- Execute tddmaster commands IMMEDIATELY — the output has all context needed.
+- NEVER ask permission to run the next command. Each step has one next step. Just run it.
+- Execute tddmaster commands IMMEDIATELY — the JSON output has all context needed.
 - Display `roadmap` before content. Display `gate` prominently.
 
 ### Task recovery
@@ -34,27 +65,64 @@ If you accidentally ended the whole spec, use `{{.Command}} spec <name> reopen -
 Plain `reopen` returns to DISCOVERY for revision; `--resume-execution` restores EXECUTING/BLOCKED progress.
 `done` and `cancel` act on the ENTIRE spec, not a single task — never call them to "undo a task".
 
-### Important task gate
+### Important task gate (runtime-delegated)
 
-Optional gate behind manifest `tddmaster.importantTaskGate`. When enabled, tasks flagged `important` pause before execution for a plan-first review by the `tddmaster-planner` subagent.
+When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`, the engine has detected an important task without an approved plan. The JSON will contain an `importantTaskGate` block. Required behavior:
 
-Mark / unmark tasks (also offered as a bulk multiSelect during SPEC_APPROVED when the gate is on):
+- Spawn `tddmaster-planner` (read-only: Read/Grep/Glob/LS) with the task scope plus `priorFeedback` when present. Do NOT edit files in this phase.
+- Present the planner output to the user in full detail — a single-line summary is NOT acceptable. The presentation must include: the full `approach` narrative, each entry in `touchedFiles` with an explicit reason why that file is touched, each `designPattern` with how it is applied, each `bestPractice`, and every `assumption`. Omitting any of these fields is a protocol violation.
+- After presenting the full plan, ask the user via AskUserQuestion with options `accept | revise | reject`.
+- On accept: submit `{{.Command}} next <slug> --answer='{"plan":{...},"accepted":true}'`.
+- On revise/reject: submit `{{.Command}} next <slug> --answer='{"planFeedback":"<reason>"}'` — gate re-fires with `priorFeedback` populated and `attemptCount` incremented.
 
-    {{.Command}} spec <name> task mark-important <id>
-    {{.Command}} spec <name> task unmark-important <id>
+Once approved, `touchedFiles` in the plan is binding — if work needs a file outside the list, STOP and report `blocked`.
 
-When the active task is important and has no approved plan, `next` returns an `importantTaskGate` block with `delegateAgent: "tddmaster-planner"`. Required behavior:
-
-- Spawn `tddmaster-planner` (read-only: Read/Grep/Glob/LS) with task scope plus `priorFeedback` when present. Do NOT edit files in this phase.
-- Present planner output via AskUserQuestion with options `accept | revise | reject`.
-- On accept: submit `{{.Command}} spec <name> next --answer='{"plan":{...},"accepted":true}'`.
-- On revise/reject: submit `{{.Command}} spec <name> next --answer='{"planFeedback":"<reason>"}'` — gate re-fires with `priorFeedback` populated and `attemptCount` incremented. Address every point in the next planner spawn.
-
-Once approved, the plan is persisted to `progress.json` (`taskPlans[]`) and embedded as `approvedPlan` in every subsequent executor spawn for that task. `touchedFiles` is binding — if work needs a file outside the list, STOP and report.
-
-Toggle outside init/sync:
+Toggle:
 
     {{.Command}} config important-gate on|off|status
+
+### TDD protocol (runtime-delegated)
+
+When TDD is enabled the engine emits stage-specific `delegateAgent` values in the `instruct` action. Drive off the JSON — do not hardcode the flow:
+
+- `delegateAgent: "tddmaster-test-writer"` and stage `red` — write failing tests ONLY; no implementation code.
+- `delegateAgent: "tddmaster-executor"` and stage `green` — implement clean, working code that makes failing tests pass. After the executor finishes, spawn `tddmaster-verifier` (phase=green) BEFORE submitting to `next`. Submit ONLY the verifier's report to `next`; never submit the executor's self-report directly.
+- `delegateAgent: "tddmaster-executor"` and stage `refactor` — apply every refactor note VERBATIM; behavior must not change and all tests must continue to pass.
+- `delegateAgent: "tddmaster-verifier"` — verify the work; submit a pass/fail report.
+
+Include `tddPhase` in status reports. When `tddFailureReport` is present in the instruction, address `failedACs` before reporting done.
+
+### Refinement
+
+During the refinement phase, adjust the task list with a dedicated upsert command that does NOT advance the phase:
+
+    {{.Command}} refine <slug> --answer='{...}'
+
+Before setting per-task `tddEnabled` or `important` flags, ask the USER via AskUserQuestion; then include the confirmed values in the refinement JSON. Example payload:
+
+```json
+{
+  "update": {"task-1": {"ac": ["new AC"], "tddEnabled": true, "important": false, "edgeCases": ["empty input", "concurrent access"]}},
+  "add":    [{"title": "New task", "ac": ["AC1"], "tddEnabled": false, "edgeCases": ["nil pointer", "max length exceeded"]}],
+  "remove": ["task-3"]
+}
+```
+
+When satisfied with the task list, advance with:
+
+    {{.Command}} next <slug> --answer="approve"
+
+Note: `refine` is only valid in the refinement phase.
+
+### Spec settings (runs before discovery)
+
+The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and three toggles in `interactiveOptions` (TDD, skip verifier, important task gate). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL three as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false}'`. A selected toggle means `true`; unselected means `false`. After submit, discovery begins automatically.
+
+### Discovery flow
+
+The discovery phase runs as a single sequence of steps delivered via `next` JSON: listen-first → mode selection → premise challenge → 7 questions → synthesis (approve). Drive each step entirely off the returned `Action`; submit each answer with `{{.Command}} next <slug> --answer=...`. Do not jump ahead or collapse steps.
+
+Ask EVERY discovery question via the AskUserQuestion tool — never as plain prose or a "write your answer, I'll submit" prompt. For each of the 7 questions, propose 2-4 concrete candidate answers as options (your best inferences from the spec description, listen-first context, and selected mode); the user picks one or writes their own. The question instruction in the `Action` JSON spells this out.
 
 ### Interactive choices
 
@@ -63,15 +131,13 @@ Toggle outside init/sync:
 - Premise challenge step: ask each premise via a separate AskUserQuestion call (agree / disagree / revise with free-form notes). Aggregate the answers client-side, then submit the final JSON payload.
 - On recurring patterns or corrections: ask 'Permanent rule?' → `{{.Command}} rule add "description"`.
 
+### Stop / resume
+
+When `next` returns `action: "notify"` and the payload includes `RestartRecommended: true`, the iteration limit for this session has been reached. Either start a new conversation and call `{{.Command}} next <slug>` to resume, or submit `{{.Command}} next <slug> --answer="continue"` in the current conversation to reset the counter and keep going.
+
 ### Git
 
 Read-only: log, diff, status, show, blame. No write commands (commit, push, checkout, etc.).
-
-### Discovery
-
-Listen first: after `start <slug>`, ask user to share context before mode selection.
-Modes: full (default), validate, technical-depth, ship-fast, explore.
-Pre-scan codebase before questions. Challenge premises. Propose alternatives.
 
 ### Execution
 
@@ -81,12 +147,3 @@ Pre-scan codebase before questions. Challenge premises. Propose alternatives.
 - Clean dead code before structural refactors on files >300 LOC.
 - Complete the spec — no mid-execution pauses or checkpoints.
 - `meta` block has resume context for session start or after compaction.
-
-### TDD Protocol
-
-When `TDDEnabled` is `true`, tddmaster enforces Red-Green-Refactor cycles.
-The executor context includes `tddPhase` (`red`|`green`|`refactor`|`""`), `tddVerificationContext`, and `tddFailureReport`.
-- `red` — write failing tests ONLY; do NOT write implementation code
-- `green` — implement clean, working code that makes the failing tests pass (do not artificially minimise the solution)
-- `refactor` — improve structure without changing behavior
-Include `tddPhase` in status reports. When `tddFailureReport` is present, address `failedACs` before reporting done.

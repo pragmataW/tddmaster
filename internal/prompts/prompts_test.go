@@ -127,3 +127,47 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+func TestVerifierTmpl_GreenBlock_AuditsACsAndEdgeCases(t *testing.T) {
+	out, err := Render("verifier", RenderData{})
+	if err != nil {
+		t.Fatalf("Render verifier: %v", err)
+	}
+	checks := []string{
+		"each acceptance criterion",
+		"uncoveredEdgeCases",
+		"edge case",
+	}
+	for _, phrase := range checks {
+		if !strings.Contains(strings.ToLower(out), strings.ToLower(phrase)) {
+			t.Errorf("verifier GREEN block missing phrase %q", phrase)
+		}
+	}
+	if !strings.Contains(out, "passed") || !strings.Contains(out, "true") {
+		t.Error("verifier template must describe passed:true condition gated on ACs+ECs+tests")
+	}
+}
+
+func TestVerifierTmpl_RefactorBlock_AuditsEdgeCases(t *testing.T) {
+	out, err := Render("verifier", RenderData{})
+	if err != nil {
+		t.Fatalf("Render verifier: %v", err)
+	}
+	lower := strings.ToLower(out)
+	if !strings.Contains(lower, "uncoveredEdgeCases") && !strings.Contains(out, "uncoveredEdgeCases") {
+		t.Error("verifier REFACTOR block missing 'uncoveredEdgeCases' field")
+	}
+	if !strings.Contains(lower, "edge case") {
+		t.Error("verifier REFACTOR block missing 'edge case' coverage check")
+	}
+}
+
+func TestVerifierTmpl_GenericBlock_AuditsEdgeCases(t *testing.T) {
+	out, err := Render("verifier", RenderData{})
+	if err != nil {
+		t.Fatalf("Render verifier: %v", err)
+	}
+	if !strings.Contains(out, "uncoveredEdgeCases") {
+		t.Error("verifier generic block missing 'uncoveredEdgeCases' field for non-TDD flow")
+	}
+}

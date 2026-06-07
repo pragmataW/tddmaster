@@ -46,7 +46,8 @@ func Start(root, slug string, now time.Time) (Result, error) {
 		return Result{}, err
 	}
 
-	if err := SaveSettings(root, slug, DefaultSettings()); err != nil {
+	settings := DefaultSettings()
+	if err := SaveSettings(root, slug, settings); err != nil {
 		return Result{}, err
 	}
 

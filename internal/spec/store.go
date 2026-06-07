@@ -84,3 +84,7 @@ func Exists(root, slug string) bool {
 	_, err := os.Stat(paths.SpecState(root, slug))
 	return err == nil
 }
+
+func SaveSpecMd(root, slug, content string) error {
+	return writeFile(paths.SpecDir(root, slug), paths.SpecMd(root, slug), []byte(content))
+}
