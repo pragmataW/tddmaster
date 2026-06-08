@@ -154,6 +154,12 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 		return engine.Action{Action: engine.ActionNotify}, false, nil
 	}
 
+	if stage.ID() == StageIDRed {
+		if err := validateAndPersistTraceability(c, task, report); err != nil {
+			return engine.Action{}, false, err
+		}
+	}
+
 	newCtx, err := stage.OnReport(ctx, report)
 	if err != nil {
 		return engine.Action{}, false, err

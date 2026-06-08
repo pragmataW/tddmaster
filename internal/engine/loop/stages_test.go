@@ -875,8 +875,8 @@ func TestRefactorStage_Prompt_BeforeApply(t *testing.T) {
 	if action.ExpectedInput.Format != engine.FormatJSON {
 		t.Errorf("ExpectedInput.Format: got %q, want %q", action.ExpectedInput.Format, engine.FormatJSON)
 	}
-	if action.ExpectedInput.Example != promptregistry.ReportExampleExecutor {
-		t.Errorf("ExpectedInput.Example: got %q, want ReportExampleExecutor", action.ExpectedInput.Example)
+	if action.ExpectedInput.Example != promptregistry.ReportExampleRefactorApply {
+		t.Errorf("ExpectedInput.Example: got %q, want ReportExampleRefactorApply", action.ExpectedInput.Example)
 	}
 	keyText := instructionText(promptregistry.KeyExecRefactorApply)
 	if !strings.Contains(action.Instruction, keyText) {

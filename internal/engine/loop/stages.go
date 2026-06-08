@@ -234,7 +234,7 @@ func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 			DelegateAgent: string(promptregistry.AgentExecutor),
 			ExpectedInput: engine.ExpectedInput{
 				Format:  engine.FormatJSON,
-				Example: promptregistry.ReportExampleExecutor,
+				Example: promptregistry.ReportExampleRefactorApply,
 			},
 			Instruction: b.String(),
 		}

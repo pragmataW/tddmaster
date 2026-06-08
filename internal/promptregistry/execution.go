@@ -2,7 +2,9 @@ package promptregistry
 
 const execRedText = "TDD RED phase active. Spawn the `test-writer` sub-agent. " +
 	"It writes FAILING tests only — no implementation, no test execution. " +
-	"Pass `edgeCases` from this `next` output verbatim. After the test-writer reports, run `tddmaster spec <name> next` again."
+	"Pass `edgeCases` from this `next` output verbatim. " +
+	"The test-writer MUST include a `traceability` field in its report: one entry per test function, each with `testFilePath`, `functionName`, `taskId`, and the `ac`/`ec` arrays it covers. Reference each acceptance criterion and edge case by its canonical id `AC-<n>` / `EC-<n>`, where <n> is the 1-based position of that item in the task's acceptance-criteria / edge-case list. This field is REQUIRED on RED submit — reports missing `traceability` are invalid. " +
+	"After the test-writer reports, run `tddmaster spec <name> next` again."
 
 const execGreenText = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
 	"It writes a clean, working implementation that makes the existing failing tests pass. " +
@@ -45,11 +47,13 @@ const RestartRecommendedText = "Iteration limit reached. Start a new conversatio
 
 const ReportExampleExecutor = `{"completed":["task-1"],"remaining":[],"blocked":[],"filesModified":["internal/foo/bar.go"],"phase":"green","refactorApplied":false}`
 
+const ReportExampleRefactorApply = `{"completed":["task-1"],"remaining":[],"blocked":[],"filesModified":["internal/foo/bar.go"],"phase":"refactor","refactorApplied":true}`
+
 const ReportExampleVerifier = `{"passed":true,"phase":"green","failedACs":[],"uncoveredEdgeCases":[],"refactorNotes":[{"file":"internal/foo/bar.go","suggestion":"extract validation","rationale":"reused in two places"}]}`
 
 const ReportExamplePlanner = `{"plan":{"taskId":"","touchedFiles":["internal/foo/bar.go","internal/foo/bar_test.go"],"approach":"Implement X by extending Y with Z pattern","assumptions":["existing tests cover happy path"],"designPatterns":["strategy"],"bestPractices":["single responsibility"]}}`
 
-const ReportExampleTestWriter = `{"testsWritten":["TestFoo_HappyPath","TestFoo_EdgeCase"],"filesModified":["internal/foo/bar_test.go"]}`
+const ReportExampleTestWriter = `{"testsWritten":["TestFoo_HappyPath","TestFoo_EdgeCase"],"filesModified":["internal/foo/bar_test.go"],"traceability":[{"testFilePath":"internal/foo/bar_test.go","functionName":"TestFoo_HappyPath","taskId":"task-1","ac":["AC-1"],"ec":["EC-1"]}]}`
 
 func init() {
 	instructionMap[KeyExecRed] = execRedText

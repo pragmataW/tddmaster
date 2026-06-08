@@ -133,6 +133,14 @@ func (c *Context) MaxIteration() int {
 	return c.maxIteration
 }
 
+func (c *Context) LoadTraceability() (spec.Traceability, error) {
+	return spec.LoadTraceability(c.root, c.slug)
+}
+
+func (c *Context) SaveTraceability(t spec.Traceability) error {
+	return spec.SaveTraceability(c.root, c.slug, t)
+}
+
 func (c *Context) AnswerValue(key string) string {
 	entries, ok := c.state.Answers[key]
 	if !ok || len(entries) == 0 {

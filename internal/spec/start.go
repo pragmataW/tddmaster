@@ -61,12 +61,17 @@ func Start(root, slug string, now time.Time) (Result, error) {
 		return Result{}, err
 	}
 
+	if err := SaveTraceability(root, slug, Traceability{}); err != nil {
+		return Result{}, err
+	}
+
 	return Result{
 		Slug: slug,
 		FilesWritten: []string{
 			paths.SpecState(root, slug),
 			paths.SpecSettings(root, slug),
 			paths.SpecProgress(root, slug),
+			paths.SpecTraceability(root, slug),
 		},
 		AlreadyExists: false,
 	}, nil

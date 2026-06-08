@@ -45,6 +45,7 @@ func GetHandler(root, slug string) (http.Handler, error) {
 	mux.HandleFunc("/progress.json", serveJSONFile(paths.SpecProgress(root, slug)))
 	mux.HandleFunc("/settings.json", serveJSONFile(paths.SpecSettings(root, slug)))
 	mux.HandleFunc("/state.json", serveJSONFile(paths.SpecState(root, slug)))
+	mux.HandleFunc("/traceability.json", serveJSONFile(paths.SpecTraceability(root, slug)))
 
 	mux.HandleFunc("/spec.md", func(w http.ResponseWriter, r *http.Request) {
 		specPath := paths.SpecMd(root, slug)
@@ -106,6 +107,7 @@ func CalculateHash(root, slug string) string {
 		paths.SpecState(root, slug),
 		paths.SpecSettings(root, slug),
 		paths.SpecMd(root, slug),
+		paths.SpecTraceability(root, slug),
 	} {
 		if info, err := os.Stat(p); err == nil {
 			h.Write([]byte(fmt.Sprintf("%s-%d-%d", filepath.Base(p), info.ModTime().UnixNano(), info.Size())))

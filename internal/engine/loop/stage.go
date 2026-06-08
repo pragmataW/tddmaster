@@ -30,6 +30,14 @@ type ExecCtx struct {
 	UserContext       string
 }
 
+type TraceReportEntry struct {
+	TestFilePath string   `json:"testFilePath"`
+	FunctionName string   `json:"functionName"`
+	TaskID       string   `json:"taskId"`
+	AC           []string `json:"ac"`
+	EC           []string `json:"ec"`
+}
+
 type RefactorNote struct {
 	File       string `json:"file"`
 	Suggestion string `json:"suggestion"`
@@ -49,7 +57,8 @@ type StageReport struct {
 	Plan               *spec.TaskPlan `json:"plan,omitempty"`
 	Accepted           bool           `json:"accepted"`
 	PlanFeedback       string         `json:"planFeedback"`
-	TestsWritten       []string       `json:"testsWritten"`
+	TestsWritten       []string          `json:"testsWritten"`
+	Traceability       []TraceReportEntry `json:"traceability"`
 }
 
 func (r StageReport) RefactorNotesPresent() bool {

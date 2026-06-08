@@ -166,7 +166,12 @@ func TestLoopDriver_Edge14_TDDTask_RedToGreenOnPassingReport(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	_, err := ctx.Submit(reportWith(t, true, false))
+	_, err := ctx.Submit(marshalStageReport(t, StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+		},
+	}))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -414,7 +419,12 @@ func TestLoopDriver_Persistence_SubmitPersistsExecutionAndTaskDone(t *testing.T)
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	_, err := ctx.Submit(reportWith(t, true, false))
+	_, err := ctx.Submit(marshalStageReport(t, StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+		},
+	}))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}

@@ -2,6 +2,15 @@ package spec
 
 import "time"
 
+type TraceEntry struct {
+	FunctionName string   `json:"functionName"`
+	TaskID       string   `json:"taskId"`
+	AC           []string `json:"ac"`
+	EC           []string `json:"ec"`
+}
+
+type Traceability map[string][]TraceEntry
+
 const (
 	PhaseInitial     = "spec-settings"
 	StatusDraft      = "draft"

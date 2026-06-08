@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/pragmataW/tddmaster/internal/paths"
+	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/visualize"
 )
 
@@ -236,6 +237,113 @@ func TestVisualizeDashboardHTML(t *testing.T) {
 		if !strings.Contains(dashboardHTML, kw) {
 			t.Errorf("dashboard missing polling keyword %q", kw)
 		}
+	}
+}
+
+func TestTraceabilityRoute_Returns200AndValidJSON(t *testing.T) {
+	if getVisualizeHandler == nil {
+		t.Fatal("getVisualizeHandler is not wired")
+	}
+
+	root := t.TempDir()
+	slug := "trace-slug"
+
+	traceability := spec.Traceability{
+		"task-1": []spec.TraceEntry{
+			{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+		},
+	}
+	if err := spec.SaveTraceability(root, slug, traceability); err != nil {
+		t.Fatalf("SaveTraceability: %v", err)
+	}
+
+	handler, err := getVisualizeHandler(root, slug)
+	if err != nil {
+		t.Fatalf("getVisualizeHandler error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/traceability.json", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("content-type = %q, want application/json", ct)
+	}
+	var parsed spec.Traceability
+	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if len(parsed["task-1"]) != 1 {
+		t.Errorf("expected 1 entry for task-1, got %d", len(parsed["task-1"]))
+	}
+}
+
+func TestTraceabilityRoute_EmptyTraceability_Returns200AndValidJSON(t *testing.T) {
+	if getVisualizeHandler == nil {
+		t.Fatal("getVisualizeHandler is not wired")
+	}
+
+	root := t.TempDir()
+	slug := "trace-empty-slug"
+
+	if err := spec.SaveTraceability(root, slug, spec.Traceability{}); err != nil {
+		t.Fatalf("SaveTraceability: %v", err)
+	}
+
+	handler, err := getVisualizeHandler(root, slug)
+	if err != nil {
+		t.Fatalf("getVisualizeHandler error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/traceability.json", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (empty traceability must not 500)", rec.Code)
+	}
+	var parsed json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+}
+
+func TestCalculateHash_IncludesTraceabilityFile(t *testing.T) {
+	root := t.TempDir()
+	slug := "hash-slug"
+
+	if err := os.MkdirAll(paths.SpecDir(root, slug), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	initial := spec.Traceability{
+		"task-1": []spec.TraceEntry{
+			{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+		},
+	}
+	if err := spec.SaveTraceability(root, slug, initial); err != nil {
+		t.Fatalf("SaveTraceability initial: %v", err)
+	}
+
+	hashBefore := visualize.CalculateHash(root, slug)
+
+	updated := spec.Traceability{
+		"task-1": []spec.TraceEntry{
+			{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+			{FunctionName: "TestBeta", TaskID: "task-1", AC: []string{"AC2"}, EC: []string{}},
+		},
+	}
+	if err := spec.SaveTraceability(root, slug, updated); err != nil {
+		t.Fatalf("SaveTraceability updated: %v", err)
+	}
+
+	hashAfter := visualize.CalculateHash(root, slug)
+
+	if hashBefore == hashAfter {
+		t.Errorf("hash did not change after mutating traceability.json: both = %q", hashBefore)
 	}
 }
 

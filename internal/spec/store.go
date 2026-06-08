@@ -41,6 +41,14 @@ func loadJSON[T any](path string) (T, error) {
 	return v, nil
 }
 
+func loadJSONOrEmpty[T any](path string) (T, error) {
+	var zero T
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return zero, nil
+	}
+	return loadJSON[T](path)
+}
+
 func SaveState(root, slug string, s State) error {
 	return saveJSON(paths.SpecDir(root, slug), paths.SpecState(root, slug), s)
 }
@@ -78,6 +86,22 @@ func LoadProgress(root, slug string) (Progress, error) {
 		return Progress{}, err
 	}
 	return pr, nil
+}
+
+func SaveTraceability(root, slug string, t Traceability) error {
+	return saveJSON(paths.SpecDir(root, slug), paths.SpecTraceability(root, slug), t)
+}
+
+func LoadTraceability(root, slug string) (Traceability, error) {
+	p := paths.SpecTraceability(root, slug)
+	tr, err := loadJSONOrEmpty[Traceability](p)
+	if err != nil {
+		return Traceability{}, err
+	}
+	if tr == nil {
+		return Traceability{}, nil
+	}
+	return tr, nil
 }
 
 func Exists(root, slug string) bool {

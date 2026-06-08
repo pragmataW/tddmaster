@@ -3,11 +3,12 @@ package paths
 import "path/filepath"
 
 const (
-	DirSpecs      = "specs"
-	FileState     = "state.json"
-	FileSettings  = "settings.json"
-	FileProgress  = "progress.json"
-	FileSpec      = "spec.md"
+	DirSpecs         = "specs"
+	FileState        = "state.json"
+	FileSettings     = "settings.json"
+	FileProgress     = "progress.json"
+	FileSpec         = "spec.md"
+	FileTraceability = "traceability.json"
 )
 
 func Tddmaster(root string) string {
@@ -48,4 +49,8 @@ func SpecProgress(root, slug string) string {
 
 func SpecMd(root, slug string) string {
 	return filepath.Join(SpecDir(root, slug), FileSpec)
+}
+
+func SpecTraceability(root, slug string) string {
+	return filepath.Join(SpecDir(root, slug), FileTraceability)
 }

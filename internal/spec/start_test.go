@@ -22,7 +22,7 @@ func writeManifest(t *testing.T, root string) {
 	}
 }
 
-func TestStart_CreatesThreeFiles(t *testing.T) {
+func TestStart_CreatesFourFiles(t *testing.T) {
 	root := t.TempDir()
 	writeManifest(t, root)
 
@@ -34,14 +34,15 @@ func TestStart_CreatesThreeFiles(t *testing.T) {
 	if result.AlreadyExists {
 		t.Fatal("expected AlreadyExists false")
 	}
-	if len(result.FilesWritten) != 3 {
-		t.Fatalf("expected 3 files written, got %d", len(result.FilesWritten))
+	if len(result.FilesWritten) != 4 {
+		t.Fatalf("expected 4 files written, got %d", len(result.FilesWritten))
 	}
 
 	for _, p := range []string{
 		paths.SpecState(root, "my-feature"),
 		paths.SpecSettings(root, "my-feature"),
 		paths.SpecProgress(root, "my-feature"),
+		paths.SpecTraceability(root, "my-feature"),
 	} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("expected file to exist: %s, got err: %v", p, err)
@@ -281,5 +282,77 @@ func TestStart_MultipleSlugsIsolated(t *testing.T) {
 	}
 	if betaState.Slug != "beta" {
 		t.Errorf("beta state has wrong slug: %q", betaState.Slug)
+	}
+}
+
+func TestStart_CreatesTraceabilityFile(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+
+	_, err := Start(root, "my-feature", fixedNow)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(paths.SpecTraceability(root, "my-feature")); err != nil {
+		t.Errorf("expected traceability.json to exist: %v", err)
+	}
+}
+
+func TestStart_TraceabilityFileContentIsEmptyMap(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+
+	_, err := Start(root, "my-feature", fixedNow)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	raw, err := os.ReadFile(paths.SpecTraceability(root, "my-feature"))
+	if err != nil {
+		t.Fatalf("read traceability.json: %v", err)
+	}
+	if strings.TrimSpace(string(raw)) != "{}" {
+		t.Errorf("traceability.json must contain {}, got: %s", string(raw))
+	}
+}
+
+func TestStart_TraceabilityLoadReturnsEmptyMap(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+
+	_, err := Start(root, "my-feature", fixedNow)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tr, err := LoadTraceability(root, "my-feature")
+	if err != nil {
+		t.Fatalf("LoadTraceability error: %v", err)
+	}
+	if len(tr) != 0 {
+		t.Errorf("expected empty Traceability, got %d entries", len(tr))
+	}
+}
+
+func TestStart_TraceabilityPathInFilesWritten(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+
+	result, err := Start(root, "my-feature", fixedNow)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := paths.SpecTraceability(root, "my-feature")
+	found := false
+	for _, p := range result.FilesWritten {
+		if p == want {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("FilesWritten must contain %q, got: %v", want, result.FilesWritten)
 	}
 }

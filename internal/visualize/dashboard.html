@@ -85,7 +85,8 @@
       gap: 1rem;
       flex-wrap: wrap;
     }
-    .header-left { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .header-left { flex: 1; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .header-right { flex: 1; justify-content: flex-end; }
     .logo {
       font-family: var(--display);
       font-size: 1.35rem;
@@ -104,25 +105,6 @@
       box-shadow: var(--shadow-sm);
     }
     .header-right { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
-    .live-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      border: 2px solid var(--line);
-      padding: 0.28rem 0.55rem;
-      background: var(--surface);
-    }
-    .live-pulse {
-      width: 9px; height: 9px;
-      background: var(--accent);
-      animation: blink 1.2s steps(1) infinite;
-    }
-    @keyframes blink { 50% { opacity: 0.15; } }
-
     .theme-toggle {
       font-family: var(--display);
       font-size: 0.7rem;
@@ -438,6 +420,78 @@
 
     .spec-panel { min-height: 480px; }
 
+    .nav-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.3rem;
+      border: 2px solid var(--line);
+      box-shadow: var(--shadow-sm);
+      background: var(--paper);
+      border-radius: 2px;
+    }
+    .nav-tab {
+      font-family: var(--display);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: var(--ink);
+      background: var(--surface);
+      border: 2px solid var(--line);
+      box-shadow: var(--shadow-sm);
+      padding: 0.32rem 0.6rem;
+      display: inline-flex;
+      align-items: center;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    .nav-tab:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+    .nav-tab:active { transform: translate(0, 0); box-shadow: 1px 1px 0 var(--ink); }
+    .nav-tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    [data-theme="dark"] .nav-tab:hover { box-shadow: 4px 4px 0 #000; }
+    [data-theme="dark"] .nav-tab:active { box-shadow: 1px 1px 0 #000; }
+
+    .container-trace {
+      max-width: 1320px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.75rem;
+      flex-grow: 1;
+      display: none;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+    .container-trace.visible { display: flex; }
+
+    .trace-task-block { display: flex; flex-direction: column; gap: 0.75rem; }
+    .trace-task-title {
+      font-family: var(--display);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-left: 4px solid var(--accent);
+      padding-left: 0.7rem;
+      color: var(--ink);
+    }
+    .badge-uncovered {
+      display: inline-block;
+      font-family: var(--display);
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.18rem 0.5rem;
+      border: 1.5px solid var(--accent);
+      color: var(--accent);
+    }
+    .trace-fn {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      word-break: break-all;
+    }
+
     footer {
       border-top: 2px solid var(--line);
       padding: 0.9rem 1.75rem;
@@ -450,6 +504,65 @@
       gap: 1rem;
       flex-wrap: wrap;
     }
+
+    .trace-th {
+      border: 2px solid var(--line);
+      padding: 0.45rem 0.65rem;
+      text-align: left;
+      background: var(--code-bg);
+      color: var(--code-fg);
+      font-family: var(--display);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+    }
+
+    .trace-th-type {
+      width: 60px;
+    }
+
+    .trace-td {
+      border: 2px solid var(--line);
+      padding: 0.45rem 0.65rem;
+    }
+
+    .trace-td-label {
+      font-size: 0.78rem;
+    }
+
+    .trace-td-type {
+      font-size: 0.7rem;
+      font-family: var(--display);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+    }
+
+    .trace-td-check {
+      text-align: center;
+    }
+
+    .trace-th-fn {
+      text-transform: none;
+      font-family: var(--mono);
+      vertical-align: bottom;
+      min-width: 140px;
+    }
+    .trace-fn-name {
+      display: block;
+      font-size: 0.74rem;
+      font-weight: 700;
+      word-break: break-word;
+    }
+    .trace-fn-file {
+      display: block;
+      font-size: 0.6rem;
+      font-weight: 400;
+      color: var(--code-fg);
+      opacity: 0.6;
+      margin-top: 0.25rem;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -458,8 +571,11 @@
       <span class="logo">TDDMASTER<span class="dot">.</span></span>
       <span class="spec-badge" id="spec-name">…</span>
     </div>
+    <nav class="nav-tabs" aria-label="Views">
+      <button class="nav-tab active" id="tab-overview" type="button">Overview</button>
+      <button class="nav-tab" id="tab-traceability" type="button">Traceability</button>
+    </nav>
     <div class="header-right">
-      <span class="live-indicator"><span class="live-pulse"></span>Live</span>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme"><span id="theme-toggle-label">Dark</span></button>
       <span class="phase-badge" id="phase-badge">—</span>
     </div>
@@ -514,6 +630,8 @@
     </div>
   </div>
 
+  <div class="container-trace" id="container-trace"></div>
+
   <footer>
     <span>tddmaster · spec visualizer</span>
     <span id="footer-updated">—</span>
@@ -550,6 +668,28 @@
     let progressData = null;
     let stateData = null;
     let settingsData = null;
+    let traceData = null;
+
+    function initNav() {
+      const tabOverview = document.getElementById('tab-overview');
+      const tabTrace = document.getElementById('tab-traceability');
+      const containerMain = document.querySelector('.container');
+      const containerTrace = document.getElementById('container-trace');
+
+      tabOverview.addEventListener('click', () => {
+        tabOverview.classList.add('active');
+        tabTrace.classList.remove('active');
+        containerMain.style.display = '';
+        containerTrace.classList.remove('visible');
+      });
+
+      tabTrace.addEventListener('click', () => {
+        tabTrace.classList.add('active');
+        tabOverview.classList.remove('active');
+        containerMain.style.display = 'none';
+        containerTrace.classList.add('visible');
+      });
+    }
 
     function esc(s) {
       return String(s == null ? '' : s)
@@ -563,16 +703,18 @@
 
     async function loadData() {
       try {
-        const [progressRes, specRes, stateRes, settingsRes] = await Promise.all([
+        const [progressRes, specRes, stateRes, settingsRes, traceRes] = await Promise.all([
           fetch('/progress.json').then(r => r.ok ? r.json() : null),
           fetch('/spec.md').then(r => r.ok ? r.text() : ''),
           fetch('/state.json').then(r => r.ok ? r.json() : null),
-          fetch('/settings.json').then(r => r.ok ? r.json() : null)
+          fetch('/settings.json').then(r => r.ok ? r.json() : null),
+          fetch('/traceability.json').then(r => r.ok ? r.json() : null)
         ]);
 
         progressData = progressRes;
         stateData = stateRes;
         settingsData = settingsRes;
+        traceData = traceRes;
 
         renderHeader();
         renderProgress();
@@ -581,6 +723,7 @@
         renderStats();
         renderSettings();
         renderFooter();
+        renderTraceability();
 
         const c = document.querySelector('.container');
         if (c) { c.classList.remove('flash'); void c.offsetWidth; }
@@ -764,6 +907,156 @@
       document.getElementById('footer-updated').textContent = u ? ('updated ' + new Date(u).toLocaleString()) : '';
     }
 
+    function renderTraceability() {
+      const ct = document.getElementById('container-trace');
+      if (!ct) return;
+      ct.innerHTML = '';
+
+      const td = (traceData && typeof traceData === 'object') ? traceData : {};
+      const tasks = (progressData && progressData.tasks) || [];
+
+      if (!tasks.length) {
+        ct.innerHTML = '<div class="panel"><div class="empty">No tasks yet.</div></div>';
+        return;
+      }
+
+      tasks.forEach(task => {
+        const acList = (task.ac) || [];
+        const ecList = (task.edgeCases) || [];
+
+        const flat = [];
+        Object.keys(td).forEach(fileKey => {
+          const arr = td[fileKey] || [];
+          arr.forEach(e => {
+            const tid = e.taskId || e.TaskID || '';
+            if (tid === task.id) {
+              flat.push({
+                file: fileKey,
+                fn: e.functionName || e.FunctionName || '',
+                ac: e.ac || e.AC || [],
+                ec: e.ec || e.EC || []
+              });
+            }
+          });
+        });
+
+        const cols = [];
+        const seenCols = new Set();
+        flat.forEach(x => {
+          if (!x.fn) return;
+          const key = x.file + '::' + x.fn;
+          if (!seenCols.has(key)) {
+            seenCols.add(key);
+            cols.push(key);
+          }
+        });
+
+        const block = document.createElement('div');
+        block.className = 'panel trace-task-block';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'trace-task-title';
+        titleEl.textContent = esc(task.id) + ' · ' + esc(task.title);
+        block.appendChild(titleEl);
+
+        if (!acList.length && !ecList.length) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'No acceptance criteria or edge cases defined.';
+          block.appendChild(empty);
+          ct.appendChild(block);
+          return;
+        }
+
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+
+        const thRow = document.createElement('th');
+        thRow.className = 'trace-th';
+        thRow.textContent = 'AC / EC';
+        headerRow.appendChild(thRow);
+
+        const thType = document.createElement('th');
+        thType.className = 'trace-th trace-th-type';
+        thType.textContent = 'Type';
+        headerRow.appendChild(thType);
+
+        cols.forEach(col => {
+          const sep = col.indexOf('::');
+          const fileName = sep !== -1 ? col.slice(0, sep) : '';
+          const fnName = sep !== -1 ? col.slice(sep + 2) : col;
+          const th = document.createElement('th');
+          th.className = 'trace-th trace-th-fn';
+          th.innerHTML = '<span class="trace-fn-name">' + esc(fnName) + '</span>' +
+            (fileName ? '<span class="trace-fn-file">' + esc(fileName) + '</span>' : '');
+          headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        const buildRow = (label, type, matchFn) => {
+          const tr = document.createElement('tr');
+
+          const tdLabel = document.createElement('td');
+          tdLabel.className = 'trace-td trace-td-label';
+          tdLabel.textContent = label;
+          tr.appendChild(tdLabel);
+
+          const tdType = document.createElement('td');
+          tdType.className = 'trace-td trace-td-type';
+          tdType.textContent = type;
+          tr.appendChild(tdType);
+
+          let linked = 0;
+          cols.forEach(col => {
+            const matches = flat.some(x => (x.file + '::' + x.fn) === col && matchFn(x));
+            if (matches) linked++;
+            const td_ = document.createElement('td');
+            td_.className = 'trace-td trace-td-check';
+            td_.textContent = matches ? '✓' : '';
+            if (matches) td_.style.color = 'var(--ok)';
+            tr.appendChild(td_);
+          });
+
+          if (!cols.length || linked === 0) {
+            const tdUncov = document.createElement('td');
+            tdUncov.className = 'trace-td';
+            tdUncov.innerHTML = '<span class="badge-uncovered">UNCOVERED</span>';
+            tr.appendChild(tdUncov);
+          }
+
+          tbody.appendChild(tr);
+        };
+
+        acList.forEach((ac, i) => {
+          const acId = 'AC-' + (i + 1);
+          buildRow(ac, 'AC', x => {
+            const arr = x.ac || [];
+            return arr.indexOf(acId) !== -1 || arr.indexOf(ac) !== -1;
+          });
+        });
+
+        ecList.forEach((ec, i) => {
+          const ecId = 'EC-' + (i + 1);
+          buildRow(ec, 'EC', x => {
+            const arr = x.ec || [];
+            return arr.indexOf(ecId) !== -1 || arr.indexOf(ec) !== -1;
+          });
+        });
+
+        table.appendChild(tbody);
+        block.appendChild(table);
+        ct.appendChild(block);
+      });
+    }
+
     async function checkUpdates() {
       try {
         const r = await fetch('/api/status');
@@ -781,6 +1074,7 @@
     }
 
     initTheme();
+    initNav();
     loadData().then(() => { setInterval(checkUpdates, 1000); });
   </script>
 </body>
