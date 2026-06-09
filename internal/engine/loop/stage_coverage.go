@@ -6,8 +6,8 @@ const fileCoverageJSONKey = "fileCoverage"
 const fileCoverageReportShape = fileCoverageJSONKey + ":[{file,coverage}]"
 
 type FileCoverageEntry struct {
-	File     string `json:"file"`
-	Coverage int    `json:"coverage"`
+	File     string  `json:"file"`
+	Coverage float64 `json:"coverage"`
 }
 
 func coverageEnforced(s spec.Settings) bool {
@@ -17,7 +17,7 @@ func coverageEnforced(s spec.Settings) bool {
 func lowCoverageFiles(r StageReport, s spec.Settings) []string {
 	result := []string{}
 	for _, e := range r.FileCoverage {
-		if e.Coverage < s.MinTestCoverage {
+		if e.Coverage < float64(s.MinTestCoverage) {
 			result = append(result, e.File)
 		}
 	}
@@ -31,8 +31,8 @@ func coverageMet(r StageReport, s spec.Settings) bool {
 	return len(r.FileCoverage) > 0 && len(lowCoverageFiles(r, s)) == 0
 }
 
-func coverageMap(r StageReport) map[string]int {
-	m := map[string]int{}
+func coverageMap(r StageReport) map[string]float64 {
+	m := map[string]float64{}
 	for _, e := range r.FileCoverage {
 		m[e.File] = e.Coverage
 	}

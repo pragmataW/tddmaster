@@ -38,11 +38,7 @@ type TraceReportEntry struct {
 	EC           []string `json:"ec"`
 }
 
-type RefactorNote struct {
-	File       string `json:"file"`
-	Suggestion string `json:"suggestion"`
-	Rationale  string `json:"rationale"`
-}
+type RefactorNote = spec.RefactorNote
 
 type StageReport struct {
 	Passed             bool           `json:"passed"`

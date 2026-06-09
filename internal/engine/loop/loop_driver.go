@@ -67,6 +67,7 @@ func (d *LoopDriver) buildExecCtx(c *engine.Context, task spec.Task, taskIdx int
 		State:             *c.Progress().Execution,
 		TaskIdx:           taskIdx,
 		MaxRefactorRounds: defaultMaxRefactorRounds,
+		UserContext:       c.AnswerValue("listen_context"),
 	}
 }
 
@@ -75,25 +76,33 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 
 	if canTerminate(pr) {
 		pr.Status = spec.StatusCompleted
-		_ = c.SaveProgress(pr)
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
+		}
 		return engine.Action{Action: engine.ActionTerminal}, true
 	}
 
 	task, taskIdx, found := findFirstPendingTask(pr.Tasks)
 	if !found {
 		pr.Status = spec.StatusCompleted
-		_ = c.SaveProgress(pr)
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
+		}
 		return engine.Action{Action: engine.ActionTerminal}, true
 	}
 
 	if pr.Execution == nil {
 		if err := d.initExecution(c, task); err != nil {
-			return engine.Action{Action: engine.ActionError}, false
+			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
 		}
 		pr = c.Progress()
 	}
 
 	if pr.Execution.Iteration >= c.MaxIteration() {
+		pr.Execution.Iteration = 0
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
+		}
 		return engine.Action{Action: engine.ActionNotify, Instruction: promptregistry.RestartRecommendedText}, false
 	}
 
@@ -110,12 +119,11 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byte) (engine.Action, bool, error) {
 	if strings.TrimSpace(string(answer)) == "continue" {
 		pr := c.Progress()
-		if pr.Execution == nil {
-			pr.Execution = &spec.ExecState{}
-		}
-		pr.Execution.Iteration = 0
-		if err := c.SaveProgress(pr); err != nil {
-			return engine.Action{}, false, err
+		if pr.Execution != nil {
+			pr.Execution.Iteration = 0
+			if err := c.SaveProgress(pr); err != nil {
+				return engine.Action{}, false, err
+			}
 		}
 		return engine.Action{}, false, nil
 	}
@@ -171,12 +179,14 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 		return engine.Action{}, false, err
 	}
 
-	if report.EffectivePassed() {
-		newCtx.State.LastFailedACs = nil
-		newCtx.State.LastUncoveredEC = nil
-	} else if report.Passed && !report.EffectivePassed() {
-		newCtx.State.LastFailedACs = report.FailedACs
-		newCtx.State.LastUncoveredEC = report.UncoveredEdgeCases
+	if reportFromVerifier(stage.ID(), ctx.State) {
+		if report.EffectivePassed() {
+			newCtx.State.LastFailedACs = nil
+			newCtx.State.LastUncoveredEC = nil
+		} else {
+			newCtx.State.LastFailedACs = report.FailedACs
+			newCtx.State.LastUncoveredEC = report.UncoveredEdgeCases
+		}
 	}
 
 	pr.Execution = &newCtx.State
@@ -211,10 +221,21 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 	}
 
 	if pr.Execution.Iteration >= c.MaxIteration() {
+		pr.Execution.Iteration = 0
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{}, false, err
+		}
 		return engine.Action{Action: engine.ActionNotify, Instruction: promptregistry.RestartRecommendedText}, false, nil
 	}
 
 	return engine.Action{}, false, nil
+}
+
+func reportFromVerifier(stageID string, st spec.ExecState) bool {
+	if stageID == StageIDVerifier {
+		return true
+	}
+	return stageID == StageIDRefactor && st.RefactorApplied
 }
 
 func isTaskComplete(tddActive, skipVerifier bool, oldState, newState spec.ExecState, report StageReport) bool {

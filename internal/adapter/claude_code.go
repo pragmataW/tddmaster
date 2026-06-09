@@ -34,6 +34,9 @@ func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 
 	claudeMdPath := paths.ClaudeMd(ctx.Root)
 	existing, readErr := os.ReadFile(claudeMdPath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("read CLAUDE.md: %w", readErr)
+	}
 
 	var newContent string
 	if readErr != nil {
@@ -41,12 +44,18 @@ func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 	} else {
 		content := string(existing)
 		startIdx := strings.Index(content, markerStart)
-		endIdx := strings.Index(content, markerEnd)
-		if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
-			before := content[:startIdx]
-			after := content[endIdx+len(markerEnd):]
-			newContent = before + block + after
+		endIdx := -1
+		if startIdx != -1 {
+			rel := strings.Index(content[startIdx+len(markerStart):], markerEnd)
+			if rel != -1 {
+				endIdx = startIdx + len(markerStart) + rel
+			}
+		}
+		if startIdx != -1 && endIdx != -1 {
+			newContent = content[:startIdx] + block + content[endIdx+len(markerEnd):]
 		} else {
+			content = strings.ReplaceAll(content, markerStart, "")
+			content = strings.ReplaceAll(content, markerEnd, "")
 			if len(content) > 0 && !strings.HasSuffix(content, "\n") {
 				newContent = content + "\n" + block
 			} else {

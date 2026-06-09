@@ -41,7 +41,7 @@ func newStartCmd() *cobra.Command {
 			for _, f := range res.FilesWritten {
 				fmt.Fprintf(out, "  %s\n", f)
 			}
-			fmt.Fprintf(out, "run: tddmaster spec %s next\n", slug)
+			fmt.Fprintf(out, "run: tddmaster next %s\n", slug)
 			return nil
 		},
 	}

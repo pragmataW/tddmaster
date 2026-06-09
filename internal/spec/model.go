@@ -11,7 +11,13 @@ type TraceEntry struct {
 
 type Traceability struct {
 	Entries  map[string][]TraceEntry `json:"entries"`
-	Coverage map[string]int          `json:"coverage,omitempty"`
+	Coverage map[string]float64      `json:"coverage,omitempty"`
+}
+
+type RefactorNote struct {
+	File       string `json:"file"`
+	Suggestion string `json:"suggestion"`
+	Rationale  string `json:"rationale"`
 }
 
 const (
@@ -54,15 +60,17 @@ type ExecState struct {
 	TaskPlans       map[string]TaskPlan `json:"taskPlans,omitempty"`
 	LastFailedACs     []string          `json:"lastFailedACs,omitempty"`
 	LastUncoveredEC   []string          `json:"lastUncoveredEC,omitempty"`
-	LastCoverage      map[string]int    `json:"lastCoverage,omitempty"`
+	LastCoverage      map[string]float64 `json:"lastCoverage,omitempty"`
 	LastModifiedFiles []string          `json:"lastModifiedFiles,omitempty"`
 	CoverageUnreported bool             `json:"coverageUnreported,omitempty"`
+	RefactorNotes     []RefactorNote    `json:"refactorNotes,omitempty"`
 }
 
 type Progress struct {
 	Spec      string     `json:"spec"`
 	Status    string     `json:"status"`
 	Tasks     []Task     `json:"tasks"`
+	TaskSeq   int        `json:"taskSeq,omitempty"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	Execution *ExecState `json:"execution,omitempty"`
 }

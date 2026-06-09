@@ -67,7 +67,7 @@ func TestTraceability_IsStruct(t *testing.T) {
 				{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]int{
+		Coverage: map[string]float64{
 			"internal/spec/model.go": 80,
 		},
 	}
@@ -91,7 +91,7 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 				{FunctionName: "TestGamma", TaskID: "task-2", AC: []string{"ac1"}, EC: []string{"EC-2"}},
 			},
 		},
-		Coverage: map[string]int{
+		Coverage: map[string]float64{
 			"internal/spec/model.go": 90,
 		},
 	}
@@ -146,7 +146,7 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 			continue
 		}
 		if gotV != v {
-			t.Errorf("Coverage[%q]: got %d, want %d", k, gotV, v)
+			t.Errorf("Coverage[%q]: got %v, want %v", k, gotV, v)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 func TestTraceability_JSONTags(t *testing.T) {
 	tr := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]int{"src/main.go": 50},
+		Coverage: map[string]float64{"src/main.go": 50},
 	}
 
 	data, err := json.Marshal(tr)
@@ -191,7 +191,7 @@ func TestTraceability_CoverageOmittedWhenEmpty(t *testing.T) {
 func TestTraceability_EmptyEntries(t *testing.T) {
 	tr := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]int{},
+		Coverage: map[string]float64{},
 	}
 
 	data, err := json.Marshal(tr)

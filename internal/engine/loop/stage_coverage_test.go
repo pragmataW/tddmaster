@@ -29,7 +29,7 @@ func TestFileCoverageEntry_JSONTags(t *testing.T) {
 		t.Errorf("File: got %q, want %q", got.File, "internal/foo/bar.go")
 	}
 	if got.Coverage != 85 {
-		t.Errorf("Coverage: got %d, want 85", got.Coverage)
+		t.Errorf("Coverage: got %v, want 85", got.Coverage)
 	}
 }
 
@@ -216,10 +216,10 @@ func TestCoverageMap_BuildsCorrectMap(t *testing.T) {
 		t.Fatalf("coverageMap: got %d entries, want 2", len(got))
 	}
 	if got["a.go"] != 90 {
-		t.Errorf("coverageMap: a.go = %d, want 90", got["a.go"])
+		t.Errorf("coverageMap: a.go = %v, want 90", got["a.go"])
 	}
 	if got["b.go"] != 75 {
-		t.Errorf("coverageMap: b.go = %d, want 75", got["b.go"])
+		t.Errorf("coverageMap: b.go = %v, want 75", got["b.go"])
 	}
 }
 

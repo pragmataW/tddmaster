@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-const goldenExecRed = "TDD RED phase active. Spawn the `test-writer` sub-agent. " +
+const goldenExecRed = "TDD RED phase active. Spawn the `tddmaster-test-writer` sub-agent. " +
 	"It writes FAILING tests only — no implementation, no test execution. " +
 	"Pass `edgeCases` from this `next` output verbatim. " +
 	"The test-writer MUST include a `traceability` field in its report: one entry per test function, each with `testFilePath`, `functionName`, `taskId`, and the `ac`/`ec` arrays it covers. Reference each acceptance criterion and edge case by its canonical id `AC-<n>` / `EC-<n>`, where <n> is the 1-based position of that item in the task's acceptance-criteria / edge-case list. This field is REQUIRED on RED submit — reports missing `traceability` are invalid. " +
-	"After the test-writer reports, run `tddmaster spec <name> next` again."
+	"After the test-writer reports, run `tddmaster next <slug>` again."
 
 const goldenExecGreen = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
 	"It writes a clean, working implementation that makes the existing failing tests pass. " +

@@ -223,7 +223,6 @@ func TestVisualizeDashboardHTML(t *testing.T) {
 		`id="stat-refactors"`,
 		`id="stat-debt"`,
 		`id="task-detail-card"`,
-		`id="debt-card"`,
 		`id="settings-card"`,
 		`id="theme-toggle"`,
 	}

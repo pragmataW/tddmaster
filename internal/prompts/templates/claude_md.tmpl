@@ -52,19 +52,6 @@ Drive entirely off the JSON:
 - Execute tddmaster commands IMMEDIATELY — the JSON output has all context needed.
 - Display `roadmap` before content. Display `gate` prominently.
 
-### Task recovery
-
-If a task was marked completed by mistake (wrong `completed: [...]` in status report,
-or user changed their mind):
-
-    {{.Command}} undo                         # reset the most recently completed task
-    {{.Command}} spec <name> task undo <id>   # reset a specific task by ID
-
-`undo` only flips the task flag — it does NOT rewind `next` iteration or TDD phase.
-If you accidentally ended the whole spec, use `{{.Command}} spec <name> reopen --resume-execution`.
-Plain `reopen` returns to DISCOVERY for revision; `--resume-execution` restores EXECUTING/BLOCKED progress.
-`done` and `cancel` act on the ENTIRE spec, not a single task — never call them to "undo a task".
-
 ### Important task gate (runtime-delegated)
 
 When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`, the engine has detected an important task without an approved plan. The JSON will contain an `importantTaskGate` block. Required behavior:
@@ -77,16 +64,14 @@ When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`
 
 Once approved, `touchedFiles` in the plan is binding — if work needs a file outside the list, STOP and report `blocked`.
 
-Toggle:
-
-    {{.Command}} config important-gate on|off|status
+The gate is configured per spec in the spec-settings step (`importantTaskGateEnabled`).
 
 ### TDD protocol (runtime-delegated)
 
 When TDD is enabled the engine emits stage-specific `delegateAgent` values in the `instruct` action. Drive off the JSON — do not hardcode the flow:
 
 - `delegateAgent: "tddmaster-test-writer"` and stage `red` — write failing tests ONLY; no implementation code.
-- `delegateAgent: "tddmaster-executor"` and stage `green` — implement clean, working code that makes failing tests pass. After the executor finishes, spawn `tddmaster-verifier` (phase=green) BEFORE submitting to `next`. Submit ONLY the verifier's report to `next`; never submit the executor's self-report directly.
+- `delegateAgent: "tddmaster-executor"` and stage `green` — implement clean, working code that makes failing tests pass. Submit the executor's status report to `next`. Do NOT spawn the verifier yourself — the engine dispatches `tddmaster-verifier` as a separate stage on the next `next` call.
 - `delegateAgent: "tddmaster-executor"` and stage `refactor` — apply every refactor note VERBATIM; behavior must not change and all tests must continue to pass.
 - `delegateAgent: "tddmaster-verifier"` — verify the work; submit a pass/fail report.
 
@@ -116,7 +101,7 @@ Note: `refine` is only valid in the refinement phase.
 
 ### Spec settings (runs before discovery)
 
-The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and three toggles in `interactiveOptions` (TDD, skip verifier, important task gate). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL three as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false}'`. A selected toggle means `true`; unselected means `false`. After submit, discovery begins automatically.
+The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and four settings in `interactiveOptions` (TDD, skip verifier, important task gate, min test coverage). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL four as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false,"minTestCoverage":80}'`. A selected toggle means `true`; unselected means `false`. `minTestCoverage` is a number (default 80; set to 0 to disable). After submit, discovery begins automatically.
 
 ### Discovery flow
 
@@ -129,7 +114,6 @@ Ask EVERY discovery question via the AskUserQuestion tool — never as plain pro
 - Use AskUserQuestion for `interactiveOptions`. Use `commandMap` to resolve selections.
 - Listen-first step (mode not yet chosen, no user context): ask the single open-ended context question via AskUserQuestion with a free-form prompt. Do NOT fabricate options.
 - Premise challenge step: ask each premise via a separate AskUserQuestion call (agree / disagree / revise with free-form notes). Aggregate the answers client-side, then submit the final JSON payload.
-- On recurring patterns or corrections: ask 'Permanent rule?' → `{{.Command}} rule add "description"`.
 
 ### Stop / resume
 

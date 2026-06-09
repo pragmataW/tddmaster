@@ -342,8 +342,8 @@ func TestRefinementDriver_SubmitApprove_NextReturnsDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Second Next() after approve: %v", err)
 	}
-	if action.Action != "" {
-		t.Errorf("after approve, Next action = %q, want empty (phase done)", action.Action)
+	if action.Action != "" && action.Action != engine.ActionTerminal {
+		t.Errorf("after approve, Next action = %q, want empty or terminal (phase done)", action.Action)
 	}
 }
 

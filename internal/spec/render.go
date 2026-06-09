@@ -21,14 +21,27 @@ var specialKeys = map[string]bool{
 }
 
 var hiddenKeys = map[string]bool{
-	"mode":            true,
-	"listen_context":  true,
-	"self_review":     true,
-	"synthesis":       true,
-	"tasks_generated": true,
+	"mode":                true,
+	"listen_context":      true,
+	"self_review":         true,
+	"synthesis":           true,
+	"tasks_generated":     true,
+	"refinement_approved": true,
+	"spec_settings":       true,
 }
 
 var edgeCaseSplit = regexp.MustCompile(`\(\d+\)\s*`)
+
+func prettifyKey(key string) string {
+	words := strings.Split(key, "_")
+	for i, w := range words {
+		if w == "" {
+			continue
+		}
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	return strings.Join(words, " ")
+}
 
 func joinAnswers(answers []Answer) string {
 	parts := make([]string, len(answers))
@@ -149,7 +162,7 @@ func RenderSpecMd(slug string, st State, pr Progress) string {
 	} else {
 		for _, k := range nonSpecialKeys {
 			b.WriteString("### ")
-			b.WriteString(k)
+			b.WriteString(prettifyKey(k))
 			b.WriteString("\n")
 			b.WriteString(joinAnswers(st.Answers[k]))
 			b.WriteString("\n\n")

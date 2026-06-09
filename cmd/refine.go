@@ -17,6 +17,9 @@ func newRefineCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
+			if !spec.ValidSlug(slug) {
+				return fmt.Errorf("invalid slug %q", slug)
+			}
 			root, err := resolveRoot(cmd)
 			if err != nil {
 				return fmt.Errorf("resolve root: %w", err)
@@ -46,17 +49,34 @@ func newRefineCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load progress: %w", err)
 			}
-			newTasks, err := spec.ApplyRefinement(progress.Tasks, payload)
+			settings, err := spec.LoadSettings(root, slug)
+			if err != nil {
+				return fmt.Errorf("load settings: %w", err)
+			}
+			newTasks, newSeq, err := spec.ApplyRefinement(progress.Tasks, payload, settings.TDDEnabled, progress.TaskSeq)
 			if err != nil {
 				return err
 			}
+			oldTasks := progress.Tasks
+			oldSeq := progress.TaskSeq
 			progress.Tasks = newTasks
+			progress.TaskSeq = newSeq
 			if err := spec.SaveProgress(root, slug, progress); err != nil {
 				return fmt.Errorf("save progress: %w", err)
 			}
 			content := spec.RenderSpecMd(slug, state, progress)
 			if err := spec.SaveSpecMd(root, slug, content); err != nil {
-				return fmt.Errorf("save spec md: %w", err)
+				progress.Tasks = oldTasks
+				progress.TaskSeq = oldSeq
+				if rbErr := spec.SaveProgress(root, slug, progress); rbErr != nil {
+					return fmt.Errorf("save spec md: %v (progress rollback also failed: %w)", err, rbErr)
+				}
+				return fmt.Errorf("save spec md (progress rolled back): %w", err)
+			}
+			if len(payload.Remove) > 0 {
+				if err := pruneTraceability(root, slug, payload.Remove); err != nil {
+					return fmt.Errorf("prune traceability: %w", err)
+				}
 			}
 			out := struct {
 				Tasks []spec.Task `json:"tasks"`
@@ -76,4 +96,37 @@ func newRefineCmd() *cobra.Command {
 	addRootFlag(cmd)
 	cmd.Flags().String("answer", "", "Refinement payload (JSON)")
 	return cmd
+}
+
+func pruneTraceability(root, slug string, removed []string) error {
+	removedSet := make(map[string]bool, len(removed))
+	for _, id := range removed {
+		removedSet[id] = true
+	}
+	tr, err := spec.LoadTraceability(root, slug)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for file, entries := range tr.Entries {
+		kept := entries[:0:0]
+		for _, e := range entries {
+			if !removedSet[e.TaskID] {
+				kept = append(kept, e)
+			}
+		}
+		if len(kept) == len(entries) {
+			continue
+		}
+		changed = true
+		if len(kept) == 0 {
+			delete(tr.Entries, file)
+		} else {
+			tr.Entries[file] = kept
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return spec.SaveTraceability(root, slug, tr)
 }

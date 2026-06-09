@@ -42,6 +42,25 @@ func appendUserContext(b *strings.Builder, userContext string) {
 	}
 }
 
+func appendRefactorNotes(b *strings.Builder, notes []spec.RefactorNote) {
+	if len(notes) == 0 {
+		return
+	}
+	b.WriteString("\nRefactor notes to apply verbatim:\n")
+	for _, n := range notes {
+		b.WriteString("- [")
+		b.WriteString(n.File)
+		b.WriteString("] ")
+		b.WriteString(n.Suggestion)
+		if n.Rationale != "" {
+			b.WriteString(" (")
+			b.WriteString(n.Rationale)
+			b.WriteString(")")
+		}
+		b.WriteString("\n")
+	}
+}
+
 func appendApprovedPlan(b *strings.Builder, state spec.ExecState, taskID string) {
 	plan, ok := state.TaskPlans[taskID]
 	if !ok {
@@ -174,7 +193,7 @@ func (redStageImpl) Prompt(ctx ExecCtx) engine.Action {
 }
 
 func (redStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
-	if len(report.TestsWritten) == 0 && !report.Passed {
+	if len(report.TestsWritten) == 0 {
 		return ctx, nil
 	}
 	ctx.State.TDDCycle = cycleGreen
@@ -210,6 +229,9 @@ func (greenStageImpl) Prompt(ctx ExecCtx) engine.Action {
 }
 
 func (greenStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
+	if len(report.Blocked) > 0 {
+		return ctx, nil
+	}
 	ctx.State.Implemented = true
 	if len(report.FilesModified) > 0 {
 		ctx.State.LastModifiedFiles = report.FilesModified
@@ -230,6 +252,7 @@ func (refactorStageImpl) Applies(ctx ExecCtx) bool {
 func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	var b strings.Builder
 	if !ctx.State.RefactorApplied {
+		appendFailedACs(&b, ctx.State)
 		applyKey := promptregistry.KeyExecRefactorApply
 		applyExample := promptregistry.ReportExampleRefactorApply
 		if ctx.Settings.SkipVerifierEnabled {
@@ -237,6 +260,7 @@ func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 			applyExample = promptregistry.ReportExampleRefactorApplySkip
 		}
 		b.WriteString(instructionFor(applyKey))
+		appendRefactorNotes(&b, ctx.State.RefactorNotes)
 		appendACsAndECs(&b, ctx.Task)
 		appendUserContext(&b, ctx.UserContext)
 		return engine.Action{
@@ -276,6 +300,11 @@ func (refactorStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, err
 	}
 	if newSt.TDDCycle == cycleRefactor {
 		newSt.RefactorApplied = false
+		if report.EffectivePassed() {
+			newSt.RefactorNotes = report.RefactorNotes
+		}
+	} else {
+		newSt.RefactorNotes = nil
 	}
 	ctx.State = newSt
 	return ctx, nil
@@ -372,7 +401,6 @@ func (verifierStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, err
 	if ctx.State.TDDCycle == cycleGreen && coverageEnforced(ctx.Settings) {
 		if len(report.FileCoverage) == 0 {
 			ctx.State.CoverageUnreported = true
-			ctx.State.Implemented = false
 			return ctx, nil
 		}
 		ctx.State.CoverageUnreported = false
@@ -388,6 +416,11 @@ func (verifierStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, err
 	}
 	newSt, _ := advanceCycle(ctx.State, true, report.RefactorNotesPresent(), ctx.MaxRefactorRounds)
 	newSt.Implemented = false
+	if newSt.TDDCycle == cycleRefactor {
+		newSt.RefactorNotes = report.RefactorNotes
+	} else {
+		newSt.RefactorNotes = nil
+	}
 	ctx.State = newSt
 	return ctx, nil
 }

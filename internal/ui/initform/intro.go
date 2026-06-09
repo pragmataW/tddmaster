@@ -1,6 +1,8 @@
 package initform
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -91,6 +93,8 @@ func (m introModel) View() string {
 
 func PlayIntro() {
 	if p := tea.NewProgram(introModel{}); p != nil {
-		_, _ = p.Run()
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "intro animation skipped: %v\n", err)
+		}
 	}
 }

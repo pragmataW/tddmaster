@@ -414,7 +414,7 @@ func TestRedStage_OnReport_AdvancesToGreen(t *testing.T) {
 	task := makeTask("t-1", true, false)
 	ctx := makeExecCtx(settings, task, makeExecState("red"), 0, 3)
 
-	report := StageReport{Passed: true}
+	report := StageReport{Passed: true, TestsWritten: []string{"t1_test.go"}}
 	newCtx, err := redStage().OnReport(ctx, report)
 
 	if err != nil {

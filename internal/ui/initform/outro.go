@@ -92,7 +92,7 @@ func (m outroModel) View() string {
 
 	if m.shown >= len(m.lines) && m.command != "" {
 		next := lipgloss.NewStyle().Foreground(lipgloss.Color("#2dd4bf")).Bold(true).
-			Render(fmt.Sprintf("→ next: %s spec new \"description\"", m.command))
+			Render(fmt.Sprintf("→ next: %s start <slug>", m.command))
 		body += "\n  " + next + "\n"
 	}
 
@@ -112,6 +112,8 @@ func PlayOutro(res scaffold.Result, command string) {
 		return
 	}
 	if p := tea.NewProgram(m); p != nil {
-		_, _ = p.Run()
+		if _, err := p.Run(); err != nil {
+			fmt.Println(RenderSummary(res, command))
+		}
 	}
 }

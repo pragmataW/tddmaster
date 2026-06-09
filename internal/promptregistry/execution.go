@@ -1,10 +1,10 @@
 package promptregistry
 
-const execRedText = "TDD RED phase active. Spawn the `test-writer` sub-agent. " +
+const execRedText = "TDD RED phase active. Spawn the `tddmaster-test-writer` sub-agent. " +
 	"It writes FAILING tests only — no implementation, no test execution. " +
 	"Pass `edgeCases` from this `next` output verbatim. " +
 	"The test-writer MUST include a `traceability` field in its report: one entry per test function, each with `testFilePath`, `functionName`, `taskId`, and the `ac`/`ec` arrays it covers. Reference each acceptance criterion and edge case by its canonical id `AC-<n>` / `EC-<n>`, where <n> is the 1-based position of that item in the task's acceptance-criteria / edge-case list. This field is REQUIRED on RED submit — reports missing `traceability` are invalid. " +
-	"After the test-writer reports, run `tddmaster spec <name> next` again."
+	"After the test-writer reports, run `tddmaster next <slug>` again."
 
 const execGreenText = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
 	"It writes a clean, working implementation that makes the existing failing tests pass. " +
@@ -41,7 +41,9 @@ const execVerifierText = "Independent verification: the tddmaster-verifier sub-a
 
 const execGateText = "Important task gate: this task requires a plan before execution. " +
 	"Spawn `tddmaster-planner` (read-only) to produce an approved plan with `touchedFiles`, `approach`, `assumptions`, and `designPatterns`. " +
-	"Present the plan to the user via AskUserQuestion (accept / revise / reject). " +
+	"FIRST, BEFORE calling any question tool, present the FULL plan to the user as a long plain-text message: the complete `approach` narrative, every `touchedFiles` entry with the reason it is touched, each `designPattern` with how it is applied, each `bestPractice`, and every `assumption`. " +
+	"Do NOT put the plan content inside the question tool — the question tool call must contain ONLY the accept / revise / reject choice. A one-line summary instead of the full presentation is a protocol violation. " +
+	"ONLY AFTER the full plan text has been presented, call AskUserQuestion with accept / revise / reject. " +
 	"On accept, submit the plan to `next`. The approved plan is binding — if work requires a file outside `touchedFiles`, stop and report."
 
 const RestartRecommendedText = "Iteration limit reached. Start a new conversation to continue, or submit `next <slug> --answer=\"continue\"` to reset the iteration counter and resume."

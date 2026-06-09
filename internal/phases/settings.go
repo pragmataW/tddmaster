@@ -28,6 +28,7 @@ func settingsPrompt() engine.Action {
 			{Label: "TDD (Red-Green-Refactor)", Description: "Enforce failing-test-first cycles per task. Default: ON."},
 			{Label: "Skip verifier", Description: "Skip the independent verifier sub-agent after the green stage. Default: OFF."},
 			{Label: "Important task gate", Description: "Pause tasks flagged important for a plan-first review before execution. Default: OFF."},
+			{Label: "Min test coverage", Description: "Coverage gate for the TDD green-phase verifier. Ask the user for a percentage (0-100) and submit it as the number minTestCoverage; 0 disables. Default: 80."},
 		},
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,

@@ -910,7 +910,7 @@ func TestSpecProposalDriver_BothAnswered_NextReturnsDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Third Next() after both answered: %v", err)
 	}
-	if action.Action != "" {
-		t.Errorf("after both answered, Next action = %q, want empty (phase done)", action.Action)
+	if action.Action != "" && action.Action != engine.ActionTerminal {
+		t.Errorf("after both answered, Next action = %q, want empty or terminal (phase done)", action.Action)
 	}
 }

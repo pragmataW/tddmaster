@@ -168,7 +168,8 @@ func TestLoopDriver_Edge14_TDDTask_RedToGreenOnPassingReport(t *testing.T) {
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
-		Passed: true,
+		Passed:       true,
+		TestsWritten: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
 			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
 		},
@@ -421,7 +422,8 @@ func TestLoopDriver_Persistence_SubmitPersistsExecutionAndTaskDone(t *testing.T)
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
-		Passed: true,
+		Passed:       true,
+		TestsWritten: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
 			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
 		},
@@ -481,7 +483,7 @@ func TestLoopDriver_Edge3_GreenPassWithFailedACs_TaskNotDone(t *testing.T) {
 	tasks := []spec.Task{
 		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
 	}
-	execution := &spec.ExecState{TDDCycle: cycleGreen}
+	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(reportWithCoverage(t, true, []string{"ac-1"}, nil))
@@ -513,7 +515,7 @@ func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_TaskNotDone(t *testing.T) {
 	tasks := []spec.Task{
 		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
 	}
-	execution := &spec.ExecState{TDDCycle: cycleGreen}
+	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(reportWithCoverage(t, true, nil, []string{"ec-2"}))

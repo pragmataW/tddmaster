@@ -50,8 +50,8 @@ func TestSaveLoadState_RoundTrip(t *testing.T) {
 	if !loaded.CreatedAt.Equal(original.CreatedAt) {
 		t.Errorf("CreatedAt mismatch: got %v, want %v", loaded.CreatedAt, original.CreatedAt)
 	}
-	if !loaded.UpdatedAt.Equal(original.UpdatedAt) {
-		t.Errorf("UpdatedAt mismatch: got %v, want %v", loaded.UpdatedAt, original.UpdatedAt)
+	if loaded.UpdatedAt.Before(original.UpdatedAt) {
+		t.Errorf("UpdatedAt should be refreshed on save: got %v, want >= %v", loaded.UpdatedAt, original.UpdatedAt)
 	}
 }
 
@@ -119,8 +119,8 @@ func TestSaveLoadProgress_RoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(loaded.Tasks, original.Tasks) {
 		t.Errorf("Tasks mismatch: got %v, want %v", loaded.Tasks, original.Tasks)
 	}
-	if !loaded.UpdatedAt.Equal(original.UpdatedAt) {
-		t.Errorf("UpdatedAt mismatch: got %v, want %v", loaded.UpdatedAt, original.UpdatedAt)
+	if loaded.UpdatedAt.Before(original.UpdatedAt) {
+		t.Errorf("UpdatedAt should be refreshed on save: got %v, want >= %v", loaded.UpdatedAt, original.UpdatedAt)
 	}
 }
 

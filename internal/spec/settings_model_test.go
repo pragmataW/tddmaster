@@ -121,7 +121,7 @@ func TestExecState_LastModifiedFiles_JSONRoundTrip(t *testing.T) {
 func TestExecState_LastCoverage_JSONRoundTrip(t *testing.T) {
 	es := ExecState{
 		Iteration:    1,
-		LastCoverage: map[string]int{"task-1": 92, "task-2": 85},
+		LastCoverage: map[string]float64{"task-1": 92, "task-2": 85},
 	}
 
 	data, err := json.Marshal(es)

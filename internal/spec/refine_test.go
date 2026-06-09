@@ -13,7 +13,7 @@ func TestApplyRefinement_EmptyPayload_ReturnsUnchanged(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, Done: false, TDDEnabled: true, Important: false},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{})
+	result, _, err := ApplyRefinement(tasks, RefinePayload{}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -27,7 +27,7 @@ func TestApplyRefinement_Remove_DropsMatchedTask(t *testing.T) {
 		{ID: "task-1", Title: "Alpha"},
 		{ID: "task-2", Title: "Beta"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-1"}})
+	result, _, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-1"}}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -43,7 +43,7 @@ func TestApplyRefinement_Remove_UnknownID_ReturnsError(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Alpha"},
 	}
-	_, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-99"}})
+	_, _, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-99"}}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for unknown remove id")
 	}
@@ -53,9 +53,9 @@ func TestApplyRefinement_Update_SetsTitle(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Old Title"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Title: strPtr("New Title")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -68,9 +68,9 @@ func TestApplyRefinement_Update_NilTitle_KeepsExisting(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Keep Me"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Title: nil}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -83,9 +83,9 @@ func TestApplyRefinement_Update_ReplacesACList(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", AC: []string{"old-ac"}},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {AC: []string{"new-ac1", "new-ac2"}}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -98,9 +98,9 @@ func TestApplyRefinement_Update_NilAC_KeepsExisting(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", AC: []string{"keep-this"}},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -113,9 +113,9 @@ func TestApplyRefinement_Update_TDDEnabled_FalsePtr_FlipsTrue(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", TDDEnabled: true},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {TDDEnabled: boolPtr(false)}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -128,9 +128,9 @@ func TestApplyRefinement_Update_TDDEnabled_NilPtr_KeepsExisting(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", TDDEnabled: true},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {TDDEnabled: nil}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -143,9 +143,9 @@ func TestApplyRefinement_Update_Important_FalsePtr_FlipsTrue(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", Important: true},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Important: boolPtr(false)}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -158,9 +158,9 @@ func TestApplyRefinement_Update_Important_NilPtr_KeepsExisting(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", Important: true},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Important: nil}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -173,9 +173,9 @@ func TestApplyRefinement_Update_UnknownID_ReturnsError(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T"},
 	}
-	_, err := ApplyRefinement(tasks, RefinePayload{
+	_, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-99": {Title: strPtr("X")}},
-	})
+	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for unknown update id")
 	}
@@ -185,9 +185,9 @@ func TestApplyRefinement_Update_DoneFlag_NeverModified(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Old", Done: true},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Title: strPtr("New")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -197,9 +197,9 @@ func TestApplyRefinement_Update_DoneFlag_NeverModified(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_AutoID_StartsAtTaskOne_WhenEmpty(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("New Task")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -216,9 +216,9 @@ func TestApplyRefinement_Add_AutoID_MaxPlusOne(t *testing.T) {
 		{ID: "task-1", Title: "A"},
 		{ID: "task-2", Title: "B"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("C")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -232,9 +232,9 @@ func TestApplyRefinement_Add_AutoID_IgnoresNonNumericIDs(t *testing.T) {
 		{ID: "garbage-id", Title: "A"},
 		{ID: "task-2", Title: "B"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("C")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -247,9 +247,9 @@ func TestApplyRefinement_Add_AutoID_OnlyNonNumericIDs_FallsBackToTaskOne(t *test
 	tasks := []Task{
 		{ID: "garbage-id", Title: "A"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("New")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -262,12 +262,12 @@ func TestApplyRefinement_Add_MultipleAdds_IncrementSequentially(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "Existing"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{
 			{Title: strPtr("Second")},
 			{Title: strPtr("Third")},
 		},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -280,27 +280,27 @@ func TestApplyRefinement_Add_MultipleAdds_IncrementSequentially(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_NilTitle_ReturnsError(t *testing.T) {
-	_, err := ApplyRefinement([]Task{}, RefinePayload{
+	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: nil}},
-	})
+	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for nil title in add op")
 	}
 }
 
 func TestApplyRefinement_Add_EmptyTitle_ReturnsError(t *testing.T) {
-	_, err := ApplyRefinement([]Task{}, RefinePayload{
+	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("")}},
-	})
+	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for empty title in add op")
 	}
 }
 
 func TestApplyRefinement_Add_NewTaskDoneIsFalse(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("T")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -310,9 +310,9 @@ func TestApplyRefinement_Add_NewTaskDoneIsFalse(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_TDDEnabled_DefaultsFalse(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("T")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -322,9 +322,9 @@ func TestApplyRefinement_Add_TDDEnabled_DefaultsFalse(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_TDDEnabled_TrueWhenSet(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("T"), TDDEnabled: boolPtr(true)}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -334,9 +334,9 @@ func TestApplyRefinement_Add_TDDEnabled_TrueWhenSet(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_Important_DefaultsFalse(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("T")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -346,9 +346,9 @@ func TestApplyRefinement_Add_Important_DefaultsFalse(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_AC_EmptyWhenNotSet(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("T")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -357,24 +357,24 @@ func TestApplyRefinement_Add_AC_EmptyWhenNotSet(t *testing.T) {
 	}
 }
 
-func TestApplyRefinement_Order_RemoveThenAdd_IDReflectsPostRemoveMax(t *testing.T) {
+func TestApplyRefinement_Order_RemoveThenAdd_DoesNotReuseRemovedID(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "A"},
 		{ID: "task-2", Title: "B"},
 		{ID: "task-3", Title: "C"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Remove: []string{"task-3"},
 		Add:    []RefineOp{{Title: strPtr("D")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
 	if len(result) != 3 {
 		t.Fatalf("got len %d, want 3", len(result))
 	}
-	if result[2].ID != "task-3" {
-		t.Fatalf("got id %q, want task-3 (max after remove is task-2, so new = task-3)", result[2].ID)
+	if result[2].ID != "task-4" {
+		t.Fatalf("got id %q, want task-4 (removed task-3 must not be reused)", result[2].ID)
 	}
 }
 
@@ -383,11 +383,11 @@ func TestApplyRefinement_Order_RemoveUpdateAdd_Sequence(t *testing.T) {
 		{ID: "task-1", Title: "A"},
 		{ID: "task-2", Title: "B"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Remove: []string{"task-1"},
 		Update: map[string]RefineOp{"task-2": {Title: strPtr("B-updated")}},
 		Add:    []RefineOp{{Title: strPtr("C")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -416,9 +416,9 @@ func TestApplyRefinement_Update_SetsEdgeCases(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", AC: []string{"ac1"}},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {EdgeCases: []string{"ec-x"}}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -431,9 +431,9 @@ func TestApplyRefinement_Update_NilEdgeCases_Preserves(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "T", AC: []string{"ac1"}, EdgeCases: []string{"old"}},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Title: strPtr("T2")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -443,9 +443,9 @@ func TestApplyRefinement_Update_NilEdgeCases_Preserves(t *testing.T) {
 }
 
 func TestApplyRefinement_Add_WithEdgeCases(t *testing.T) {
-	result, err := ApplyRefinement([]Task{}, RefinePayload{
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("New"), AC: []string{"a"}, EdgeCases: []string{"ec-1"}}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
@@ -462,14 +462,83 @@ func TestApplyRefinement_ReturnedSlice_OrderIsOriginalThenAdded(t *testing.T) {
 		{ID: "task-1", Title: "A"},
 		{ID: "task-2", Title: "B"},
 	}
-	result, err := ApplyRefinement(tasks, RefinePayload{
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{{Title: strPtr("C")}},
-	})
+	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
 	}
 	if result[0].ID != "task-1" || result[1].ID != "task-2" || result[2].ID != "task-3" {
 		t.Fatalf("got order %v/%v/%v, want task-1/task-2/task-3",
 			result[0].ID, result[1].ID, result[2].ID)
+	}
+}
+
+func TestApplyRefinement_Add_TDDEnabled_DefaultsToTDDDefault(t *testing.T) {
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("T")}},
+	}, true, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if result[0].TDDEnabled != true {
+		t.Fatal("got TDDEnabled false, want true when tddDefault is true and op leaves it unset")
+	}
+}
+
+func TestApplyRefinement_Add_TDDEnabled_ExplicitFalse_OverridesDefault(t *testing.T) {
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("T"), TDDEnabled: boolPtr(false)}},
+	}, true, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if result[0].TDDEnabled != false {
+		t.Fatal("got TDDEnabled true, want false when op explicitly disables it")
+	}
+}
+
+func TestApplyRefinement_Seq_PreventsIDReuseAcrossCalls(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B"},
+		{ID: "task-3", Title: "C"},
+	}
+	afterRemove, seq, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-3"}}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if seq != 3 {
+		t.Fatalf("got seq %d, want 3 — removed IDs must stay reserved", seq)
+	}
+	result, seq2, err := ApplyRefinement(afterRemove, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("D")}},
+	}, false, seq)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if result[len(result)-1].ID != "task-4" {
+		t.Fatalf("got id %q, want task-4 — removed task-3 must not be reused across calls", result[len(result)-1].ID)
+	}
+	if seq2 != 4 {
+		t.Fatalf("got seq %d, want 4", seq2)
+	}
+}
+
+func TestApplyRefinement_Seq_TakesMaxOfSeqAndTaskIDs(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-5", Title: "E"},
+	}
+	result, seq, err := ApplyRefinement(tasks, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("F")}},
+	}, false, 2)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if result[1].ID != "task-6" {
+		t.Fatalf("got id %q, want task-6", result[1].ID)
+	}
+	if seq != 6 {
+		t.Fatalf("got seq %d, want 6", seq)
 	}
 }

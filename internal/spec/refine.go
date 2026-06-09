@@ -20,9 +20,24 @@ type RefinePayload struct {
 	Update map[string]RefineOp `json:"update,omitempty"`
 }
 
-func ApplyRefinement(tasks []Task, p RefinePayload) ([]Task, error) {
+func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([]Task, int, error) {
 	result := make([]Task, len(tasks))
 	copy(result, tasks)
+
+	maxN := seq
+	for _, t := range tasks {
+		suffix := strings.TrimPrefix(t.ID, "task-")
+		if suffix == t.ID {
+			continue
+		}
+		n, err := strconv.Atoi(suffix)
+		if err != nil {
+			continue
+		}
+		if n > maxN {
+			maxN = n
+		}
+	}
 
 	for _, id := range p.Remove {
 		idx := -1
@@ -33,7 +48,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload) ([]Task, error) {
 			}
 		}
 		if idx == -1 {
-			return nil, fmt.Errorf("unknown task id: %s", id)
+			return nil, seq, fmt.Errorf("unknown task id: %s", id)
 		}
 		result = append(result[:idx], result[idx+1:]...)
 	}
@@ -47,7 +62,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload) ([]Task, error) {
 			}
 		}
 		if idx == -1 {
-			return nil, fmt.Errorf("unknown task id: %s", id)
+			return nil, seq, fmt.Errorf("unknown task id: %s", id)
 		}
 		if op.Title != nil {
 			result[idx].Title = *op.Title
@@ -66,31 +81,17 @@ func ApplyRefinement(tasks []Task, p RefinePayload) ([]Task, error) {
 		}
 	}
 
-	maxN := 0
-	for _, t := range result {
-		suffix := strings.TrimPrefix(t.ID, "task-")
-		if suffix == t.ID {
-			continue
-		}
-		n, err := strconv.Atoi(suffix)
-		if err != nil {
-			continue
-		}
-		if n > maxN {
-			maxN = n
-		}
-	}
-
 	for _, op := range p.Add {
 		if op.Title == nil || *op.Title == "" {
-			return nil, fmt.Errorf("add op requires a non-empty title")
+			return nil, seq, fmt.Errorf("add op requires a non-empty title")
 		}
 		maxN++
 		newTask := Task{
-			ID:    fmt.Sprintf("task-%d", maxN),
-			Title: *op.Title,
-			AC:    op.AC,
-			Done:  false,
+			ID:         fmt.Sprintf("task-%d", maxN),
+			Title:      *op.Title,
+			AC:         op.AC,
+			Done:       false,
+			TDDEnabled: tddDefault,
 		}
 		if op.TDDEnabled != nil {
 			newTask.TDDEnabled = *op.TDDEnabled
@@ -102,8 +103,11 @@ func ApplyRefinement(tasks []Task, p RefinePayload) ([]Task, error) {
 		if newTask.AC == nil {
 			newTask.AC = []string{}
 		}
+		if newTask.EdgeCases == nil {
+			newTask.EdgeCases = []string{}
+		}
 		result = append(result, newTask)
 	}
 
-	return result, nil
+	return result, maxN, nil
 }

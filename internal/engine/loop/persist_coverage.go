@@ -8,7 +8,7 @@ func persistCoverage(c *engine.Context, report StageReport) error {
 		return err
 	}
 	if tr.Coverage == nil {
-		tr.Coverage = map[string]int{}
+		tr.Coverage = map[string]float64{}
 	}
 	for _, entry := range report.FileCoverage {
 		tr.Coverage[entry.File] = entry.Coverage

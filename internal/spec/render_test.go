@@ -71,9 +71,9 @@ func TestRenderSpecMd_GoldenFullSpec(t *testing.T) {
 		"## Status\n" +
 		"executing\n\n" +
 		"## Discovery Answers\n" +
-		"### approach\n" +
+		"### Approach\n" +
 		"Use layered architecture.\n\n" +
-		"### context\n" +
+		"### Context\n" +
 		"Background context here.\n\n" +
 		"## Decisions\n" +
 		"We assume REST over gRPC.\n\n" +
@@ -117,24 +117,26 @@ func TestRenderSpecMd_HiddenKeysOmitted(t *testing.T) {
 		Slug:    "s",
 		Phase:   PhaseInitial,
 		Answers: map[string][]Answer{
-			"mode":            {{Key: "mode", Value: "full"}},
-			"listen_context":  {{Key: "listen_context", Value: "ctx"}},
-			"self_review":     {{Key: "self_review", Value: "approve"}},
-			"synthesis":       {{Key: "synthesis", Value: "approve"}},
-			"tasks_generated": {{Key: "tasks_generated", Value: "{}"}},
-			"status_quo":      {{Key: "status_quo", Value: "current state"}},
+			"mode":                {{Key: "mode", Value: "full"}},
+			"listen_context":      {{Key: "listen_context", Value: "ctx"}},
+			"self_review":         {{Key: "self_review", Value: "approve"}},
+			"synthesis":           {{Key: "synthesis", Value: "approve"}},
+			"tasks_generated":     {{Key: "tasks_generated", Value: "{}"}},
+			"refinement_approved": {{Key: "refinement_approved", Value: "approve"}},
+			"spec_settings":       {{Key: "spec_settings", Value: `{"tddEnabled":true}`}},
+			"status_quo":          {{Key: "status_quo", Value: "current state"}},
 		},
 	}
 	pr := Progress{Spec: "s", Status: StatusDraft, Tasks: []Task{}}
 
 	got := RenderSpecMd("s", st, pr)
 
-	for _, k := range []string{"### mode", "### listen_context", "### self_review", "### synthesis", "### tasks_generated"} {
+	for _, k := range []string{"### Mode", "### Listen Context", "### Self Review", "### Synthesis", "### Tasks Generated", "### Refinement Approved", "### Spec Settings"} {
 		if strings.Contains(got, k) {
 			t.Errorf("hidden key %q must not appear, got:\n%s", k, got)
 		}
 	}
-	if !strings.Contains(got, "### status_quo\ncurrent state") {
+	if !strings.Contains(got, "### Status Quo\ncurrent state") {
 		t.Errorf("expected status_quo kept in Discovery Answers, got:\n%s", got)
 	}
 }
@@ -371,9 +373,9 @@ func TestRenderSpecMd_DiscoveryAnswersSortedLexicographic(t *testing.T) {
 
 	got := RenderSpecMd("s", st, pr)
 
-	appleIdx := strings.Index(got, "### apple")
-	mangoIdx := strings.Index(got, "### mango")
-	zebraIdx := strings.Index(got, "### zebra")
+	appleIdx := strings.Index(got, "### Apple")
+	mangoIdx := strings.Index(got, "### Mango")
+	zebraIdx := strings.Index(got, "### Zebra")
 
 	if appleIdx == -1 || mangoIdx == -1 || zebraIdx == -1 {
 		t.Fatalf("expected all discovery keys in output, got:\n%s", got)
@@ -400,13 +402,13 @@ func TestRenderSpecMd_SpecialKeysNotInDiscoveryAnswers(t *testing.T) {
 
 	got := RenderSpecMd("s", st, pr)
 
-	for _, specialKey := range []string{"### premises", "### scope_boundary", "### edge_cases", "### verification"} {
+	for _, specialKey := range []string{"### Premises", "### Scope Boundary", "### Edge Cases", "### Verification"} {
 		if strings.Contains(got, specialKey) {
 			t.Errorf("special key %q must not appear in ## Discovery Answers, got:\n%s", specialKey, got)
 		}
 	}
 
-	if !strings.Contains(got, "### context") {
+	if !strings.Contains(got, "### Context") {
 		t.Errorf("expected non-special key 'context' in Discovery Answers, got:\n%s", got)
 	}
 }
@@ -532,9 +534,9 @@ func TestRenderSpecMd_DeterministicMapKeyOrder(t *testing.T) {
 	}
 
 	got := results[0]
-	aaaIdx := strings.Index(got, "### aaa")
-	mmmIdx := strings.Index(got, "### mmm")
-	zzzIdx := strings.Index(got, "### zzz")
+	aaaIdx := strings.Index(got, "### Aaa")
+	mmmIdx := strings.Index(got, "### Mmm")
+	zzzIdx := strings.Index(got, "### Zzz")
 
 	if !(aaaIdx < mmmIdx && mmmIdx < zzzIdx) {
 		t.Errorf("keys not in sorted order across repeated calls: aaa=%d mmm=%d zzz=%d", aaaIdx, mmmIdx, zzzIdx)

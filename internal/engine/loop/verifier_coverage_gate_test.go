@@ -97,7 +97,7 @@ func TestVerifierOnReport_GreenEnforced_LowCoverage_GateTriggersRedAndNotImpleme
 		t.Fatal("LastCoverage: must be set even when gate triggers")
 	}
 	if result.State.LastCoverage["main.go"] != 50 {
-		t.Errorf("LastCoverage[main.go]: got %d, want 50", result.State.LastCoverage["main.go"])
+		t.Errorf("LastCoverage[main.go]: got %v, want 50", result.State.LastCoverage["main.go"])
 	}
 }
 
@@ -113,8 +113,8 @@ func TestVerifierOnReport_GreenEnforced_EmptyFileCoverage_StaysGreenUnreported_E
 	if result.State.TDDCycle != cycleGreen {
 		t.Errorf("TDDCycle: got %q, want %q — empty FileCoverage is a verifier-fail; cycle must stay green so the verifier re-measures, not red (EC-1)", result.State.TDDCycle, cycleGreen)
 	}
-	if result.State.Implemented {
-		t.Error("Implemented: got true, want false so the verifier re-runs (EC-1)")
+	if !result.State.Implemented {
+		t.Error("Implemented: got false, want true so the verifier re-runs directly without an extra green executor round (EC-1)")
 	}
 	if !result.State.CoverageUnreported {
 		t.Error("CoverageUnreported: got false, want true to flag the missing measurement (EC-1)")
@@ -158,7 +158,7 @@ func TestVerifierOnReport_GreenEnforced_BoundaryExactThreshold_Advances_EC2(t *t
 		t.Fatal("LastCoverage: must be set when coverage met")
 	}
 	if result.State.LastCoverage["pkg.go"] != 80 {
-		t.Errorf("LastCoverage[pkg.go]: got %d, want 80", result.State.LastCoverage["pkg.go"])
+		t.Errorf("LastCoverage[pkg.go]: got %v, want 80", result.State.LastCoverage["pkg.go"])
 	}
 }
 
@@ -184,10 +184,10 @@ func TestVerifierOnReport_GreenEnforced_CoverageMet_AdvancesNormally(t *testing.
 		t.Fatal("LastCoverage: must be populated when coverage met and cycle advances")
 	}
 	if result.State.LastCoverage["a.go"] != 90 {
-		t.Errorf("LastCoverage[a.go]: got %d, want 90", result.State.LastCoverage["a.go"])
+		t.Errorf("LastCoverage[a.go]: got %v, want 90", result.State.LastCoverage["a.go"])
 	}
 	if result.State.LastCoverage["b.go"] != 85 {
-		t.Errorf("LastCoverage[b.go]: got %d, want 85", result.State.LastCoverage["b.go"])
+		t.Errorf("LastCoverage[b.go]: got %v, want 85", result.State.LastCoverage["b.go"])
 	}
 }
 

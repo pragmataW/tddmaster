@@ -8,8 +8,10 @@ func addRootFlag(cmd *cobra.Command) {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "tddmaster",
-		Short: "TDD-driven spec orchestration tool",
+		Use:           "tddmaster",
+		Short:         "TDD-driven spec orchestration tool",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	root.AddCommand(newInitCmd())
 	root.AddCommand(newStartCmd())

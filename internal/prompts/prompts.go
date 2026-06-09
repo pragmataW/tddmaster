@@ -37,7 +37,10 @@ func Render(name string, data RenderData) (string, error) {
 }
 
 func TemplateNames() []string {
-	entries, _ := templatesFS.ReadDir(templateDir)
+	entries, err := templatesFS.ReadDir(templateDir)
+	if err != nil {
+		panic(fmt.Sprintf("prompts: read template dir: %v", err))
+	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		n := e.Name()

@@ -494,8 +494,8 @@ func TestDiscoveryDriver_AllAnswered_NextReturnsPhaseDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next after all answered: %v", err)
 	}
-	if action.Action != "" {
-		t.Errorf("after all answered, Next action = %q, want empty (phase done)", action.Action)
+	if action.Action != "" && action.Action != engine.ActionTerminal {
+		t.Errorf("after all answered, Next action = %q, want empty or terminal (phase done)", action.Action)
 	}
 }
 

@@ -52,8 +52,8 @@ func TestSettingsDriver_Next_AsksWithMultiSelect(t *testing.T) {
 	if !action.MultiSelect {
 		t.Fatal("expected MultiSelect=true")
 	}
-	if len(action.InteractiveOptions) != 3 {
-		t.Fatalf("expected 3 interactive options, got %d", len(action.InteractiveOptions))
+	if len(action.InteractiveOptions) != 4 {
+		t.Fatalf("expected 4 interactive options, got %d", len(action.InteractiveOptions))
 	}
 	if action.ExpectedInput.Format != engine.FormatJSON {
 		t.Fatalf("expected JSON format, got %q", action.ExpectedInput.Format)

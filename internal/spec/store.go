@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/pragmataW/tddmaster/internal/paths"
 )
@@ -18,7 +19,29 @@ func writeFile(dir, path string, data []byte) error {
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, filePerm)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, filePerm); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
 
 func saveJSON(dir, path string, v any) error {
@@ -50,6 +73,7 @@ func loadJSONOrEmpty[T any](path string) (T, error) {
 }
 
 func SaveState(root, slug string, s State) error {
+	s.UpdatedAt = time.Now().UTC()
 	return saveJSON(paths.SpecDir(root, slug), paths.SpecState(root, slug), s)
 }
 
@@ -68,6 +92,9 @@ func SaveSettings(root, slug string, s Settings) error {
 
 func LoadSettings(root, slug string) (Settings, error) {
 	p := paths.SpecSettings(root, slug)
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		return DefaultSettings(), nil
+	}
 	s, err := loadJSON[Settings](p)
 	if err != nil {
 		return Settings{}, err
@@ -76,6 +103,7 @@ func LoadSettings(root, slug string) (Settings, error) {
 }
 
 func SaveProgress(root, slug string, p Progress) error {
+	p.UpdatedAt = time.Now().UTC()
 	return saveJSON(paths.SpecDir(root, slug), paths.SpecProgress(root, slug), p)
 }
 
@@ -102,7 +130,7 @@ func LoadTraceability(root, slug string) (Traceability, error) {
 		tr.Entries = map[string][]TraceEntry{}
 	}
 	if tr.Coverage == nil {
-		tr.Coverage = map[string]int{}
+		tr.Coverage = map[string]float64{}
 	}
 	return tr, nil
 }

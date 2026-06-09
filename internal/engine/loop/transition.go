@@ -77,6 +77,12 @@ func completeCurrentTask(tasks []spec.Task, idx int) []spec.Task {
 func reseedCycle(st spec.ExecState, taskTDDEnabled bool) spec.ExecState {
 	st = resetRefactorCounters(st)
 	st.Implemented = false
+	st.LastFailedACs = nil
+	st.LastUncoveredEC = nil
+	st.LastCoverage = nil
+	st.LastModifiedFiles = nil
+	st.CoverageUnreported = false
+	st.RefactorNotes = nil
 	if taskTDDEnabled {
 		st.TDDCycle = cycleRed
 	} else {

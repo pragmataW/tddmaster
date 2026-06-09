@@ -22,7 +22,7 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 				{FunctionName: "TestBaz", TaskID: "task-2", AC: []string{"ac1"}, EC: []string{"EC-2"}},
 			},
 		},
-		Coverage: map[string]int{
+		Coverage: map[string]float64{
 			"internal/spec/store.go": 75,
 		},
 	}
@@ -67,7 +67,7 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 	}
 
 	if loaded.Coverage["internal/spec/store.go"] != 75 {
-		t.Errorf("Coverage round-trip: got %d, want 75", loaded.Coverage["internal/spec/store.go"])
+		t.Errorf("Coverage round-trip: got %v, want 75", loaded.Coverage["internal/spec/store.go"])
 	}
 }
 
@@ -81,7 +81,7 @@ func TestSaveTraceability_WritesToCorrectPath(t *testing.T) {
 				{FunctionName: "TestX", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]int{},
+		Coverage: map[string]float64{},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -180,7 +180,7 @@ func TestSaveLoadTraceability_CoverageRoundTrip(t *testing.T) {
 
 	original := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]int{"internal/spec/model.go": 100, "cmd/root.go": 42},
+		Coverage: map[string]float64{"internal/spec/model.go": 100, "cmd/root.go": 42},
 	}
 
 	if err := SaveTraceability(root, slug, original); err != nil {
@@ -201,7 +201,7 @@ func TestSaveTraceability_EmptyEntries(t *testing.T) {
 	root := t.TempDir()
 	slug := "empty-trace-spec"
 
-	if err := SaveTraceability(root, slug, Traceability{Entries: map[string][]TraceEntry{}, Coverage: map[string]int{}}); err != nil {
+	if err := SaveTraceability(root, slug, Traceability{Entries: map[string][]TraceEntry{}, Coverage: map[string]float64{}}); err != nil {
 		t.Fatalf("SaveTraceability with empty maps returned error: %v", err)
 	}
 
@@ -225,7 +225,7 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 				{FunctionName: "TestIdempotent", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]int{"src/main.go": 60},
+		Coverage: map[string]float64{"src/main.go": 60},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -245,6 +245,6 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 		t.Errorf("expected 1 entry after idempotent save, got %d", len(loaded.Entries["task-1"]))
 	}
 	if loaded.Coverage["src/main.go"] != 60 {
-		t.Errorf("Coverage after idempotent save: got %d, want 60", loaded.Coverage["src/main.go"])
+		t.Errorf("Coverage after idempotent save: got %v, want 60", loaded.Coverage["src/main.go"])
 	}
 }

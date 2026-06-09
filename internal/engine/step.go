@@ -14,7 +14,7 @@ type StepDef struct {
 	ID       StepID
 	Prompt   func(*Context) Action
 	Validate func(answer []byte) error
-	Emit     func(answer []byte) (json.RawMessage, error)
+	Emit     func(answer []byte) error
 	Run      func(*Context, []byte) (RunResult, error)
 }
 

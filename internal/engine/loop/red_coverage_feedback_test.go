@@ -7,7 +7,7 @@ import (
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
-func makeRedCtxWithCoverage(lastCoverage map[string]int, minCoverage int) ExecCtx {
+func makeRedCtxWithCoverage(lastCoverage map[string]float64, minCoverage int) ExecCtx {
 	task := spec.Task{
 		ID:         "task-7",
 		Title:      "task-7",
@@ -29,7 +29,7 @@ func makeRedCtxWithCoverage(lastCoverage map[string]int, minCoverage int) ExecCt
 }
 
 func TestRedStage_Prompt_LowCoverageFile_IsListedWithPercentAndThreshold(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{"a.go": 50, "b.go": 90}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"a.go": 50, "b.go": 90}, 80)
 	action := redStage().Prompt(ctx)
 	if !strings.Contains(action.Instruction, "a.go") {
 		t.Error("red prompt: expected low-coverage file 'a.go' to be listed")
@@ -43,7 +43,7 @@ func TestRedStage_Prompt_LowCoverageFile_IsListedWithPercentAndThreshold(t *test
 }
 
 func TestRedStage_Prompt_AboveThresholdFile_IsNotListed(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{"a.go": 50, "b.go": 90}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"a.go": 50, "b.go": 90}, 80)
 	action := redStage().Prompt(ctx)
 	if strings.Contains(action.Instruction, "b.go") {
 		t.Error("red prompt: 'b.go' at 90% must NOT be listed as low-coverage when threshold is 80")
@@ -51,7 +51,7 @@ func TestRedStage_Prompt_AboveThresholdFile_IsNotListed(t *testing.T) {
 }
 
 func TestRedStage_Prompt_BoundaryAtThreshold_NotListed_EC4(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{"c.go": 80}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"c.go": 80}, 80)
 	action := redStage().Prompt(ctx)
 	if strings.Contains(action.Instruction, "c.go") {
 		t.Error("red prompt (EC-4): 'c.go' at exactly 80 must NOT be listed when threshold is 80 (>= passes)")
@@ -59,7 +59,7 @@ func TestRedStage_Prompt_BoundaryAtThreshold_NotListed_EC4(t *testing.T) {
 }
 
 func TestRedStage_Prompt_OneBelowBoundary_IsListed_EC4(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{"d.go": 79}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"d.go": 79}, 80)
 	action := redStage().Prompt(ctx)
 	if !strings.Contains(action.Instruction, "d.go") {
 		t.Error("red prompt (EC-4): 'd.go' at 79 must be listed when threshold is 80 (79 < 80)")
@@ -75,7 +75,7 @@ func TestRedStage_Prompt_NilLastCoverage_NoFeedback_AC3(t *testing.T) {
 }
 
 func TestRedStage_Prompt_EmptyLastCoverage_NoFeedback_AC3(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{}, 80)
 	action := redStage().Prompt(ctx)
 	if strings.Contains(action.Instruction, "coverage") {
 		t.Error("red prompt (AC-3): empty LastCoverage must produce no coverage-feedback text")
@@ -83,7 +83,7 @@ func TestRedStage_Prompt_EmptyLastCoverage_NoFeedback_AC3(t *testing.T) {
 }
 
 func TestRedStage_Prompt_GateDisabled_NoFeedback(t *testing.T) {
-	ctx := makeRedCtxWithCoverage(map[string]int{"e.go": 30}, 0)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"e.go": 30}, 0)
 	action := redStage().Prompt(ctx)
 	if strings.Contains(action.Instruction, "e.go") {
 		t.Error("red prompt: coverage gate disabled (MinTestCoverage=0) must not produce low-coverage feedback")
@@ -92,7 +92,7 @@ func TestRedStage_Prompt_GateDisabled_NoFeedback(t *testing.T) {
 
 func TestAppendCoverageFeedback_LowFiles_ListedWithPercentAndThreshold(t *testing.T) {
 	var b strings.Builder
-	ctx := makeRedCtxWithCoverage(map[string]int{"internal/foo.go": 50, "internal/bar.go": 90}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"internal/foo.go": 50, "internal/bar.go": 90}, 80)
 	appendCoverageFeedback(&b, ctx)
 	result := b.String()
 	if !strings.Contains(result, "internal/foo.go") {
@@ -111,7 +111,7 @@ func TestAppendCoverageFeedback_LowFiles_ListedWithPercentAndThreshold(t *testin
 
 func TestAppendCoverageFeedback_BoundaryExact_NotListed(t *testing.T) {
 	var b strings.Builder
-	ctx := makeRedCtxWithCoverage(map[string]int{"c.go": 80}, 80)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"c.go": 80}, 80)
 	appendCoverageFeedback(&b, ctx)
 	result := b.String()
 	if strings.Contains(result, "c.go") {
@@ -130,7 +130,7 @@ func TestAppendCoverageFeedback_NilCoverage_Empty(t *testing.T) {
 
 func TestAppendCoverageFeedback_GateDisabled_Empty(t *testing.T) {
 	var b strings.Builder
-	ctx := makeRedCtxWithCoverage(map[string]int{"e.go": 30}, 0)
+	ctx := makeRedCtxWithCoverage(map[string]float64{"e.go": 30}, 0)
 	appendCoverageFeedback(&b, ctx)
 	if b.Len() != 0 {
 		t.Errorf("appendCoverageFeedback: gate disabled (MinTestCoverage=0) must write nothing, got %q", b.String())

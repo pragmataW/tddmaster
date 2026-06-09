@@ -62,7 +62,7 @@ func TestPersistCoverage_MergesFileCoverageIntoTraceability(t *testing.T) {
 		Entries: map[string][]spec.TraceEntry{
 			"foo_test.go": {{FunctionName: "TestFoo", TaskID: "t1", AC: []string{"AC-1"}}},
 		},
-		Coverage: map[string]int{
+		Coverage: map[string]float64{
 			"existing.go": 70,
 		},
 	}
@@ -92,13 +92,13 @@ func TestPersistCoverage_MergesFileCoverageIntoTraceability(t *testing.T) {
 	}
 
 	if tr.Coverage["a.go"] != 85 {
-		t.Errorf("Coverage[a.go]: got %d, want 85", tr.Coverage["a.go"])
+		t.Errorf("Coverage[a.go]: got %v, want 85", tr.Coverage["a.go"])
 	}
 	if tr.Coverage["b.go"] != 40 {
-		t.Errorf("Coverage[b.go]: got %d, want 40", tr.Coverage["b.go"])
+		t.Errorf("Coverage[b.go]: got %v, want 40", tr.Coverage["b.go"])
 	}
 	if tr.Coverage["existing.go"] != 70 {
-		t.Errorf("Coverage[existing.go]: got %d, want 70 (must preserve prior entry)", tr.Coverage["existing.go"])
+		t.Errorf("Coverage[existing.go]: got %v, want 70 (must preserve prior entry)", tr.Coverage["existing.go"])
 	}
 	if len(tr.Entries["foo_test.go"]) == 0 {
 		t.Error("Entries[foo_test.go]: must be preserved after persistCoverage")
@@ -111,7 +111,7 @@ func TestPersistCoverage_OverwritesSameFile(t *testing.T) {
 
 	existing := spec.Traceability{
 		Entries:  map[string][]spec.TraceEntry{},
-		Coverage: map[string]int{"a.go": 60},
+		Coverage: map[string]float64{"a.go": 60},
 	}
 	if err := spec.SaveTraceability(root, slug, existing); err != nil {
 		t.Fatalf("SaveTraceability: %v", err)
@@ -136,7 +136,7 @@ func TestPersistCoverage_OverwritesSameFile(t *testing.T) {
 	}
 
 	if tr.Coverage["a.go"] != 90 {
-		t.Errorf("Coverage[a.go]: got %d, want 90 (overwrite of prior entry)", tr.Coverage["a.go"])
+		t.Errorf("Coverage[a.go]: got %v, want 90 (overwrite of prior entry)", tr.Coverage["a.go"])
 	}
 }
 
@@ -168,7 +168,7 @@ func TestPersistCoverage_EmptyStore_CreatesMapWithoutPanic(t *testing.T) {
 		t.Fatal("Coverage map must not be nil after persistCoverage into empty store (EC-1)")
 	}
 	if tr.Coverage["x.go"] != 75 {
-		t.Errorf("Coverage[x.go]: got %d, want 75", tr.Coverage["x.go"])
+		t.Errorf("Coverage[x.go]: got %v, want 75", tr.Coverage["x.go"])
 	}
 }
 
@@ -195,7 +195,7 @@ func TestPersistCoverage_NilTraceabilityFile_NoPanic(t *testing.T) {
 	}
 
 	if tr.Coverage["y.go"] != 55 {
-		t.Errorf("Coverage[y.go]: got %d, want 55", tr.Coverage["y.go"])
+		t.Errorf("Coverage[y.go]: got %v, want 55", tr.Coverage["y.go"])
 	}
 }
 
@@ -229,10 +229,10 @@ func TestDriverSubmit_GreenVerifier_WithHighCoverage_UpdatesCoverageAndTaskDone(
 	}
 
 	if tr.Coverage["impl.go"] != 90 {
-		t.Errorf("Coverage[impl.go]: got %d, want 90", tr.Coverage["impl.go"])
+		t.Errorf("Coverage[impl.go]: got %v, want 90", tr.Coverage["impl.go"])
 	}
 	if tr.Coverage["helper.go"] != 85 {
-		t.Errorf("Coverage[helper.go]: got %d, want 85", tr.Coverage["helper.go"])
+		t.Errorf("Coverage[helper.go]: got %v, want 85", tr.Coverage["helper.go"])
 	}
 
 	pr, err := spec.LoadProgress(root, slug)
@@ -273,7 +273,7 @@ func TestDriverSubmit_GreenVerifier_WithLowCoverage_UpdatesCoverageButTaskNotDon
 	}
 
 	if tr.Coverage["impl.go"] != 50 {
-		t.Errorf("Coverage[impl.go]: got %d, want 50 (coverage must persist even when gate fires)", tr.Coverage["impl.go"])
+		t.Errorf("Coverage[impl.go]: got %v, want 50 (coverage must persist even when gate fires)", tr.Coverage["impl.go"])
 	}
 
 	pr, err := spec.LoadProgress(root, slug)

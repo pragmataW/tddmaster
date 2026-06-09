@@ -36,6 +36,9 @@ func newVisualizeCmd() *cobra.Command {
 
 func runVisualize(cmd *cobra.Command, args []string) error {
 	slug := args[0]
+	if !spec.ValidSlug(slug) {
+		return fmt.Errorf("invalid slug %q", slug)
+	}
 	root, err := resolveRoot(cmd)
 	if err != nil {
 		return fmt.Errorf("resolve root: %w", err)

@@ -18,6 +18,9 @@ func newNextCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
+			if !spec.ValidSlug(slug) {
+				return fmt.Errorf("invalid slug %q", slug)
+			}
 			root, err := resolveRoot(cmd)
 			if err != nil {
 				return fmt.Errorf("resolve root: %w", err)
@@ -36,7 +39,7 @@ func newNextCmd() *cobra.Command {
 			}
 			answer, _ := cmd.Flags().GetString("answer")
 			var action engine.Action
-			if answer == "" {
+			if !cmd.Flags().Changed("answer") {
 				action, err = ctx.Next()
 			} else {
 				trimmed := strings.TrimSpace(answer)

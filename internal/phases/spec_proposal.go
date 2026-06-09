@@ -73,7 +73,8 @@ func selfReviewPrompt() engine.Action {
 		Action:      engine.ActionAsk,
 		Instruction: instr,
 		ExpectedInput: engine.ExpectedInput{
-			Format: engine.FormatFlag,
+			Format:  engine.FormatFlag,
+			Example: "approve",
 		},
 	}
 }

@@ -44,6 +44,9 @@ func seedSpec(t *testing.T, root, slug, phase string) {
 	if err := spec.SaveProgress(root, slug, pr); err != nil {
 		t.Fatalf("seedSpec SaveProgress: %v", err)
 	}
+	if err := spec.SaveSettings(root, slug, spec.DefaultSettings()); err != nil {
+		t.Fatalf("seedSpec SaveSettings: %v", err)
+	}
 }
 
 func TestBuild_ErrorWhenSpecMissing(t *testing.T) {
@@ -193,6 +196,9 @@ func TestBuild_ToleratesProgressWithNilExecution(t *testing.T) {
 	}
 	if err := os.WriteFile(paths.SpecProgress(root, slug), oldJSON, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := spec.SaveSettings(root, slug, spec.DefaultSettings()); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
 	}
 
 	defs := []PhaseDef{makeOneStepPhase(PhaseID(spec.PhaseInitial), "q")}

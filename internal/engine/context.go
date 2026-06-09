@@ -16,6 +16,7 @@ type Context struct {
 	defs         []PhaseDef
 	state        spec.State
 	progress     spec.Progress
+	settings     spec.Settings
 	maxIteration int
 }
 
@@ -34,6 +35,11 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 		return nil, fmt.Errorf("load progress: %w", err)
 	}
 
+	settings, err := spec.LoadSettings(root, slug)
+	if err != nil {
+		return nil, fmt.Errorf("load settings: %w", err)
+	}
+
 	maxIter := manifest.Defaults().MaxIterationBeforeStart
 	if data, readErr := os.ReadFile(paths.Manifest(root)); readErr == nil {
 		var m manifest.Manifest
@@ -49,6 +55,7 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 		defs:         defs,
 		state:        state,
 		progress:     progress,
+		settings:     settings,
 		maxIteration: maxIter,
 	}, nil
 }
@@ -94,12 +101,15 @@ func (c *Context) advancePhase() error {
 func (c *Context) Next() (Action, error) {
 	ph := c.activePhaseDef()
 	if ph == nil {
-		return Action{}, nil
+		return Action{Action: ActionTerminal}, nil
 	}
 	action, phaseDone := ph.Driver.Next(c, ph)
 	if phaseDone {
 		if err := c.advancePhase(); err != nil {
 			return Action{}, err
+		}
+		if action.Action == "" {
+			return c.Next()
 		}
 	}
 	return action, nil
@@ -118,15 +128,15 @@ func (c *Context) SaveProgress(p spec.Progress) error {
 }
 
 func (c *Context) Settings() spec.Settings {
-	s, err := spec.LoadSettings(c.root, c.slug)
-	if err != nil {
-		return spec.DefaultSettings()
-	}
-	return s
+	return c.settings
 }
 
 func (c *Context) SaveSettings(s spec.Settings) error {
-	return spec.SaveSettings(c.root, c.slug, s)
+	if err := spec.SaveSettings(c.root, c.slug, s); err != nil {
+		return err
+	}
+	c.settings = s
+	return nil
 }
 
 func (c *Context) MaxIteration() int {
@@ -168,7 +178,7 @@ func (c *Context) SetAnswer(key, value string) error {
 func (c *Context) Submit(answer []byte) (Action, error) {
 	ph := c.activePhaseDef()
 	if ph == nil {
-		return Action{}, nil
+		return Action{Action: ActionTerminal}, nil
 	}
 
 	action, phaseDone, err := ph.Driver.Submit(c, ph, answer)

@@ -11,79 +11,31 @@ type Driver interface {
 }
 
 type StepTableDriver struct {
-	Modules  []ModuleDef
-	progress *PhaseProgress
+	Modules []ModuleDef
 }
 
-func (d *StepTableDriver) bootstrap() {
-	if d.progress == nil {
-		d.progress = &PhaseProgress{}
+func stepAnswerKey(ph *PhaseDef, mod ModuleID, step StepID) string {
+	phase := ""
+	if ph != nil {
+		phase = string(ph.ID)
 	}
+	return "step:" + phase + ":" + string(mod) + ":" + string(step)
+}
+
+func (d *StepTableDriver) findFirstUnanswered(c *Context, ph *PhaseDef) (StepDef, string, bool) {
 	for _, m := range d.Modules {
-		found := false
-		for _, mp := range d.progress.Modules {
-			if mp.Module == m.ID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			mp := ModuleProgress{Module: m.ID}
-			for _, s := range m.Steps {
-				mp.Steps = append(mp.Steps, StepProgress{Step: s.ID, Answered: false})
-			}
-			d.progress.Modules = append(d.progress.Modules, mp)
-		}
-	}
-}
-
-func (d *StepTableDriver) traverseSteps(fn func(mi, si int, s StepDef) bool) {
-	for mi, m := range d.Modules {
-		for si, s := range m.Steps {
-			if mi < len(d.progress.Modules) && si < len(d.progress.Modules[mi].Steps) {
-				if fn(mi, si, s) {
-					return
-				}
+		for _, s := range m.Steps {
+			key := stepAnswerKey(ph, m.ID, s.ID)
+			if !c.HasAnswer(key) {
+				return s, key, true
 			}
 		}
 	}
-}
-
-func (d *StepTableDriver) findFirstUnanswered() (modIdx int, stepIdx int, stepDef *StepDef, found bool) {
-	d.traverseSteps(func(mi, si int, s StepDef) bool {
-		if !d.progress.Modules[mi].Steps[si].Answered {
-			copy := s
-			modIdx = mi
-			stepIdx = si
-			stepDef = &copy
-			found = true
-			return true
-		}
-		return false
-	})
-	return
-}
-
-func (d *StepTableDriver) findFirstUnansweredStep() (*StepDef, bool) {
-	_, _, stepDef, found := d.findFirstUnanswered()
-	return stepDef, found
-}
-
-func (d *StepTableDriver) allAnswered() bool {
-	result := true
-	d.traverseSteps(func(mi, si int, s StepDef) bool {
-		if !d.progress.Modules[mi].Steps[si].Answered {
-			result = false
-			return true
-		}
-		return false
-	})
-	return result
+	return StepDef{}, "", false
 }
 
 func (d *StepTableDriver) Next(c *Context, ph *PhaseDef) (Action, bool) {
-	d.bootstrap()
-	stepDef, found := d.findFirstUnansweredStep()
+	stepDef, _, found := d.findFirstUnanswered(c, ph)
 	if !found {
 		return Action{}, true
 	}
@@ -91,8 +43,7 @@ func (d *StepTableDriver) Next(c *Context, ph *PhaseDef) (Action, bool) {
 }
 
 func (d *StepTableDriver) Submit(c *Context, ph *PhaseDef, answer []byte) (Action, bool, error) {
-	d.bootstrap()
-	mi, si, stepDef, found := d.findFirstUnanswered()
+	stepDef, key, found := d.findFirstUnanswered(c, ph)
 	if !found {
 		return Action{}, true, nil
 	}
@@ -111,14 +62,15 @@ func (d *StepTableDriver) Submit(c *Context, ph *PhaseDef, answer []byte) (Actio
 	}
 
 	if stepDef.Emit != nil {
-		if _, err := stepDef.Emit(answer); err != nil {
+		if err := stepDef.Emit(answer); err != nil {
 			return Action{}, false, err
 		}
 	}
 
-	d.progress.Modules[mi].Steps[si].Answered = true
-	d.progress.Modules[mi].Steps[si].Answer = answer
+	if err := c.SetAnswer(key, string(answer)); err != nil {
+		return Action{}, false, err
+	}
 
-	phaseDone := d.allAnswered()
-	return Action{}, phaseDone, nil
+	_, _, stillUnanswered := d.findFirstUnanswered(c, ph)
+	return Action{}, !stillUnanswered, nil
 }

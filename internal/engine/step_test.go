@@ -86,8 +86,8 @@ func TestStepDef_Construct(t *testing.T) {
 			}
 			return nil
 		},
-		Emit: func(answer []byte) (json.RawMessage, error) {
-			return answer, nil
+		Emit: func(answer []byte) error {
+			return nil
 		},
 		Run: func(c *Context, decision []byte) (RunResult, error) {
 			return RunResult{Done: true}, nil
