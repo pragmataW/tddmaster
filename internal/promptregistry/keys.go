@@ -33,6 +33,7 @@ const (
 	KeyExecGreen        InstructionKey = "execution:green"
 	KeyExecRefactor     InstructionKey = "execution:refactor"
 	KeyExecRefactorApply InstructionKey = "execution:refactor-apply"
+	KeyExecRefactorSkipVerify InstructionKey = "execution:refactor-skip-verify"
 	KeyExecExecutor     InstructionKey = "execution:executor"
 	KeyExecExecutorSkipVerify InstructionKey = "execution:executor-skip-verify"
 	KeyExecVerifier     InstructionKey = "execution:verifier"

@@ -20,6 +20,7 @@ func TestDefaultSettings(t *testing.T) {
 		TDDEnabled:               true,
 		SkipVerifierEnabled:      false,
 		ImportantTaskGateEnabled: false,
+		MinTestCoverage:          80,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("DefaultSettings() = %+v, want %+v", got, want)

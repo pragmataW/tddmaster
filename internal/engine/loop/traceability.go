@@ -28,8 +28,8 @@ func validateAndPersistTraceability(c *engine.Context, task spec.Task, report St
 	if err != nil {
 		return err
 	}
-	if tr == nil {
-		tr = make(spec.Traceability)
+	if tr.Entries == nil {
+		tr.Entries = map[string][]spec.TraceEntry{}
 	}
 
 	for _, entry := range report.Traceability {
@@ -44,7 +44,7 @@ func validateAndPersistTraceability(c *engine.Context, task spec.Task, report St
 			EC:           entry.EC,
 		}
 
-		existing := tr[entry.TestFilePath]
+		existing := tr.Entries[entry.TestFilePath]
 		replaced := false
 		for i, e := range existing {
 			if e.FunctionName == entry.FunctionName {
@@ -56,7 +56,7 @@ func validateAndPersistTraceability(c *engine.Context, task spec.Task, report St
 		if !replaced {
 			existing = append(existing, newEntry)
 		}
-		tr[entry.TestFilePath] = existing
+		tr.Entries[entry.TestFilePath] = existing
 	}
 
 	return c.SaveTraceability(tr)

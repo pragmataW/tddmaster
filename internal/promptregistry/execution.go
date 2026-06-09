@@ -36,7 +36,8 @@ const execExecutorSkipVerifyText = "Executor flow (verifier DISABLED): the tddma
 
 const execVerifierText = "Independent verification: the tddmaster-verifier sub-agent runs the full test suite and performs an independent scan. " +
 	"It produces `passed` (bool), `failedACs` (list), `refactorNotes` (list), and `uncoveredEdgeCases` (list). " +
-	"Its structured report is the authoritative result submitted to `next` — not the executor's self-report."
+	"Its structured report is the authoritative result submitted to `next` — not the executor's self-report. " +
+	"When coverage measurement is required (green phase only), also include the per-file coverage array described in any appended coverage requirement; this field is omitted in all other phases."
 
 const execGateText = "Important task gate: this task requires a plan before execution. " +
 	"Spawn `tddmaster-planner` (read-only) to produce an approved plan with `touchedFiles`, `approach`, `assumptions`, and `designPatterns`. " +
@@ -49,7 +50,9 @@ const ReportExampleExecutor = `{"completed":["task-1"],"remaining":[],"blocked":
 
 const ReportExampleRefactorApply = `{"completed":["task-1"],"remaining":[],"blocked":[],"filesModified":["internal/foo/bar.go"],"phase":"refactor","refactorApplied":true}`
 
-const ReportExampleVerifier = `{"passed":true,"phase":"green","failedACs":[],"uncoveredEdgeCases":[],"refactorNotes":[{"file":"internal/foo/bar.go","suggestion":"extract validation","rationale":"reused in two places"}]}`
+const ReportExampleRefactorApplySkip = `{"passed":true,"completed":["task-1"],"remaining":[],"blocked":[],"filesModified":["internal/foo/bar.go"],"phase":"refactor","refactorApplied":true}`
+
+const ReportExampleVerifier = `{"passed":true,"phase":"green","failedACs":[],"uncoveredEdgeCases":[],"refactorNotes":[{"file":"internal/foo/bar.go","suggestion":"extract validation","rationale":"reused in two places"}],"fileCoverage":[{"file":"internal/foo/bar.go","coverage":85}]}`
 
 const ReportExamplePlanner = `{"plan":{"taskId":"","touchedFiles":["internal/foo/bar.go","internal/foo/bar_test.go"],"approach":"Implement X by extending Y with Z pattern","assumptions":["existing tests cover happy path"],"designPatterns":["strategy"],"bestPractices":["single responsibility"]}}`
 
@@ -65,5 +68,5 @@ func init() {
 	instructionMap[KeyExecVerifier] = execVerifierText
 	instructionMap[KeyExecGate] = execGateText
 	instructionMap[KeyExecVerifyFailed] = execVerifyFailedText
-	_ = execRefactorSkipVerifyText
+	instructionMap[KeyExecRefactorSkipVerify] = execRefactorSkipVerifyText
 }

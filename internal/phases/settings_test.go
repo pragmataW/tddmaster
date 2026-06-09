@@ -78,7 +78,7 @@ func TestSettingsDriver_Submit_PersistsSettingsAndCompletesPhase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSettings: %v", err)
 	}
-	want := spec.Settings{TDDEnabled: false, SkipVerifierEnabled: true, ImportantTaskGateEnabled: true}
+	want := spec.Settings{TDDEnabled: false, SkipVerifierEnabled: true, ImportantTaskGateEnabled: true, MinTestCoverage: 80}
 	if got != want {
 		t.Fatalf("persisted settings = %+v, want %+v", got, want)
 	}

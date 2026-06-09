@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -12,12 +13,17 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 	slug := "trace-spec"
 
 	original := Traceability{
-		"task-1": []TraceEntry{
-			{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
-			{FunctionName: "TestBar", TaskID: "task-1", AC: []string{"ac2"}, EC: []string{"EC-1"}},
+		Entries: map[string][]TraceEntry{
+			"task-1": {
+				{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+				{FunctionName: "TestBar", TaskID: "task-1", AC: []string{"ac2"}, EC: []string{"EC-1"}},
+			},
+			"task-2": {
+				{FunctionName: "TestBaz", TaskID: "task-2", AC: []string{"ac1"}, EC: []string{"EC-2"}},
+			},
 		},
-		"task-2": []TraceEntry{
-			{FunctionName: "TestBaz", TaskID: "task-2", AC: []string{"ac1"}, EC: []string{"EC-2"}},
+		Coverage: map[string]int{
+			"internal/spec/store.go": 75,
 		},
 	}
 
@@ -30,14 +36,14 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 		t.Fatalf("LoadTraceability returned error: %v", err)
 	}
 
-	if len(loaded) != len(original) {
-		t.Fatalf("Traceability length: got %d, want %d", len(loaded), len(original))
+	if len(loaded.Entries) != len(original.Entries) {
+		t.Fatalf("Entries length: got %d, want %d", len(loaded.Entries), len(original.Entries))
 	}
 
-	for taskID, entries := range original {
-		gotEntries, ok := loaded[taskID]
+	for taskID, entries := range original.Entries {
+		gotEntries, ok := loaded.Entries[taskID]
 		if !ok {
-			t.Errorf("missing key %q in loaded Traceability", taskID)
+			t.Errorf("missing key %q in loaded Entries", taskID)
 			continue
 		}
 		if len(gotEntries) != len(entries) {
@@ -59,6 +65,10 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 			}
 		}
 	}
+
+	if loaded.Coverage["internal/spec/store.go"] != 75 {
+		t.Errorf("Coverage round-trip: got %d, want 75", loaded.Coverage["internal/spec/store.go"])
+	}
 }
 
 func TestSaveTraceability_WritesToCorrectPath(t *testing.T) {
@@ -66,9 +76,12 @@ func TestSaveTraceability_WritesToCorrectPath(t *testing.T) {
 	slug := "trace-path-spec"
 
 	tr := Traceability{
-		"task-1": []TraceEntry{
-			{FunctionName: "TestX", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+		Entries: map[string][]TraceEntry{
+			"task-1": {
+				{FunctionName: "TestX", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+			},
 		},
+		Coverage: map[string]int{},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -81,12 +94,12 @@ func TestSaveTraceability_WritesToCorrectPath(t *testing.T) {
 		t.Fatalf("loadJSON from expected path returned error: %v", err)
 	}
 
-	if len(loaded) != 1 {
-		t.Errorf("expected 1 entry, got %d", len(loaded))
+	if len(loaded.Entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(loaded.Entries))
 	}
 }
 
-func TestLoadTraceability_MissingFile_ReturnsEmptyWithoutError(t *testing.T) {
+func TestLoadTraceability_MissingFile_ReturnsNonNilMaps(t *testing.T) {
 	root := t.TempDir()
 	slug := "nonexistent-spec"
 
@@ -95,16 +108,28 @@ func TestLoadTraceability_MissingFile_ReturnsEmptyWithoutError(t *testing.T) {
 		t.Fatalf("LoadTraceability on missing file returned error: %v", err)
 	}
 
-	if got == nil {
-		t.Fatal("LoadTraceability on missing file returned nil map, want empty Traceability{}")
+	if got.Entries == nil {
+		t.Fatal("Entries must be non-nil on missing file load")
 	}
-
-	if len(got) != 0 {
-		t.Errorf("LoadTraceability on missing file returned non-empty map: %v", got)
+	if got.Coverage == nil {
+		t.Fatal("Coverage must be non-nil on missing file load")
 	}
 }
 
-func TestLoadTraceability_MissingFile_EmptyTaskID_ReturnsEmptyWithoutError(t *testing.T) {
+func TestLoadTraceability_MissingFile_IndexDoesNotPanic(t *testing.T) {
+	root := t.TempDir()
+	slug := "nonexistent-spec-2"
+
+	got, err := LoadTraceability(root, slug)
+	if err != nil {
+		t.Fatalf("LoadTraceability on missing file returned error: %v", err)
+	}
+
+	_ = got.Entries["task-1"]
+	_ = got.Coverage["internal/spec/model.go"]
+}
+
+func TestLoadTraceability_MissingFile_EmptySlug_ReturnsNonNilMaps(t *testing.T) {
 	root := t.TempDir()
 	slug := ""
 
@@ -113,17 +138,53 @@ func TestLoadTraceability_MissingFile_EmptyTaskID_ReturnsEmptyWithoutError(t *te
 		t.Fatalf("LoadTraceability with empty slug on missing file returned error: %v", err)
 	}
 
-	if len(got) != 0 {
-		t.Errorf("LoadTraceability with empty slug on missing file returned non-empty map: %v", got)
+	if got.Entries == nil {
+		t.Fatal("Entries must be non-nil on empty-slug missing file load")
+	}
+	if got.Coverage == nil {
+		t.Fatal("Coverage must be non-nil on empty-slug missing file load")
 	}
 }
 
-func TestSaveTraceability_EmptyMap(t *testing.T) {
+func TestLoadTraceability_EmptyFile_DoesNotPanic(t *testing.T) {
 	root := t.TempDir()
-	slug := "empty-trace-spec"
+	slug := "empty-file-spec"
 
-	if err := SaveTraceability(root, slug, Traceability{}); err != nil {
-		t.Fatalf("SaveTraceability with empty map returned error: %v", err)
+	p := paths.SpecTraceability(root, slug)
+	if err := os.MkdirAll(paths.SpecDir(root, slug), dirPerm); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(p, []byte(`{}`), filePerm); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := LoadTraceability(root, slug)
+	if err != nil {
+		t.Fatalf("LoadTraceability on empty JSON object returned error: %v", err)
+	}
+
+	if got.Entries == nil {
+		t.Fatal("Entries must be non-nil after loading empty JSON object")
+	}
+	if got.Coverage == nil {
+		t.Fatal("Coverage must be non-nil after loading empty JSON object")
+	}
+
+	_ = got.Entries["task-1"]
+	_ = got.Coverage["src/main.go"]
+}
+
+func TestSaveLoadTraceability_CoverageRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	slug := "coverage-spec"
+
+	original := Traceability{
+		Entries:  map[string][]TraceEntry{},
+		Coverage: map[string]int{"internal/spec/model.go": 100, "cmd/root.go": 42},
+	}
+
+	if err := SaveTraceability(root, slug, original); err != nil {
+		t.Fatalf("SaveTraceability returned error: %v", err)
 	}
 
 	loaded, err := LoadTraceability(root, slug)
@@ -131,8 +192,26 @@ func TestSaveTraceability_EmptyMap(t *testing.T) {
 		t.Fatalf("LoadTraceability returned error: %v", err)
 	}
 
-	if len(loaded) != 0 {
-		t.Errorf("expected empty Traceability after round-trip, got: %v", loaded)
+	if !reflect.DeepEqual(loaded.Coverage, original.Coverage) {
+		t.Errorf("Coverage round-trip: got %v, want %v", loaded.Coverage, original.Coverage)
+	}
+}
+
+func TestSaveTraceability_EmptyEntries(t *testing.T) {
+	root := t.TempDir()
+	slug := "empty-trace-spec"
+
+	if err := SaveTraceability(root, slug, Traceability{Entries: map[string][]TraceEntry{}, Coverage: map[string]int{}}); err != nil {
+		t.Fatalf("SaveTraceability with empty maps returned error: %v", err)
+	}
+
+	loaded, err := LoadTraceability(root, slug)
+	if err != nil {
+		t.Fatalf("LoadTraceability returned error: %v", err)
+	}
+
+	if len(loaded.Entries) != 0 {
+		t.Errorf("expected empty Entries after round-trip, got: %v", loaded.Entries)
 	}
 }
 
@@ -141,9 +220,12 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 	slug := "idempotent-spec"
 
 	tr := Traceability{
-		"task-1": []TraceEntry{
-			{FunctionName: "TestIdempotent", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+		Entries: map[string][]TraceEntry{
+			"task-1": {
+				{FunctionName: "TestIdempotent", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+			},
 		},
+		Coverage: map[string]int{"src/main.go": 60},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -159,7 +241,10 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 		t.Fatalf("LoadTraceability returned error: %v", err)
 	}
 
-	if len(loaded["task-1"]) != 1 {
-		t.Errorf("expected 1 entry after idempotent save, got %d", len(loaded["task-1"]))
+	if len(loaded.Entries["task-1"]) != 1 {
+		t.Errorf("expected 1 entry after idempotent save, got %d", len(loaded.Entries["task-1"]))
+	}
+	if loaded.Coverage["src/main.go"] != 60 {
+		t.Errorf("Coverage after idempotent save: got %d, want 60", loaded.Coverage["src/main.go"])
 	}
 }

@@ -98,8 +98,11 @@ func LoadTraceability(root, slug string) (Traceability, error) {
 	if err != nil {
 		return Traceability{}, err
 	}
-	if tr == nil {
-		return Traceability{}, nil
+	if tr.Entries == nil {
+		tr.Entries = map[string][]TraceEntry{}
+	}
+	if tr.Coverage == nil {
+		tr.Coverage = map[string]int{}
 	}
 	return tr, nil
 }

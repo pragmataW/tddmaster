@@ -31,7 +31,7 @@ func settingsPrompt() engine.Action {
 		},
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
-			Example: fmt.Sprintf(`{"tddEnabled":%t,"skipVerifierEnabled":%t,"importantTaskGateEnabled":%t}`, d.TDDEnabled, d.SkipVerifierEnabled, d.ImportantTaskGateEnabled),
+			Example: fmt.Sprintf(`{"tddEnabled":%t,"skipVerifierEnabled":%t,"importantTaskGateEnabled":%t,"minTestCoverage":%d}`, d.TDDEnabled, d.SkipVerifierEnabled, d.ImportantTaskGateEnabled, d.MinTestCoverage),
 		},
 	}
 }
@@ -54,6 +54,7 @@ func (d *settingsDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer [
 	if err := json.Unmarshal(answer, &settings); err != nil {
 		return engine.Action{}, false, fmt.Errorf("parse settings: %w", err)
 	}
+	settings.ClampCoverage()
 	if err := c.SaveSettings(settings); err != nil {
 		return engine.Action{}, false, err
 	}

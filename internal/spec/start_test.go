@@ -308,12 +308,15 @@ func TestStart_TraceabilityFileContentIsEmptyMap(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	raw, err := os.ReadFile(paths.SpecTraceability(root, "my-feature"))
+	tr, err := LoadTraceability(root, "my-feature")
 	if err != nil {
-		t.Fatalf("read traceability.json: %v", err)
+		t.Fatalf("LoadTraceability: %v", err)
 	}
-	if strings.TrimSpace(string(raw)) != "{}" {
-		t.Errorf("traceability.json must contain {}, got: %s", string(raw))
+	if len(tr.Entries) != 0 {
+		t.Errorf("traceability must start empty, got %d entries", len(tr.Entries))
+	}
+	if len(tr.Coverage) != 0 {
+		t.Errorf("traceability must start with no coverage, got %d", len(tr.Coverage))
 	}
 }
 
@@ -330,8 +333,8 @@ func TestStart_TraceabilityLoadReturnsEmptyMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTraceability error: %v", err)
 	}
-	if len(tr) != 0 {
-		t.Errorf("expected empty Traceability, got %d entries", len(tr))
+	if len(tr.Entries) != 0 {
+		t.Errorf("expected empty Traceability, got %d entries", len(tr.Entries))
 	}
 }
 

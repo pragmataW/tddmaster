@@ -9,7 +9,10 @@ type TraceEntry struct {
 	EC           []string `json:"ec"`
 }
 
-type Traceability map[string][]TraceEntry
+type Traceability struct {
+	Entries  map[string][]TraceEntry `json:"entries"`
+	Coverage map[string]int          `json:"coverage,omitempty"`
+}
 
 const (
 	PhaseInitial     = "spec-settings"
@@ -36,6 +39,7 @@ type Settings struct {
 	TDDEnabled               bool `json:"tddEnabled"`
 	SkipVerifierEnabled      bool `json:"skipVerifierEnabled"`
 	ImportantTaskGateEnabled bool `json:"importantTaskGateEnabled"`
+	MinTestCoverage          int  `json:"minTestCoverage"`
 }
 
 type ExecState struct {
@@ -48,8 +52,11 @@ type ExecState struct {
 	PlanAttempts    map[string]int    `json:"planAttempts,omitempty"`
 	PlanFeedback    map[string]string `json:"planFeedback,omitempty"`
 	TaskPlans       map[string]TaskPlan `json:"taskPlans,omitempty"`
-	LastFailedACs   []string          `json:"lastFailedACs,omitempty"`
-	LastUncoveredEC []string          `json:"lastUncoveredEC,omitempty"`
+	LastFailedACs     []string          `json:"lastFailedACs,omitempty"`
+	LastUncoveredEC   []string          `json:"lastUncoveredEC,omitempty"`
+	LastCoverage      map[string]int    `json:"lastCoverage,omitempty"`
+	LastModifiedFiles []string          `json:"lastModifiedFiles,omitempty"`
+	CoverageUnreported bool             `json:"coverageUnreported,omitempty"`
 }
 
 type Progress struct {
@@ -80,5 +87,14 @@ type TaskPlan struct {
 }
 
 func DefaultSettings() Settings {
-	return Settings{TDDEnabled: true, SkipVerifierEnabled: false, ImportantTaskGateEnabled: false}
+	return Settings{TDDEnabled: true, SkipVerifierEnabled: false, ImportantTaskGateEnabled: false, MinTestCoverage: 80}
+}
+
+func (s *Settings) ClampCoverage() {
+	if s.MinTestCoverage < 0 {
+		s.MinTestCoverage = 0
+	}
+	if s.MinTestCoverage > 100 {
+		s.MinTestCoverage = 100
+	}
 }

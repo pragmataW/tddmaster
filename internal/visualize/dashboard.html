@@ -563,6 +563,20 @@
       margin-top: 0.25rem;
       word-break: break-all;
     }
+    .trace-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .trace-table-wrap table {
+      width: auto;
+      min-width: 100%;
+    }
+    .trace-td-label {
+      max-width: 360px;
+    }
+    .trace-th-fn {
+      max-width: 160px;
+    }
   </style>
 </head>
 <body>
@@ -574,6 +588,7 @@
     <nav class="nav-tabs" aria-label="Views">
       <button class="nav-tab active" id="tab-overview" type="button">Overview</button>
       <button class="nav-tab" id="tab-traceability" type="button">Traceability</button>
+      <button class="nav-tab" id="tab-coverage" type="button">Coverage Reports</button>
     </nav>
     <div class="header-right">
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme"><span id="theme-toggle-label">Dark</span></button>
@@ -632,6 +647,8 @@
 
   <div class="container-trace" id="container-trace"></div>
 
+  <div class="container-trace" id="container-coverage"></div>
+
   <footer>
     <span>tddmaster · spec visualizer</span>
     <span id="footer-updated">—</span>
@@ -673,22 +690,23 @@
     function initNav() {
       const tabOverview = document.getElementById('tab-overview');
       const tabTrace = document.getElementById('tab-traceability');
+      const tabCoverage = document.getElementById('tab-coverage');
       const containerMain = document.querySelector('.container');
       const containerTrace = document.getElementById('container-trace');
+      const containerCoverage = document.getElementById('container-coverage');
 
-      tabOverview.addEventListener('click', () => {
-        tabOverview.classList.add('active');
-        tabTrace.classList.remove('active');
-        containerMain.style.display = '';
-        containerTrace.classList.remove('visible');
-      });
+      const tabs = [tabOverview, tabTrace, tabCoverage];
 
-      tabTrace.addEventListener('click', () => {
-        tabTrace.classList.add('active');
-        tabOverview.classList.remove('active');
-        containerMain.style.display = 'none';
-        containerTrace.classList.add('visible');
-      });
+      function activate(tab, view) {
+        tabs.forEach(t => t.classList.toggle('active', t === tab));
+        containerMain.style.display = view === 'overview' ? '' : 'none';
+        containerTrace.classList.toggle('visible', view === 'trace');
+        containerCoverage.classList.toggle('visible', view === 'coverage');
+      }
+
+      tabOverview.addEventListener('click', () => activate(tabOverview, 'overview'));
+      tabTrace.addEventListener('click', () => activate(tabTrace, 'trace'));
+      tabCoverage.addEventListener('click', () => activate(tabCoverage, 'coverage'));
     }
 
     function esc(s) {
@@ -724,6 +742,7 @@
         renderSettings();
         renderFooter();
         renderTraceability();
+        renderCoverage();
 
         const c = document.querySelector('.container');
         if (c) { c.classList.remove('flash'); void c.offsetWidth; }
@@ -891,15 +910,18 @@
       const list = document.getElementById('settings-list');
       if (!settingsData) { card.style.display = 'none'; return; }
       card.style.display = 'block';
-      const rows = [
+      const toggleRows = [
         ['TDD Enabled', settingsData.tddEnabled],
         ['Skip Verifier', settingsData.skipVerifierEnabled],
         ['Important Gate', settingsData.importantTaskGateEnabled]
       ];
-      list.innerHTML = rows.map(r =>
+      const minCov = settingsData.minTestCoverage != null ? settingsData.minTestCoverage : 0;
+      list.innerHTML = toggleRows.map(r =>
         '<div class="setting-row"><span>' + r[0] + '</span>' +
         '<span class="toggle ' + (r[1] ? 'on' : 'off') + '">' + (r[1] ? 'On' : 'Off') + '</span></div>'
-      ).join('');
+      ).join('') +
+        '<div class="setting-row"><span>Min Coverage</span>' +
+        '<span class="toggle off">' + minCov + '%</span></div>';
     }
 
     function renderFooter() {
@@ -907,12 +929,64 @@
       document.getElementById('footer-updated').textContent = u ? ('updated ' + new Date(u).toLocaleString()) : '';
     }
 
+    function coverageBadge(file) {
+      if (!traceData || !traceData.coverage) return '';
+      const pct = traceData.coverage[file];
+      if (pct == null) return '';
+      const minCov = (settingsData && settingsData.minTestCoverage != null) ? settingsData.minTestCoverage : 0;
+      if (minCov === 0) return '';
+      const color = pct >= minCov ? 'var(--ok)' : 'var(--accent)';
+      return ' <span style="font-family:var(--display);font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:0.1rem 0.35rem;border:1.5px solid ' + color + ';color:' + color + ';">' + pct + '%</span>';
+    }
+
+    function renderCoverage() {
+      const ct = document.getElementById('container-coverage');
+      if (!ct) return;
+      ct.innerHTML = '';
+      const coverage = (traceData && traceData.coverage && typeof traceData.coverage === 'object') ? traceData.coverage : {};
+      const files = Object.keys(coverage).sort();
+      if (!files.length) {
+        ct.innerHTML = '<div class="panel"><div class="empty">No coverage measured yet. Coverage is recorded by the TDD green-phase verifier when min coverage is enabled.</div></div>';
+        return;
+      }
+      const minCov = (settingsData && settingsData.minTestCoverage != null) ? settingsData.minTestCoverage : 0;
+      const panel = document.createElement('div');
+      panel.className = 'panel trace-task-block';
+      const title = document.createElement('div');
+      title.className = 'trace-task-title';
+      title.textContent = 'File Coverage' + (minCov > 0 ? ' · min ' + minCov + '%' : ' · gate disabled');
+      panel.appendChild(title);
+      const table = document.createElement('table');
+      table.style.borderCollapse = 'collapse';
+      const tbody = document.createElement('tbody');
+      files.forEach(file => {
+        const pct = coverage[file];
+        const tr = document.createElement('tr');
+        const tdFile = document.createElement('td');
+        tdFile.className = 'trace-td trace-td-label';
+        tdFile.textContent = file;
+        tr.appendChild(tdFile);
+        const tdPct = document.createElement('td');
+        tdPct.className = 'trace-td';
+        const color = (minCov > 0 && pct < minCov) ? 'var(--accent)' : 'var(--ok)';
+        tdPct.innerHTML = '<span style="font-family:var(--display);font-weight:700;color:' + color + ';">' + pct + '%</span>';
+        tr.appendChild(tdPct);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      const wrap = document.createElement('div');
+      wrap.className = 'trace-table-wrap';
+      wrap.appendChild(table);
+      panel.appendChild(wrap);
+      ct.appendChild(panel);
+    }
+
     function renderTraceability() {
       const ct = document.getElementById('container-trace');
       if (!ct) return;
       ct.innerHTML = '';
 
-      const td = (traceData && typeof traceData === 'object') ? traceData : {};
+      const entries = (traceData && traceData.entries && typeof traceData.entries === 'object') ? traceData.entries : {};
       const tasks = (progressData && progressData.tasks) || [];
 
       if (!tasks.length) {
@@ -925,8 +999,8 @@
         const ecList = (task.edgeCases) || [];
 
         const flat = [];
-        Object.keys(td).forEach(fileKey => {
-          const arr = td[fileKey] || [];
+        Object.keys(entries).forEach(fileKey => {
+          const arr = entries[fileKey] || [];
           arr.forEach(e => {
             const tid = e.taskId || e.TaskID || '';
             if (tid === task.id) {
@@ -969,7 +1043,6 @@
         }
 
         const table = document.createElement('table');
-        table.style.width = '100%';
         table.style.borderCollapse = 'collapse';
 
         const thead = document.createElement('thead');
@@ -992,7 +1065,7 @@
           const th = document.createElement('th');
           th.className = 'trace-th trace-th-fn';
           th.innerHTML = '<span class="trace-fn-name">' + esc(fnName) + '</span>' +
-            (fileName ? '<span class="trace-fn-file">' + esc(fileName) + '</span>' : '');
+            (fileName ? '<span class="trace-fn-file">' + esc(fileName) + coverageBadge(fileName) + '</span>' : '');
           headerRow.appendChild(th);
         });
 
@@ -1052,7 +1125,10 @@
         });
 
         table.appendChild(tbody);
-        block.appendChild(table);
+        const tableWrap = document.createElement('div');
+        tableWrap.className = 'trace-table-wrap';
+        tableWrap.appendChild(table);
+        block.appendChild(tableWrap);
         ct.appendChild(block);
       });
     }

@@ -57,8 +57,9 @@ type StageReport struct {
 	Plan               *spec.TaskPlan `json:"plan,omitempty"`
 	Accepted           bool           `json:"accepted"`
 	PlanFeedback       string         `json:"planFeedback"`
-	TestsWritten       []string          `json:"testsWritten"`
+	TestsWritten       []string           `json:"testsWritten"`
 	Traceability       []TraceReportEntry `json:"traceability"`
+	FileCoverage       []FileCoverageEntry `json:"fileCoverage,omitempty"`
 }
 
 func (r StageReport) RefactorNotesPresent() bool {

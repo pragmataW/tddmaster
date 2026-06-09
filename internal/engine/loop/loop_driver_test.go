@@ -35,6 +35,7 @@ func seedLoopSpec(t *testing.T, root, slug string, tasks []spec.Task, execution 
 		t.Fatalf("SaveProgress: %v", err)
 	}
 	settings := spec.DefaultSettings()
+	settings.MinTestCoverage = 0
 	if err := spec.SaveSettings(root, slug, settings); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
 	}

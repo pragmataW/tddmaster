@@ -160,6 +160,12 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 		}
 	}
 
+	if stage.ID() == StageIDVerifier && tddActive(ctx) && ctx.State.TDDCycle == cycleGreen && len(report.FileCoverage) > 0 {
+		if err := persistCoverage(c, report); err != nil {
+			return engine.Action{}, false, err
+		}
+	}
+
 	newCtx, err := stage.OnReport(ctx, report)
 	if err != nil {
 		return engine.Action{}, false, err

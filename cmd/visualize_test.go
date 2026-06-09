@@ -249,8 +249,10 @@ func TestTraceabilityRoute_Returns200AndValidJSON(t *testing.T) {
 	slug := "trace-slug"
 
 	traceability := spec.Traceability{
-		"task-1": []spec.TraceEntry{
-			{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+		Entries: map[string][]spec.TraceEntry{
+			"task-1": {
+				{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+			},
 		},
 	}
 	if err := spec.SaveTraceability(root, slug, traceability); err != nil {
@@ -276,8 +278,8 @@ func TestTraceabilityRoute_Returns200AndValidJSON(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("body is not valid JSON: %v", err)
 	}
-	if len(parsed["task-1"]) != 1 {
-		t.Errorf("expected 1 entry for task-1, got %d", len(parsed["task-1"]))
+	if len(parsed.Entries["task-1"]) != 1 {
+		t.Errorf("expected 1 entry for task-1, got %d", len(parsed.Entries["task-1"]))
 	}
 }
 
@@ -320,8 +322,10 @@ func TestCalculateHash_IncludesTraceabilityFile(t *testing.T) {
 	}
 
 	initial := spec.Traceability{
-		"task-1": []spec.TraceEntry{
-			{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+		Entries: map[string][]spec.TraceEntry{
+			"task-1": {
+				{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+			},
 		},
 	}
 	if err := spec.SaveTraceability(root, slug, initial); err != nil {
@@ -331,9 +335,11 @@ func TestCalculateHash_IncludesTraceabilityFile(t *testing.T) {
 	hashBefore := visualize.CalculateHash(root, slug)
 
 	updated := spec.Traceability{
-		"task-1": []spec.TraceEntry{
-			{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
-			{FunctionName: "TestBeta", TaskID: "task-1", AC: []string{"AC2"}, EC: []string{}},
+		Entries: map[string][]spec.TraceEntry{
+			"task-1": {
+				{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+				{FunctionName: "TestBeta", TaskID: "task-1", AC: []string{"AC2"}, EC: []string{}},
+			},
 		},
 	}
 	if err := spec.SaveTraceability(root, slug, updated); err != nil {

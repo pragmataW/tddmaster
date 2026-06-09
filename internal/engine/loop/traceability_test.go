@@ -65,7 +65,7 @@ func TestContextLoadTraceability_MissingFile_ReturnsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTraceability on missing file: %v", err)
 	}
-	if len(tr) != 0 {
+	if len(tr.Entries) != 0 {
 		t.Fatalf("expected empty Traceability, got %v", tr)
 	}
 }
@@ -77,8 +77,10 @@ func TestContextSaveTraceability_RoundTrip(t *testing.T) {
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	tr := spec.Traceability{
-		"testfile_test.go": []spec.TraceEntry{
-			{FunctionName: "TestSomething", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+		Entries: map[string][]spec.TraceEntry{
+			"testfile_test.go": {
+				{FunctionName: "TestSomething", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+			},
 		},
 	}
 
@@ -90,10 +92,10 @@ func TestContextSaveTraceability_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
-	if len(loaded) != 1 {
-		t.Fatalf("expected 1 key, got %d", len(loaded))
+	if len(loaded.Entries) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(loaded.Entries))
 	}
-	entries := loaded["testfile_test.go"]
+	entries := loaded.Entries["testfile_test.go"]
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -236,7 +238,7 @@ func TestValidateAndPersistTraceability_PersistHappyPath_EntriesWritten(t *testi
 	if err != nil {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
-	entries := loaded["foo_test.go"]
+	entries := loaded.Entries["foo_test.go"]
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries under foo_test.go, got %d", len(entries))
 	}
@@ -272,7 +274,7 @@ func TestValidateAndPersistTraceability_KeyIsTestFilePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
-	if _, ok := loaded["internal/foo/foo_test.go"]; !ok {
+	if _, ok := loaded.Entries["internal/foo/foo_test.go"]; !ok {
 		t.Fatalf("expected key %q in loaded traceability, keys present: %v", "internal/foo/foo_test.go", loaded)
 	}
 }
@@ -298,7 +300,7 @@ func TestValidateAndPersistTraceability_EmptyTaskID_FilledFromTask(t *testing.T)
 	if err != nil {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
-	entries := loaded["foo_test.go"]
+	entries := loaded.Entries["foo_test.go"]
 	if len(entries) == 0 {
 		t.Fatal("expected persisted entries, got none")
 	}
@@ -328,8 +330,8 @@ func TestValidateAndPersistTraceability_MissingTraceFile_MergeWorks(t *testing.T
 	if err != nil {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
-	if len(loaded["bar_test.go"]) != 1 {
-		t.Fatalf("expected 1 entry after merge-write, got %d", len(loaded["bar_test.go"]))
+	if len(loaded.Entries["bar_test.go"]) != 1 {
+		t.Fatalf("expected 1 entry after merge-write, got %d", len(loaded.Entries["bar_test.go"]))
 	}
 }
 
@@ -358,7 +360,7 @@ func TestValidateAndPersistTraceability_Dedup_SameFileAndFunc_NoDuplicate(t *tes
 		t.Fatalf("LoadTraceability: %v", err)
 	}
 	count := 0
-	for _, e := range loaded["foo_test.go"] {
+	for _, e := range loaded.Entries["foo_test.go"] {
 		if e.FunctionName == "TestFoo" {
 			count++
 		}
@@ -399,7 +401,7 @@ func TestValidateAndPersistTraceability_Dedup_LaterReplacesPrior(t *testing.T) {
 		t.Fatalf("LoadTraceability: %v", err)
 	}
 	count := 0
-	for _, e := range loaded["foo_test.go"] {
+	for _, e := range loaded.Entries["foo_test.go"] {
 		if e.FunctionName == "TestFoo" {
 			count++
 		}

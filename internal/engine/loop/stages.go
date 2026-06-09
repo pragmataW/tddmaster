@@ -161,6 +161,7 @@ func (redStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	b.WriteString(instructionFor(promptregistry.KeyExecRed))
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
+	appendCoverageFeedback(&b, ctx)
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentTestWriter),
@@ -210,6 +211,9 @@ func (greenStageImpl) Prompt(ctx ExecCtx) engine.Action {
 
 func (greenStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
 	ctx.State.Implemented = true
+	if len(report.FilesModified) > 0 {
+		ctx.State.LastModifiedFiles = report.FilesModified
+	}
 	return ctx, nil
 }
 
@@ -226,7 +230,13 @@ func (refactorStageImpl) Applies(ctx ExecCtx) bool {
 func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	var b strings.Builder
 	if !ctx.State.RefactorApplied {
-		b.WriteString(instructionFor(promptregistry.KeyExecRefactorApply))
+		applyKey := promptregistry.KeyExecRefactorApply
+		applyExample := promptregistry.ReportExampleRefactorApply
+		if ctx.Settings.SkipVerifierEnabled {
+			applyKey = promptregistry.KeyExecRefactorSkipVerify
+			applyExample = promptregistry.ReportExampleRefactorApplySkip
+		}
+		b.WriteString(instructionFor(applyKey))
 		appendACsAndECs(&b, ctx.Task)
 		appendUserContext(&b, ctx.UserContext)
 		return engine.Action{
@@ -234,7 +244,7 @@ func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 			DelegateAgent: string(promptregistry.AgentExecutor),
 			ExpectedInput: engine.ExpectedInput{
 				Format:  engine.FormatJSON,
-				Example: promptregistry.ReportExampleRefactorApply,
+				Example: applyExample,
 			},
 			Instruction: b.String(),
 		}
@@ -337,6 +347,9 @@ func (verifierStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	var b strings.Builder
 	b.WriteString(instructionFor(promptregistry.KeyExecVerifier))
 	appendACsAndECs(&b, ctx.Task)
+	if tddActive(ctx) && ctx.State.TDDCycle == cycleGreen {
+		appendCoverageRequirement(&b, ctx)
+	}
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentVerifier),
@@ -355,6 +368,23 @@ func (verifierStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, err
 	}
 	if !tddActive(ctx) {
 		return ctx, nil
+	}
+	if ctx.State.TDDCycle == cycleGreen && coverageEnforced(ctx.Settings) {
+		if len(report.FileCoverage) == 0 {
+			ctx.State.CoverageUnreported = true
+			ctx.State.Implemented = false
+			return ctx, nil
+		}
+		ctx.State.CoverageUnreported = false
+		if !coverageMet(report, ctx.Settings) {
+			ctx.State.LastCoverage = coverageMap(report)
+			ctx.State.Implemented = false
+			ctx.State.TDDCycle = cycleRed
+			return ctx, nil
+		}
+	}
+	if ctx.State.TDDCycle == cycleGreen {
+		ctx.State.LastCoverage = coverageMap(report)
 	}
 	newSt, _ := advanceCycle(ctx.State, true, report.RefactorNotesPresent(), ctx.MaxRefactorRounds)
 	newSt.Implemented = false
