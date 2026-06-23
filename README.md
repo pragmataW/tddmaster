@@ -86,13 +86,15 @@ What each phase is for:
 
 ## Settings phase
 
-Unlike the original, workflow behavior is chosen **per spec** at the start, not baked in at `init`. The settings phase asks for three flags via a multi-select:
+Unlike the original, workflow behavior is chosen **per spec** at the start, not baked in at `init`. The settings phase asks for five flags via a multi-select:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `tddEnabled` | ON | Enforce failing-test-first cycles per task |
 | `skipVerifierEnabled` | OFF | Skip the independent verifier sub-agent after the green stage |
 | `importantTaskGateEnabled` | OFF | Pause tasks flagged `important` for a plan-first review before execution |
+| `minTestCoverage` | 80 | Minimum test coverage percentage required in green stage (0 = disabled) |
+| `ruleLearningEnabled` | OFF | Run the rule learning phase after execution to persist patterns as project rules |
 
 These flags are persisted with the spec and steer the execution ruleset.
 
@@ -246,6 +248,39 @@ When the gate is enabled and the active task is flagged `important` without an a
 - **revise / reject** → `tddmaster next <slug> --answer='{"planFeedback":"<reason>"}'` — the gate re-fires with prior feedback and an incremented attempt count
 
 Once approved, the plan is persisted and embedded in every executor spawn for that task. `touchedFiles` is binding — work that needs a file outside the list must stop and report blocked.
+
+## Rule learning phase
+
+When `ruleLearningEnabled` is on, after execution completes the engine runs the rule learning phase. If no learnings emerged during execution it is a no-op.
+
+The engine emits `action: "instruct"` with `delegateAgent: "tddmaster-rule-synthesizer"`. The synthesizer inspects the completed work and proposes a set of rules as JSON:
+
+```json
+{"rules": [{"scope": "executor", "name": "no-globals", "content": "Never use global variables.", "rationale": "..."}]}
+```
+
+The orchestrating agent presents the proposed rules and asks the user to `accept`, `revise`, or `reject`:
+
+- **accept** — the synthesizer writes each rule using the non-interactive CLI command (one invocation per rule):
+
+  ```bash
+  tddmaster rule add --scope <scope> --name <name> --content-file <path>
+  ```
+
+  `--scope` is one of `global`, `test-writer`, `executor`, `verifier`, or `planner`. The synthesizer writes the rule body to a temp file, then calls the command. It never edits `.tddmaster/rules/` directly and never passes `--overwrite`.
+
+- **revise** — the user provides feedback and the synthesizer re-proposes.
+- **reject** — no rules are written.
+
+### Non-interactive rule command
+
+```bash
+tddmaster rule add --scope global|test-writer|executor|verifier|planner \
+                   --name <filename-without-extension> \
+                   --content <text> | --content-file <path>
+```
+
+When called with no flags the interactive TUI opens instead. `--content` and `--content-file` are mutually exclusive.
 
 ## Sub-agents
 

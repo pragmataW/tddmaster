@@ -101,7 +101,25 @@ Note: `refine` is only valid in the refinement phase.
 
 ### Spec settings (runs before discovery)
 
-The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and four settings in `interactiveOptions` (TDD, skip verifier, important task gate, min test coverage). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL four as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false,"minTestCoverage":80}'`. A selected toggle means `true`; unselected means `false`. `minTestCoverage` is a number (default 80; set to 0 to disable). After submit, discovery begins automatically.
+The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and five settings in `interactiveOptions` (TDD, skip verifier, important task gate, min test coverage, rule learning). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL five as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false,"minTestCoverage":80,"ruleLearningEnabled":false}'`. A selected toggle means `true`; unselected means `false`. `minTestCoverage` is a number (default 80; set to 0 to disable). `ruleLearningEnabled` defaults to `false`. After submit, discovery begins automatically.
+
+### Rule learning phase
+
+The rule learning phase runs after execution completes, but only when `ruleLearningEnabled` is on. If no learnings emerge the phase is a no-op.
+
+When the engine emits `action: "instruct"` with `delegateAgent: "tddmaster-rule-synthesizer"`, spawn the synthesizer to PROPOSE rules as a JSON array:
+
+```json
+{"rules": [{"scope": "executor", "name": "no-globals", "content": "Never use global variables.", "rationale": "..."}]}
+```
+
+Present the proposed rules to the user and ask via AskUserQuestion with options `accept | revise | reject`:
+
+- **accept** — the synthesizer APPLIES the rules via the non-interactive CLI (one call per rule):
+  `{{.Command}} rule add --scope <scope> --name <name> --content-file <path>`
+  The synthesizer writes content to a temp file first, then calls the command. It never edits `.tddmaster/rules/` directly and never passes `--overwrite`.
+- **revise** — re-propose with the user's feedback; submit `--answer='{"feedback":"<reason>"}'`
+- **reject** — no rules written; submit `--answer='{"accepted":false}'`
 
 ### Discovery flow
 

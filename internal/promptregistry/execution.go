@@ -60,6 +60,17 @@ const ReportExamplePlanner = `{"plan":{"taskId":"","touchedFiles":["internal/foo
 
 const ReportExampleTestWriter = `{"testsWritten":["TestFoo_HappyPath","TestFoo_EdgeCase"],"filesModified":["internal/foo/bar_test.go"],"traceability":[{"testFilePath":"internal/foo/bar_test.go","functionName":"TestFoo_HappyPath","taskId":"task-1","ac":["AC-1"],"ec":["EC-1"]}]}`
 
+const ReportExampleRuleSynthesizer = `{"rules":[{"scope":"executor","name":"prefer-table-tests","content":"Use table-driven tests for all functions with multiple input cases.","rationale":"Reduces duplication and makes edge cases explicit."}]}`
+
+const ruleLearnProposeText = "Synthesize rules from the accumulated learnings gathered during execution. " +
+	"Analyze the refactor note suggestions and failed AC reasons provided. " +
+	"For each rule, decide its SCOPE: use 'global' to apply to all agents, or one of 'executor', 'test-writer', 'verifier', 'planner' for a specific agent. " +
+	"Return ONLY a JSON proposal without writing any files: {\"rules\":[{\"scope\":\"<scope>\",\"name\":\"<name>\",\"content\":\"<rule text>\",\"rationale\":\"<why>\"}]}."
+
+const ruleLearnApplyText = "Apply the approved rules by running `tddmaster rule add` for each rule. " +
+	"For each rule: write its content to a temporary file, then run `tddmaster rule add --scope <scope> --name <name> --content-file <path>`. " +
+	"Never edit rule files directly. Never overwrite existing rules. Surface any errors immediately."
+
 func init() {
 	instructionMap[KeyExecRed] = execRedText
 	instructionMap[KeyExecGreen] = execGreenText
@@ -71,4 +82,6 @@ func init() {
 	instructionMap[KeyExecGate] = execGateText
 	instructionMap[KeyExecVerifyFailed] = execVerifyFailedText
 	instructionMap[KeyExecRefactorSkipVerify] = execRefactorSkipVerifyText
+	instructionMap[KeyRuleLearnPropose] = ruleLearnProposeText
+	instructionMap[KeyRuleLearnApply] = ruleLearnApplyText
 }

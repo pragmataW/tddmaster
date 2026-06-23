@@ -29,10 +29,11 @@ func settingsPrompt() engine.Action {
 			{Label: "Skip verifier", Description: "Skip the independent verifier sub-agent after the green stage. Default: OFF."},
 			{Label: "Important task gate", Description: "Pause tasks flagged important for a plan-first review before execution. Default: OFF."},
 			{Label: "Min test coverage", Description: "Coverage gate for the TDD green-phase verifier. Ask the user for a percentage (0-100) and submit it as the number minTestCoverage; 0 disables. Default: 80."},
+			{Label: "Rule learning", Description: "Derive tddmaster rules from refactor notes and failed ACs after execution. Default: OFF."},
 		},
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
-			Example: fmt.Sprintf(`{"tddEnabled":%t,"skipVerifierEnabled":%t,"importantTaskGateEnabled":%t,"minTestCoverage":%d}`, d.TDDEnabled, d.SkipVerifierEnabled, d.ImportantTaskGateEnabled, d.MinTestCoverage),
+			Example: fmt.Sprintf(`{"tddEnabled":%t,"skipVerifierEnabled":%t,"importantTaskGateEnabled":%t,"minTestCoverage":%d,"ruleLearningEnabled":%t}`, d.TDDEnabled, d.SkipVerifierEnabled, d.ImportantTaskGateEnabled, d.MinTestCoverage, d.RuleLearningEnabled),
 		},
 	}
 }

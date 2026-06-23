@@ -25,7 +25,8 @@ func Render(name string, data RenderData) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unknown template %q: %w", name, err)
 	}
-	tmpl, err := template.New(name).Parse(string(content))
+	src := string(content)
+	tmpl, err := template.New(name).Parse(src)
 	if err != nil {
 		return "", fmt.Errorf("parse template %q: %w", name, err)
 	}

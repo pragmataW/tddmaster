@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
@@ -80,7 +81,7 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 		if err := c.SaveProgress(pr); err != nil {
 			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
 		}
-		return engine.Action{Action: engine.ActionTerminal}, true
+		return engine.Action{}, true
 	}
 
 	task, taskIdx, found := findFirstPendingTask(pr.Tasks)
@@ -89,7 +90,7 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 		if err := c.SaveProgress(pr); err != nil {
 			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
 		}
-		return engine.Action{Action: engine.ActionTerminal}, true
+		return engine.Action{}, true
 	}
 
 	if pr.Execution == nil {
@@ -141,12 +142,12 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 	pr := c.Progress()
 
 	if canTerminate(pr) {
-		return engine.Action{Action: engine.ActionTerminal}, true, nil
+		return engine.Action{}, true, nil
 	}
 
 	task, taskIdx, found := findFirstPendingTask(pr.Tasks)
 	if !found {
-		return engine.Action{Action: engine.ActionTerminal}, true, nil
+		return engine.Action{}, true, nil
 	}
 
 	if pr.Execution == nil {
@@ -192,6 +193,12 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 
 	pr.Execution = &newCtx.State
 
+	pr.Tasks[taskIdx].RefactorNotes = appendUniqueNotes(pr.Tasks[taskIdx].RefactorNotes, report.RefactorNotes)
+	combined := make([]string, 0, len(report.FailedACs)+len(report.UncoveredEdgeCases))
+	combined = append(combined, report.FailedACs...)
+	combined = append(combined, report.UncoveredEdgeCases...)
+	pr.Tasks[taskIdx].FailedACReasons = appendUniqueStrings(pr.Tasks[taskIdx].FailedACReasons, combined)
+
 	taskComplete := isTaskComplete(c.Settings().TDDEnabled && task.TDDEnabled, c.Settings().SkipVerifierEnabled, ctx.State, newCtx.State, report)
 	if taskComplete {
 		pr.Tasks = completeCurrentTask(pr.Tasks, taskIdx)
@@ -218,7 +225,7 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 			return engine.Action{}, false, err
 		}
 		writeSpecMd(c)
-		return engine.Action{Action: engine.ActionTerminal}, true, nil
+		return engine.Action{}, true, nil
 	}
 
 	if pr.Execution.Iteration >= c.MaxIteration() {
@@ -230,6 +237,30 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 	}
 
 	return engine.Action{}, false, nil
+}
+
+func appendUnique[T any](dst, src []T, eq func(a, b T) bool) []T {
+	for _, item := range src {
+		if !slices.ContainsFunc(dst, func(existing T) bool { return eq(existing, item) }) {
+			dst = append(dst, item)
+		}
+	}
+	return dst
+}
+
+func appendUniqueNotes(dst []RefactorNote, src []RefactorNote) []RefactorNote {
+	return appendUnique(dst, src, func(a, b RefactorNote) bool {
+		return a.File == b.File && a.Suggestion == b.Suggestion && a.Rationale == b.Rationale
+	})
+}
+
+func appendUniqueStrings(dst []string, src []string) []string {
+	for _, s := range src {
+		if !slices.Contains(dst, s) {
+			dst = append(dst, s)
+		}
+	}
+	return dst
 }
 
 func reportFromVerifier(stageID string, st spec.ExecState) bool {

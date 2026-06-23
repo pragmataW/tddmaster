@@ -9,6 +9,7 @@ const (
 	PhaseSpecProposal engine.PhaseID = "spec-proposal"
 	PhaseRefinement   engine.PhaseID = "refinement"
 	PhaseExecution    engine.PhaseID = "execution"
+	PhaseRuleLearning engine.PhaseID = "rule-learning"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 	ModSpecProposal engine.ModuleID = "mod-spec-proposal"
 	ModRefinement   engine.ModuleID = "mod-refinement"
 	ModExecution    engine.ModuleID = "mod-execution"
+	ModRuleLearning engine.ModuleID = "mod-rule-learning"
 )
 
 const (
@@ -27,4 +29,5 @@ const (
 	StepSpecProposalAsk engine.StepID = "step-spec-proposal-ask"
 	StepRefinementAsk   engine.StepID = "step-refinement-ask"
 	StepExecutionAsk    engine.StepID = "step-execution-ask"
+	StepRuleLearningAsk engine.StepID = "step-rule-learning-ask"
 )

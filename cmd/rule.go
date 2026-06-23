@@ -20,7 +20,7 @@ func newRuleCmd() *cobra.Command {
 func newRuleAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Add a new rule file interactively",
+		Short: "Add a new rule file interactively or non-interactively",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := cmd.Flags().GetString("root")
 			if root == "" {
@@ -30,9 +30,40 @@ func newRuleAddCmd() *cobra.Command {
 				}
 				root = cwd
 			}
+			scope, _ := cmd.Flags().GetString("scope")
+			name, _ := cmd.Flags().GetString("name")
+			if (scope != "") != (name != "") {
+				return fmt.Errorf("non-interactive mode requires both --scope and --name")
+			}
+			if scope != "" && name != "" {
+				content, _ := cmd.Flags().GetString("content")
+				contentFile, _ := cmd.Flags().GetString("content-file")
+				if content != "" && contentFile != "" {
+					return fmt.Errorf("--content and --content-file are mutually exclusive")
+				}
+				_, err := runRuleAddNonInteractive(root, scope, name, content, contentFile)
+				return err
+			}
 			return ruleform.Run(root)
 		},
 	}
 	cmd.Flags().String("root", "", "Root directory (default: cwd)")
+	cmd.Flags().String("scope", "", "Scope / target agent (e.g. executor, global)")
+	cmd.Flags().String("name", "", "Rule name")
+	cmd.Flags().String("content", "", "Rule content")
+	cmd.Flags().String("content-file", "", "Path to file whose content becomes the rule body")
 	return cmd
+}
+
+func runRuleAddNonInteractive(root, scope, name, content, contentFile string) (string, error) {
+	body := content
+	if contentFile != "" {
+		raw, err := os.ReadFile(contentFile)
+		if err != nil {
+			return "", fmt.Errorf("read content-file %q: %w", contentFile, err)
+		}
+		body = string(raw)
+	}
+
+	return ruleform.WriteRuleNoOverwrite(root, scope, name, body)
 }

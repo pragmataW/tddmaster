@@ -46,6 +46,7 @@ type Settings struct {
 	SkipVerifierEnabled      bool `json:"skipVerifierEnabled"`
 	ImportantTaskGateEnabled bool `json:"importantTaskGateEnabled"`
 	MinTestCoverage          int  `json:"minTestCoverage"`
+	RuleLearningEnabled      bool `json:"ruleLearningEnabled"`
 }
 
 type ExecState struct {
@@ -82,7 +83,9 @@ type Task struct {
 	Done       bool     `json:"done"`
 	TDDEnabled bool     `json:"tddEnabled"`
 	Important  bool     `json:"important"`
-	EdgeCases  []string `json:"edgeCases,omitempty"`
+	EdgeCases       []string       `json:"edgeCases,omitempty"`
+	RefactorNotes   []RefactorNote `json:"refactorNotes,omitempty"`
+	FailedACReasons []string       `json:"failedAcReasons,omitempty"`
 }
 
 type TaskPlan struct {
@@ -95,7 +98,7 @@ type TaskPlan struct {
 }
 
 func DefaultSettings() Settings {
-	return Settings{TDDEnabled: true, SkipVerifierEnabled: false, ImportantTaskGateEnabled: false, MinTestCoverage: 80}
+	return Settings{TDDEnabled: true, SkipVerifierEnabled: false, ImportantTaskGateEnabled: false, MinTestCoverage: 80, RuleLearningEnabled: false}
 }
 
 func (s *Settings) ClampCoverage() {

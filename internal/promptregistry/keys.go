@@ -5,10 +5,11 @@ type InstructionKey string
 type AgentRegistryKey string
 
 const (
-	AgentExecutor   AgentRegistryKey = "tddmaster-executor"
-	AgentVerifier   AgentRegistryKey = "tddmaster-verifier"
-	AgentPlanner    AgentRegistryKey = "tddmaster-planner"
-	AgentTestWriter AgentRegistryKey = "tddmaster-test-writer"
+	AgentExecutor        AgentRegistryKey = "tddmaster-executor"
+	AgentVerifier        AgentRegistryKey = "tddmaster-verifier"
+	AgentPlanner         AgentRegistryKey = "tddmaster-planner"
+	AgentTestWriter      AgentRegistryKey = "tddmaster-test-writer"
+	AgentRuleSynthesizer AgentRegistryKey = "tddmaster-rule-synthesizer"
 )
 
 var AllAgentKeys = []AgentRegistryKey{
@@ -16,6 +17,7 @@ var AllAgentKeys = []AgentRegistryKey{
 	AgentVerifier,
 	AgentPlanner,
 	AgentTestWriter,
+	AgentRuleSynthesizer,
 }
 
 const (
@@ -29,16 +31,21 @@ const (
 )
 
 const (
-	KeyExecRed          InstructionKey = "execution:red"
-	KeyExecGreen        InstructionKey = "execution:green"
-	KeyExecRefactor     InstructionKey = "execution:refactor"
-	KeyExecRefactorApply InstructionKey = "execution:refactor-apply"
+	KeyRuleLearnPropose InstructionKey = "rule-learning:propose"
+	KeyRuleLearnApply   InstructionKey = "rule-learning:apply"
+)
+
+const (
+	KeyExecRed                InstructionKey = "execution:red"
+	KeyExecGreen              InstructionKey = "execution:green"
+	KeyExecRefactor           InstructionKey = "execution:refactor"
+	KeyExecRefactorApply      InstructionKey = "execution:refactor-apply"
 	KeyExecRefactorSkipVerify InstructionKey = "execution:refactor-skip-verify"
-	KeyExecExecutor     InstructionKey = "execution:executor"
+	KeyExecExecutor           InstructionKey = "execution:executor"
 	KeyExecExecutorSkipVerify InstructionKey = "execution:executor-skip-verify"
-	KeyExecVerifier     InstructionKey = "execution:verifier"
-	KeyExecGate         InstructionKey = "execution:gate"
-	KeyExecVerifyFailed InstructionKey = "execution:verify-failed"
+	KeyExecVerifier           InstructionKey = "execution:verifier"
+	KeyExecGate               InstructionKey = "execution:gate"
+	KeyExecVerifyFailed       InstructionKey = "execution:verify-failed"
 )
 
 func KeyDiscoveryQuestion(id string) InstructionKey {

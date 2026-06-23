@@ -94,7 +94,7 @@ func TestRender_AgentTemplates_ContainNameAndDescription(t *testing.T) {
 }
 
 func TestTemplateNames_ReturnsExactSortedNames(t *testing.T) {
-	expected := []string{"claude_md", "executor", "planner", "test-writer", "verifier"}
+	expected := []string{"claude_md", "executor", "planner", "rule-synthesizer", "test-writer", "verifier"}
 	got := TemplateNames()
 	if len(got) != len(expected) {
 		t.Fatalf("expected %d names, got %d: %v", len(expected), len(got), got)

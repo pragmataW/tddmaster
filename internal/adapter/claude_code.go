@@ -76,6 +76,7 @@ func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 		{"tddmaster-verifier.md", "verifier"},
 		{"tddmaster-planner.md", "planner"},
 		{"tddmaster-test-writer.md", "test-writer"},
+		{"tddmaster-rule-synthesizer.md", "rule-synthesizer"},
 	}
 
 	for _, af := range agentFiles {
