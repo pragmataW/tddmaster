@@ -200,6 +200,44 @@ Non-TDD is still structured — it simply skips red-green-refactor. Useful for b
 | on  | false | Verifier called in green and refactor stages |
 | on  | true  | Verifier called once per task in green (for refactor notes) |
 
+## Project rules
+
+Rules are project-specific `.md` files that the engine injects into sub-agent prompts so execution behavior is governed deterministically rather than left to the agent to infer.
+
+### Directory layout
+
+```
+.tddmaster/rules/
+  *.md                  ->  all sub-agents (global)
+  test-writer/*.md      ->  test-writer only
+  executor/*.md         ->  executor only
+  verifier/*.md         ->  verifier only
+  planner/*.md          ->  planner only (gate stage)
+```
+
+Only `.md` files are read. Unknown subdirectories are silently ignored.
+
+Rules are injected **by path** — the engine lists the exact file paths each sub-agent must read; it never inlines rule content into the prompt. Global root rules are listed first, then agent-specific rules; each group is sorted lexically.
+
+Rules are always active. If `.tddmaster/rules/` is missing or empty it is a no-op and sub-agent prompts are unchanged.
+
+### Creating rules
+
+**By hand** — drop a `.md` file into the appropriate directory:
+
+```bash
+echo "Never use global variables." > .tddmaster/rules/executor/no-globals.md
+```
+
+**With the CLI** — run the interactive TUI:
+
+```bash
+tddmaster rule add
+tddmaster rule add --root /path/to/project
+```
+
+`rule add` opens a full-screen TUI: pick the target agent (`global`, `test-writer`, `executor`, `verifier`, or `planner`), enter a filename, type the rule body, and confirm. The engine writes the `.md` file into the correct subdirectory. `--root` defaults to the current directory.
+
 ## Important task gate
 
 When the gate is enabled and the active task is flagged `important` without an approved plan, the execution loop pauses and delegates to `tddmaster-planner` (read-only). The planner produces an approach, a binding `touchedFiles` list, design patterns, best practices, and assumptions. The user accepts, revises, or rejects:
@@ -278,6 +316,7 @@ Important generated files live under `.tddmaster/`:
 - `.tddmaster/specs/<slug>/spec.md`: the human-readable execution contract
 - `.tddmaster/specs/<slug>/progress.json`: task and progress state
 - `.tddmaster/specs/<slug>/dashboard/index.html`: generated visualize dashboard
+- `.tddmaster/rules/**/*.md`: project rule files injected into sub-agent prompts
 
 Do not edit these by hand — the engine is the source of truth. Read them through `tddmaster next`.
 

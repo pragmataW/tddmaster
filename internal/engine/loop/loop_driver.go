@@ -68,6 +68,7 @@ func (d *LoopDriver) buildExecCtx(c *engine.Context, task spec.Task, taskIdx int
 		TaskIdx:           taskIdx,
 		MaxRefactorRounds: defaultMaxRefactorRounds,
 		UserContext:       c.AnswerValue("listen_context"),
+		Rules:             c.Rules(),
 	}
 }
 

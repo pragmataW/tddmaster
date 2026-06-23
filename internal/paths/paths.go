@@ -4,6 +4,7 @@ import "path/filepath"
 
 const (
 	DirSpecs         = "specs"
+	DirRules         = "rules"
 	FileState        = "state.json"
 	FileSettings     = "settings.json"
 	FileProgress     = "progress.json"
@@ -53,4 +54,12 @@ func SpecMd(root, slug string) string {
 
 func SpecTraceability(root, slug string) string {
 	return filepath.Join(SpecDir(root, slug), FileTraceability)
+}
+
+func Rules(root string) string {
+	return filepath.Join(Tddmaster(root), DirRules)
+}
+
+func RulesAgentDir(root, agent string) string {
+	return filepath.Join(Rules(root), agent)
 }

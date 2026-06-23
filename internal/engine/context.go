@@ -7,6 +7,7 @@ import (
 
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
+	"github.com/pragmataW/tddmaster/internal/rules"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -18,6 +19,7 @@ type Context struct {
 	progress     spec.Progress
 	settings     spec.Settings
 	maxIteration int
+	rules        rules.Set
 }
 
 func Build(root, slug string, defs []PhaseDef) (*Context, error) {
@@ -49,6 +51,11 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 		}
 	}
 
+	ruleSet, err := rules.Load(root)
+	if err != nil {
+		return nil, fmt.Errorf("load rules: %w", err)
+	}
+
 	return &Context{
 		root:         root,
 		slug:         slug,
@@ -57,7 +64,12 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 		progress:     progress,
 		settings:     settings,
 		maxIteration: maxIter,
+		rules:        ruleSet,
 	}, nil
+}
+
+func (c *Context) Rules() rules.Set {
+	return c.rules
 }
 
 func (c *Context) Phase() PhaseID {

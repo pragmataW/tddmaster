@@ -18,6 +18,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newNextCmd())
 	root.AddCommand(newRefineCmd())
 	root.AddCommand(newVisualizeCmd())
+	root.AddCommand(newRuleCmd())
 	return root
 }
 

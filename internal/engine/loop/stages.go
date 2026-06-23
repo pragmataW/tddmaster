@@ -98,6 +98,20 @@ func appendFailedACs(b *strings.Builder, state spec.ExecState) {
 	}
 }
 
+func appendRules(b *strings.Builder, ctx ExecCtx, agent string) {
+	paths := ctx.Rules.For(agent)
+	if len(paths) == 0 {
+		return
+	}
+	b.WriteString("\nYou MUST read and follow these project rule files before doing anything. They are mandatory project constraints, not suggestions:\n")
+	for _, p := range paths {
+		b.WriteString("- ")
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	b.WriteString("Do not proceed until you have read every file listed above.")
+}
+
 func tddActive(ctx ExecCtx) bool {
 	return ctx.Settings.TDDEnabled && ctx.Task.TDDEnabled
 }
@@ -127,8 +141,9 @@ func (gateStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	b.WriteString(instructionFor(promptregistry.KeyExecGate))
 	if feedback, ok := ctx.State.PlanFeedback[ctx.Task.ID]; ok && feedback != "" {
 		attempts := ctx.State.PlanAttempts[ctx.Task.ID]
-		b.WriteString(fmt.Sprintf("\nPrior feedback: %s\nattemptCount: %d\n", feedback, attempts))
+		fmt.Fprintf(&b, "\nPrior feedback: %s\nattemptCount: %d\n", feedback, attempts)
 	}
+	appendRules(&b, ctx, "planner")
 	return engine.Action{
 		Action:        engine.ActionAsk,
 		DelegateAgent: string(promptregistry.AgentPlanner),
@@ -181,6 +196,7 @@ func (redStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
 	appendCoverageFeedback(&b, ctx)
+	appendRules(&b, ctx, "test-writer")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentTestWriter),
@@ -217,6 +233,7 @@ func (greenStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
 	appendApprovedPlan(&b, ctx.State, ctx.Task.ID)
+	appendRules(&b, ctx, "executor")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentExecutor),
@@ -263,6 +280,7 @@ func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 		appendRefactorNotes(&b, ctx.State.RefactorNotes)
 		appendACsAndECs(&b, ctx.Task)
 		appendUserContext(&b, ctx.UserContext)
+		appendRules(&b, ctx, "executor")
 		return engine.Action{
 			Action:        engine.ActionInstruct,
 			DelegateAgent: string(promptregistry.AgentExecutor),
@@ -276,6 +294,7 @@ func (refactorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	b.WriteString(instructionFor(promptregistry.KeyExecRefactor))
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
+	appendRules(&b, ctx, "verifier")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentVerifier),
@@ -337,6 +356,7 @@ func (executorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
 	appendApprovedPlan(&b, ctx.State, ctx.Task.ID)
+	appendRules(&b, ctx, "executor")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentExecutor),
@@ -379,6 +399,7 @@ func (verifierStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	if tddActive(ctx) && ctx.State.TDDCycle == cycleGreen {
 		appendCoverageRequirement(&b, ctx)
 	}
+	appendRules(&b, ctx, "verifier")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
 		DelegateAgent: string(promptregistry.AgentVerifier),

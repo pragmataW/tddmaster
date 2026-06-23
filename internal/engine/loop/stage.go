@@ -2,6 +2,7 @@ package loop
 
 import (
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/rules"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -28,6 +29,7 @@ type ExecCtx struct {
 	TaskIdx           int
 	MaxRefactorRounds int
 	UserContext       string
+	Rules             rules.Set
 }
 
 type TraceReportEntry struct {
