@@ -23,8 +23,8 @@ func RenderTaskList(tasks []spec.Task) string {
 			line += " (important)"
 		}
 		lines = append(lines, line)
-		for _, ac := range task.AC {
-			lines = append(lines, "  - "+ac)
+		for _, c := range task.Criteria {
+			lines = append(lines, "  - ["+c.ID+"]"+spec.FormatCriterionInline(c))
 		}
 	}
 	return strings.Join(lines, "\n")

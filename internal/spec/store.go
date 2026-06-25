@@ -135,6 +135,19 @@ func LoadTraceability(root, slug string) (Traceability, error) {
 	return tr, nil
 }
 
+func SaveAnalysis(root, slug string, a Analysis) error {
+	return saveJSON(paths.SpecDir(root, slug), paths.SpecAnalysis(root, slug), a)
+}
+
+func LoadAnalysis(root, slug string) (Analysis, error) {
+	p := paths.SpecAnalysis(root, slug)
+	a, err := loadJSONOrEmpty[Analysis](p)
+	if err != nil {
+		return Analysis{}, err
+	}
+	return a, nil
+}
+
 func Exists(root, slug string) bool {
 	_, err := os.Stat(paths.SpecState(root, slug))
 	return err == nil

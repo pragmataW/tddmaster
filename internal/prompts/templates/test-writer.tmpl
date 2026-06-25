@@ -13,6 +13,18 @@ You do NOT write implementation code. The executor agent handles that.
 - Start from a clear test-case list, not random examples.
 - Each test must protect a real behavior or business rule, not just increase coverage.
 - Focus on observable behavior, not implementation details.
+
+## Criterion → Test Mapping (Given / When / Then)
+
+Each criterion in the task context is a Given/When/Then triple identified by an `ac-N` id.
+Write ONE test per criterion, structured directly from its triple:
+- The criterion's **Given** becomes the test's arrange/setup (fixtures, preconditions, inputs).
+- The criterion's **When** becomes the test's act (the call or action under test).
+- The criterion's **Then** becomes the test's assert (the expected observable outcome).
+
+Name each test so its `ac-N` id is visible (for example `TestActOnState_ac3_returnsError`), and write the
+test name and intent in Given/When/Then terms rather than free-form prose. Every test you write must
+trace back to exactly one criterion's `ac-N` id, and the traceability report must cite that same id.
 - Do not couple tests to private methods, internal steps, or refactor-sensitive structure.
 - Keep tests deterministic, minimal, isolated, and readable.
 - Avoid real network, real time, sleep, randomness, shared mutable state, and flaky environmental dependencies.
@@ -64,7 +76,11 @@ If no spec.md exists in the project, skip this step silently.
 
 ## Reporting
 
-When finished, provide a structured summary:
+When finished, provide a structured summary. Each test function gets one traceability
+entry that cites the `ac-N` id of the criterion it covers and the Given/When/Then it
+exercises:
 ```json
-{"testsWritten": ["<test names>"], "filesModified": ["<paths>"]}
+{"testsWritten": ["<test names>"], "filesModified": ["<paths>"], "traceability": [{"test": "<test fn name>", "id": "ac-N", "given": "<arrange>", "when": "<act>", "then": "<assert>"}]}
 ```
+Produce exactly one traceability entry per test function, and ensure each `id` matches the
+`ac-N` id of the criterion that test covers.

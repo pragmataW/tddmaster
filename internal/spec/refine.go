@@ -7,11 +7,11 @@ import (
 )
 
 type RefineOp struct {
-	Title      *string  `json:"title,omitempty"`
-	AC         []string `json:"ac,omitempty"`
-	TDDEnabled *bool    `json:"tddEnabled,omitempty"`
-	Important  *bool    `json:"important,omitempty"`
-	EdgeCases  []string `json:"edgeCases,omitempty"`
+	Title      *string     `json:"title,omitempty"`
+	Criteria   []Criterion `json:"criteria,omitempty"`
+	TDDEnabled *bool       `json:"tddEnabled,omitempty"`
+	Important  *bool       `json:"important,omitempty"`
+	EdgeCases  []string    `json:"edgeCases,omitempty"`
 }
 
 type RefinePayload struct {
@@ -26,7 +26,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 
 	maxN := seq
 	for _, t := range tasks {
-		suffix := strings.TrimPrefix(t.ID, "task-")
+		suffix := strings.TrimPrefix(t.ID, TaskIDPrefix)
 		if suffix == t.ID {
 			continue
 		}
@@ -67,9 +67,6 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 		if op.Title != nil {
 			result[idx].Title = *op.Title
 		}
-		if op.AC != nil {
-			result[idx].AC = op.AC
-		}
 		if op.TDDEnabled != nil {
 			result[idx].TDDEnabled = *op.TDDEnabled
 		}
@@ -79,6 +76,10 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 		if op.EdgeCases != nil {
 			result[idx].EdgeCases = op.EdgeCases
 		}
+		if op.Criteria != nil {
+			result[idx].Criteria = op.Criteria
+			AssignCriterionIDs(&result[idx])
+		}
 	}
 
 	for _, op := range p.Add {
@@ -87,9 +88,8 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 		}
 		maxN++
 		newTask := Task{
-			ID:         fmt.Sprintf("task-%d", maxN),
+			ID:         fmt.Sprintf("%s%d", TaskIDPrefix, maxN),
 			Title:      *op.Title,
-			AC:         op.AC,
 			Done:       false,
 			TDDEnabled: tddDefault,
 		}
@@ -100,8 +100,9 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 			newTask.Important = *op.Important
 		}
 		newTask.EdgeCases = op.EdgeCases
-		if newTask.AC == nil {
-			newTask.AC = []string{}
+		if op.Criteria != nil {
+			newTask.Criteria = op.Criteria
+			AssignCriterionIDs(&newTask)
 		}
 		if newTask.EdgeCases == nil {
 			newTask.EdgeCases = []string{}

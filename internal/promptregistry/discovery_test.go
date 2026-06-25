@@ -330,7 +330,7 @@ func TestInstruction_KeyListenFirst_MentionsExecutionPropagation(t *testing.T) {
 		t.Fatalf("Instruction(KeyListenFirst): expected ok=true, got false")
 	}
 	lower := strings.ToLower(got)
-	hasPropagation := strings.Contains(lower, "execution") || strings.Contains(lower, "task") || strings.Contains(lower, "geçirilecek")
+	hasPropagation := strings.Contains(lower, "execution") || strings.Contains(lower, "task")
 	if !hasPropagation {
 		t.Fatalf("Instruction(KeyListenFirst): expected to mention that context is passed during execution, got %q", got)
 	}

@@ -143,6 +143,16 @@ func TestSpecFileHelpers_TableDriven(t *testing.T) {
 	}
 }
 
+func TestSpecAnalysis_Path(t *testing.T) {
+	root := "/tmp/proj"
+	slug := "my-spec"
+	want := filepath.Join(SpecDir(root, slug), "analysis.json")
+	got := SpecAnalysis(root, slug)
+	if got != want {
+		t.Errorf("SpecAnalysis(%q, %q) = %q; want %q", root, slug, got, want)
+	}
+}
+
 func TestSpecDir_SlugIsolation(t *testing.T) {
 	root := "/tmp/proj"
 	dirAlpha := SpecDir(root, "alpha")

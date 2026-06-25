@@ -42,14 +42,14 @@ func buildRefinementCtx(t *testing.T, root, slug string) *engine.Context {
 
 func twoSeededTasks() []spec.Task {
 	return []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1", "ac2"}, TDDEnabled: true, Important: true},
-		{ID: "task-2", Title: "Beta", AC: []string{"ac3"}, TDDEnabled: false, Important: false},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}, {ID: "ac-2", Then: "ac2"}}, TDDEnabled: true, Important: true},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac3"}}, TDDEnabled: false, Important: false},
 	}
 }
 
 func TestRenderTaskList_TDDAndImportant_ContainsTaskLine(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "- task-1: Alpha") {
@@ -59,7 +59,7 @@ func TestRenderTaskList_TDDAndImportant_ContainsTaskLine(t *testing.T) {
 
 func TestRenderTaskList_TDDAndImportant_ContainsTDDTag(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "(TDD)") {
@@ -69,7 +69,7 @@ func TestRenderTaskList_TDDAndImportant_ContainsTDDTag(t *testing.T) {
 
 func TestRenderTaskList_TDDAndImportant_ContainsImportantTag(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "(important)") {
@@ -79,7 +79,7 @@ func TestRenderTaskList_TDDAndImportant_ContainsImportantTag(t *testing.T) {
 
 func TestRenderTaskList_TDDAndImportant_TDDBeforeImportant(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	tddIdx := strings.Index(out, "(TDD)")
@@ -94,17 +94,17 @@ func TestRenderTaskList_TDDAndImportant_TDDBeforeImportant(t *testing.T) {
 
 func TestRenderTaskList_TDDAndImportant_ContainsACSubBullet(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
-	if !strings.Contains(out, "  - ac1") {
-		t.Errorf("output missing AC sub-bullet; got: %s", out)
+	if !strings.Contains(out, "  - [ac-1] THEN ac1") {
+		t.Errorf("output missing criterion sub-bullet; got: %s", out)
 	}
 }
 
 func TestRenderTaskList_SecondTask_NoTagsPresent(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-2", Title: "Beta", AC: []string{"ac3"}, TDDEnabled: false, Important: false},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac3"}}, TDDEnabled: false, Important: false},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "- task-2: Beta") {
@@ -120,7 +120,7 @@ func TestRenderTaskList_SecondTask_NoTagsPresent(t *testing.T) {
 
 func TestRenderTaskList_TDDOnly_ContainsTDDNotImportant(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Gamma", AC: []string{"ac1"}, TDDEnabled: true, Important: false},
+		{ID: "task-1", Title: "Gamma", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: false},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "(TDD)") {
@@ -133,7 +133,7 @@ func TestRenderTaskList_TDDOnly_ContainsTDDNotImportant(t *testing.T) {
 
 func TestRenderTaskList_ImportantOnly_ContainsImportantNotTDD(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Delta", AC: []string{"ac1"}, TDDEnabled: false, Important: true},
+		{ID: "task-1", Title: "Delta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: false, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	if strings.Contains(out, "(TDD)") {
@@ -146,7 +146,7 @@ func TestRenderTaskList_ImportantOnly_ContainsImportantNotTDD(t *testing.T) {
 
 func TestRenderTaskList_BothTagsCombined_ContainsBoth(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Both", AC: []string{"ac1"}, TDDEnabled: true, Important: true},
+		{ID: "task-1", Title: "Both", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: true, Important: true},
 	}
 	out := RenderTaskList(tasks)
 	if !strings.Contains(out, "(TDD)") {
@@ -159,7 +159,7 @@ func TestRenderTaskList_BothTagsCombined_ContainsBoth(t *testing.T) {
 
 func TestRenderTaskList_NeitherTag_ContainsNeither(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Neither", AC: []string{"ac1"}, TDDEnabled: false, Important: false},
+		{ID: "task-1", Title: "Neither", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, TDDEnabled: false, Important: false},
 	}
 	out := RenderTaskList(tasks)
 	if strings.Contains(out, "(TDD)") {
@@ -172,14 +172,14 @@ func TestRenderTaskList_NeitherTag_ContainsNeither(t *testing.T) {
 
 func TestRenderTaskList_MultipleAC_AllSubBulletsPresent(t *testing.T) {
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "Multi", AC: []string{"ac1", "ac2"}, TDDEnabled: false, Important: false},
+		{ID: "task-1", Title: "Multi", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}, {ID: "ac-2", Then: "ac2"}}, TDDEnabled: false, Important: false},
 	}
 	out := RenderTaskList(tasks)
-	if !strings.Contains(out, "  - ac1") {
-		t.Errorf("output missing AC sub-bullet ac1; got: %s", out)
+	if !strings.Contains(out, "  - [ac-1] THEN ac1") {
+		t.Errorf("output missing criterion sub-bullet ac1; got: %s", out)
 	}
-	if !strings.Contains(out, "  - ac2") {
-		t.Errorf("output missing AC sub-bullet ac2; got: %s", out)
+	if !strings.Contains(out, "  - [ac-2] THEN ac2") {
+		t.Errorf("output missing criterion sub-bullet ac2; got: %s", out)
 	}
 }
 

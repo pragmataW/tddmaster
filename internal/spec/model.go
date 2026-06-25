@@ -1,11 +1,23 @@
 package spec
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Criterion struct {
+	ID    string `json:"id"`
+	Given string `json:"given,omitempty"`
+	When  string `json:"when,omitempty"`
+	Then  string `json:"then"`
+	Raw   string `json:"raw,omitempty"`
+}
 
 type TraceEntry struct {
 	FunctionName string   `json:"functionName"`
 	TaskID       string   `json:"taskId"`
-	AC           []string `json:"ac"`
+	CriterionIDs []string `json:"criterionIds,omitempty"`
 	EC           []string `json:"ec"`
 }
 
@@ -77,12 +89,12 @@ type Progress struct {
 }
 
 type Task struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	AC         []string `json:"ac"`
-	Done       bool     `json:"done"`
-	TDDEnabled bool     `json:"tddEnabled"`
-	Important  bool     `json:"important"`
+	ID         string      `json:"id"`
+	Title      string      `json:"title"`
+	Criteria   []Criterion `json:"criteria,omitempty"`
+	Done       bool        `json:"done"`
+	TDDEnabled bool        `json:"tddEnabled"`
+	Important  bool        `json:"important"`
 	EdgeCases       []string       `json:"edgeCases,omitempty"`
 	RefactorNotes   []RefactorNote `json:"refactorNotes,omitempty"`
 	FailedACReasons []string       `json:"failedAcReasons,omitempty"`
@@ -95,6 +107,35 @@ type TaskPlan struct {
 	DesignPatterns []string `json:"designPatterns"`
 	BestPractices  []string `json:"bestPractices"`
 	Approach       string   `json:"approach"`
+}
+
+const (
+	CriterionIDPrefix = "ac-"
+	TaskIDPrefix      = "task-"
+)
+
+func AssignCriterionIDs(t *Task) {
+	const prefix = CriterionIDPrefix
+	maxSuffix := 0
+	for _, c := range t.Criteria {
+		if !strings.HasPrefix(c.ID, prefix) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimPrefix(c.ID, prefix))
+		if err != nil {
+			continue
+		}
+		if n > maxSuffix {
+			maxSuffix = n
+		}
+	}
+	for i := range t.Criteria {
+		if t.Criteria[i].ID != "" {
+			continue
+		}
+		maxSuffix++
+		t.Criteria[i].ID = prefix + strconv.Itoa(maxSuffix)
+	}
 }
 
 func DefaultSettings() Settings {

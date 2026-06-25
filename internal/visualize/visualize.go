@@ -5,18 +5,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"html"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/paths"
+	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
 //go:embed dashboard.html
 var DashboardHTML string
+
+const (
+	classCriteriaGWT = "criteria-gwt"
+	classGwtTable    = "gwt-table"
+	classGwtID       = "gwt-id"
+)
 
 func GetHandler(root, slug string) (http.Handler, error) {
 	specDir := paths.SpecDir(root, slug)
@@ -27,6 +36,10 @@ func GetHandler(root, slug string) (http.Handler, error) {
 	}
 
 	htmlPath := filepath.Join(dashboardDir, "index.html")
+	// Criteria, istemci tarafında renderCriteria() ile yalnızca "Criteria"
+	// sekmesindeki container-criteria'ya çizilir. Daha önce buraya server-side
+	// enjekte edilen GWT bölümü footer'dan önce (tab container'larının dışında)
+	// yer aldığı için her sekmede görünüyordu; o enjeksiyon kaldırıldı.
 	if err := os.WriteFile(htmlPath, []byte(DashboardHTML), 0o644); err != nil {
 		return nil, fmt.Errorf("failed to write dashboard html: %w", err)
 	}
@@ -67,6 +80,54 @@ func GetHandler(root, slug string) (http.Handler, error) {
 	})
 
 	return mux, nil
+}
+
+func writeGwtRow(b *strings.Builder, label, value string) {
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+	b.WriteString(`<tr><th>`)
+	b.WriteString(label)
+	b.WriteString(`</th><td>`)
+	b.WriteString(html.EscapeString(value))
+	b.WriteString(`</td></tr>`)
+}
+
+func RenderCriteriaGWT(tasks []spec.Task) string {
+	var b strings.Builder
+	b.WriteString(`<div class="container-trace ` + classCriteriaGWT + `" id="container-criteria">`)
+	for _, t := range tasks {
+		if len(t.Criteria) == 0 {
+			continue
+		}
+		b.WriteString(`<div class="panel trace-task-block">`)
+		b.WriteString(`<div class="trace-task-title">`)
+		b.WriteString(html.EscapeString(t.ID))
+		if strings.TrimSpace(t.Title) != "" {
+			b.WriteString(" · ")
+			b.WriteString(html.EscapeString(t.Title))
+		}
+		b.WriteString(`</div>`)
+		for _, c := range t.Criteria {
+			b.WriteString(`<table class="` + classGwtTable + `" data-criterion="`)
+			b.WriteString(html.EscapeString(c.ID))
+			b.WriteString(`">`)
+			b.WriteString(`<caption class="` + classGwtID + `">`)
+			b.WriteString(html.EscapeString(strings.ToUpper(c.ID)))
+			b.WriteString(`</caption>`)
+			if strings.TrimSpace(c.Raw) != "" {
+				writeGwtRow(&b, "RAW", c.Raw)
+			} else {
+				writeGwtRow(&b, "GIVEN", c.Given)
+				writeGwtRow(&b, "WHEN", c.When)
+				writeGwtRow(&b, "THEN", c.Then)
+			}
+			b.WriteString(`</table>`)
+		}
+		b.WriteString(`</div>`)
+	}
+	b.WriteString(`</div>`)
+	return b.String()
 }
 
 func serveJSONFile(path string) http.HandlerFunc {

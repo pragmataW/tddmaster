@@ -11,9 +11,9 @@ import (
 )
 
 type TaskGenItem struct {
-	Title           string   `json:"title"`
-	AC              []string `json:"ac"`
-	LinkedEdgeCases []string `json:"linkedEdgeCases,omitempty"`
+	Title           string           `json:"title"`
+	Criteria        []spec.Criterion `json:"criteria,omitempty"`
+	LinkedEdgeCases []string         `json:"linkedEdgeCases,omitempty"`
 }
 
 type TaskGenPayload struct {
@@ -29,7 +29,7 @@ func BuildTasksFromGen(p TaskGenPayload, tddDefault bool, fallbackEdgeCases []st
 		if item.Title == "" {
 			return nil, fmt.Errorf("task %d: title is required", i+1)
 		}
-		if len(item.AC) == 0 {
+		if len(item.Criteria) == 0 {
 			return nil, fmt.Errorf("task %d: at least one acceptance criterion required", i+1)
 		}
 		ec := item.LinkedEdgeCases
@@ -37,14 +37,15 @@ func BuildTasksFromGen(p TaskGenPayload, tddDefault bool, fallbackEdgeCases []st
 			ec = fallbackEdgeCases
 		}
 		tasks[i] = spec.Task{
-			ID:         fmt.Sprintf("task-%d", i+1),
+			ID:         fmt.Sprintf("%s%d", spec.TaskIDPrefix, i+1),
 			Title:      item.Title,
-			AC:         item.AC,
+			Criteria:   item.Criteria,
 			Done:       false,
 			Important:  false,
 			TDDEnabled: tddDefault,
 			EdgeCases:  ec,
 		}
+		spec.AssignCriterionIDs(&tasks[i])
 	}
 	return tasks, nil
 }
@@ -62,7 +63,7 @@ func taskGenPrompt() engine.Action {
 		Instruction: instr,
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
-			Example: `{"tasks":[{"title":"...","ac":["..."],"linkedEdgeCases":["..."]}]}`,
+			Example: `{"tasks":[{"title":"...","criteria":[{"then":"..."}],"linkedEdgeCases":["..."]}]}`,
 		},
 	}
 }

@@ -16,7 +16,7 @@ func TestRender_ClaudeMd_NoErrorNonEmpty(t *testing.T) {
 }
 
 func TestRender_AllTemplates_NoErrorNonEmpty(t *testing.T) {
-	names := []string{"claude_md", "executor", "verifier", "planner", "test-writer"}
+	names := []string{"claude_md", "executor", "verifier", "planner", "test-writer", "auditor"}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			out, err := Render(name, RenderData{Command: "tddmaster"})
@@ -61,7 +61,7 @@ func TestRender_ClaudeMd_UsesStartSlugNotSpecNew(t *testing.T) {
 }
 
 func TestRender_AgentTemplates_StartsWithFrontmatterDelimiter(t *testing.T) {
-	agentNames := []string{"executor", "verifier", "planner", "test-writer"}
+	agentNames := []string{"executor", "verifier", "planner", "test-writer", "auditor"}
 	for _, name := range agentNames {
 		t.Run(name, func(t *testing.T) {
 			out, err := Render(name, RenderData{Command: "tddmaster"})
@@ -76,7 +76,7 @@ func TestRender_AgentTemplates_StartsWithFrontmatterDelimiter(t *testing.T) {
 }
 
 func TestRender_AgentTemplates_ContainNameAndDescription(t *testing.T) {
-	agentNames := []string{"executor", "verifier", "planner", "test-writer"}
+	agentNames := []string{"executor", "verifier", "planner", "test-writer", "auditor"}
 	for _, name := range agentNames {
 		t.Run(name, func(t *testing.T) {
 			out, err := Render(name, RenderData{Command: "tddmaster"})
@@ -94,7 +94,7 @@ func TestRender_AgentTemplates_ContainNameAndDescription(t *testing.T) {
 }
 
 func TestTemplateNames_ReturnsExactSortedNames(t *testing.T) {
-	expected := []string{"claude_md", "executor", "planner", "rule-synthesizer", "test-writer", "verifier"}
+	expected := []string{"auditor", "claude_md", "executor", "planner", "rule-synthesizer", "test-writer", "verifier"}
 	got := TemplateNames()
 	if len(got) != len(expected) {
 		t.Fatalf("expected %d names, got %d: %v", len(expected), len(got), got)
@@ -107,7 +107,7 @@ func TestTemplateNames_ReturnsExactSortedNames(t *testing.T) {
 }
 
 func TestRender_AgentTemplates_NoUnresolvedTemplateSyntax(t *testing.T) {
-	agentNames := []string{"executor", "verifier", "planner", "test-writer"}
+	agentNames := []string{"executor", "verifier", "planner", "test-writer", "auditor"}
 	for _, name := range agentNames {
 		t.Run(name, func(t *testing.T) {
 			out, err := Render(name, RenderData{Command: "tddmaster"})

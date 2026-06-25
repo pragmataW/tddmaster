@@ -110,7 +110,7 @@ func TestProgress_JSONTags(t *testing.T) {
 			{
 				ID:         "t1",
 				Title:      "first task",
-				AC:         []string{"ac1", "ac2"},
+				Criteria:   []Criterion{{ID: "ac-1", Then: "ac1"}, {ID: "ac-2", Then: "ac2"}},
 				Done:       false,
 				TDDEnabled: true,
 				Important:  false,
@@ -125,7 +125,7 @@ func TestProgress_JSONTags(t *testing.T) {
 	}
 
 	raw := string(data)
-	for _, tag := range []string{`"spec"`, `"status"`, `"tasks"`, `"id"`, `"title"`, `"ac"`, `"done"`, `"tddEnabled"`, `"important"`} {
+	for _, tag := range []string{`"spec"`, `"status"`, `"tasks"`, `"id"`, `"title"`, `"criteria"`, `"done"`, `"tddEnabled"`, `"important"`} {
 		if !strings.Contains(raw, tag) {
 			t.Errorf("JSON missing tag %s in: %s", tag, raw)
 		}
@@ -370,5 +370,613 @@ func TestState_EmptyAnswersMap(t *testing.T) {
 	}
 	if strings.Contains(raw, `"answers":null`) {
 		t.Errorf("answers must not serialize as null, got: %s", raw)
+	}
+}
+
+func TestCriterion_JSONRoundTrip(t *testing.T) {
+	original := Criterion{
+		ID:    "ac-1",
+		Given: "a running service",
+		When:  "a request arrives",
+		Then:  "a response is returned",
+		Raw:   "Given a running service When a request arrives Then a response is returned",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	for _, tag := range []string{`"id"`, `"given"`, `"when"`, `"then"`, `"raw"`} {
+		if !strings.Contains(raw, tag) {
+			t.Errorf("JSON missing tag %s in: %s", tag, raw)
+		}
+	}
+
+	var got Criterion
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if got.ID != original.ID {
+		t.Errorf("ID: got %q, want %q", got.ID, original.ID)
+	}
+	if got.Given != original.Given {
+		t.Errorf("Given: got %q, want %q", got.Given, original.Given)
+	}
+	if got.When != original.When {
+		t.Errorf("When: got %q, want %q", got.When, original.When)
+	}
+	if got.Then != original.Then {
+		t.Errorf("Then: got %q, want %q", got.Then, original.Then)
+	}
+	if got.Raw != original.Raw {
+		t.Errorf("Raw: got %q, want %q", got.Raw, original.Raw)
+	}
+}
+
+func TestCriterion_JSONOmitsEmptyOptionalFields(t *testing.T) {
+	c := Criterion{
+		ID:   "ac-2",
+		Then: "something happens",
+	}
+
+	data, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	if !strings.Contains(raw, `"then"`) {
+		t.Errorf("JSON must always contain then key, got: %s", raw)
+	}
+	for _, tag := range []string{`"given"`, `"when"`, `"raw"`} {
+		if strings.Contains(raw, tag) {
+			t.Errorf("JSON must omit %s when empty, got: %s", tag, raw)
+		}
+	}
+}
+
+func TestTask_Criteria_JSONKey(t *testing.T) {
+	task := Task{
+		ID:    "task-1",
+		Title: "some task",
+		Criteria: []Criterion{
+			{ID: "ac-1", Then: "it works"},
+		},
+	}
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	if !strings.Contains(raw, `"criteria"`) {
+		t.Errorf("JSON must contain criteria key, got: %s", raw)
+	}
+	if strings.Contains(raw, `"ac"`) {
+		t.Errorf("JSON must not contain ac key, got: %s", raw)
+	}
+}
+
+func TestTask_Criteria_RoundTrip(t *testing.T) {
+	original := Task{
+		ID:    "task-1",
+		Title: "some task",
+		Criteria: []Criterion{
+			{ID: "ac-1", Then: "first thing works"},
+			{ID: "ac-2", Given: "precondition", Then: "second thing works"},
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got Task
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if len(got.Criteria) != len(original.Criteria) {
+		t.Fatalf("Criteria length: got %d, want %d", len(got.Criteria), len(original.Criteria))
+	}
+	if got.Criteria[0].ID != "ac-1" {
+		t.Errorf("Criteria[0].ID: got %q, want ac-1", got.Criteria[0].ID)
+	}
+	if got.Criteria[1].Given != "precondition" {
+		t.Errorf("Criteria[1].Given: got %q, want precondition", got.Criteria[1].Given)
+	}
+}
+
+func TestAssignCriterionIDs_FreshTask(t *testing.T) {
+	task := &Task{
+		ID:    "task-1",
+		Title: "fresh task",
+		Criteria: []Criterion{
+			{Then: "first thing works"},
+			{Then: "second thing works"},
+			{Then: "third thing works"},
+		},
+	}
+
+	AssignCriterionIDs(task)
+
+	if task.Criteria[0].ID != "ac-1" {
+		t.Errorf("Criteria[0].ID: got %q, want ac-1", task.Criteria[0].ID)
+	}
+	if task.Criteria[1].ID != "ac-2" {
+		t.Errorf("Criteria[1].ID: got %q, want ac-2", task.Criteria[1].ID)
+	}
+	if task.Criteria[2].ID != "ac-3" {
+		t.Errorf("Criteria[2].ID: got %q, want ac-3", task.Criteria[2].ID)
+	}
+}
+
+func TestAssignCriterionIDs_Idempotent(t *testing.T) {
+	task := &Task{
+		ID:    "task-1",
+		Title: "idempotent task",
+		Criteria: []Criterion{
+			{Then: "first thing works"},
+			{Then: "second thing works"},
+		},
+	}
+
+	AssignCriterionIDs(task)
+	firstID := task.Criteria[0].ID
+	secondID := task.Criteria[1].ID
+
+	AssignCriterionIDs(task)
+
+	if task.Criteria[0].ID != firstID {
+		t.Errorf("Criteria[0].ID changed on second run: got %q, want %q", task.Criteria[0].ID, firstID)
+	}
+	if task.Criteria[1].ID != secondID {
+		t.Errorf("Criteria[1].ID changed on second run: got %q, want %q", task.Criteria[1].ID, secondID)
+	}
+}
+
+func TestAssignCriterionIDs_RefineCollision(t *testing.T) {
+	task := &Task{
+		ID:    "task-1",
+		Title: "refine task",
+		Criteria: []Criterion{
+			{ID: "ac-1", Then: "existing first"},
+			{ID: "ac-3", Then: "existing third"},
+			{Then: "new criterion added after refine"},
+		},
+	}
+
+	AssignCriterionIDs(task)
+
+	if task.Criteria[0].ID != "ac-1" {
+		t.Errorf("Criteria[0].ID must remain ac-1, got %q", task.Criteria[0].ID)
+	}
+	if task.Criteria[1].ID != "ac-3" {
+		t.Errorf("Criteria[1].ID must remain ac-3, got %q", task.Criteria[1].ID)
+	}
+	if task.Criteria[2].ID != "ac-4" {
+		t.Errorf("Criteria[2].ID must be ac-4 (max+1), got %q", task.Criteria[2].ID)
+	}
+}
+
+
+func TestTraceEntry_JSONTags(t *testing.T) {
+	entry := TraceEntry{
+		FunctionName: "TestFoo_Bar",
+		TaskID:       "task-1",
+		CriterionIDs: []string{"ac-1"},
+		EC:           []string{"EC-3"},
+	}
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	for _, tag := range []string{`"functionName"`, `"taskId"`, `"criterionIds"`, `"ec"`} {
+		if !strings.Contains(raw, tag) {
+			t.Errorf("JSON missing tag %s in: %s", tag, raw)
+		}
+	}
+}
+
+func TestTraceEntry_JSONRoundTrip(t *testing.T) {
+	original := TraceEntry{
+		FunctionName: "TestDoSomething",
+		TaskID:       "task-2",
+		CriterionIDs: []string{"must handle nil input"},
+		EC:           []string{"EC-1"},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got TraceEntry
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if got.FunctionName != original.FunctionName {
+		t.Errorf("FunctionName: got %q, want %q", got.FunctionName, original.FunctionName)
+	}
+	if got.TaskID != original.TaskID {
+		t.Errorf("TaskID: got %q, want %q", got.TaskID, original.TaskID)
+	}
+	if !reflect.DeepEqual(got.CriterionIDs, original.CriterionIDs) {
+		t.Errorf("CriterionIDs: got %q, want %q", got.CriterionIDs, original.CriterionIDs)
+	}
+	if !reflect.DeepEqual(got.EC, original.EC) {
+		t.Errorf("EC: got %q, want %q", got.EC, original.EC)
+	}
+}
+
+func TestTraceability_IsStruct(t *testing.T) {
+	tr := Traceability{
+		Entries: map[string][]TraceEntry{
+			"task-1": {
+				{FunctionName: "TestAlpha", TaskID: "task-1", CriterionIDs: []string{"ac-1"}, EC: nil},
+			},
+		},
+		Coverage: map[string]float64{
+			"internal/spec/model.go": 80,
+		},
+	}
+
+	if tr.Entries == nil {
+		t.Fatal("Entries must not be nil after explicit init")
+	}
+	if tr.Coverage == nil {
+		t.Fatal("Coverage must not be nil after explicit init")
+	}
+}
+
+func TestTraceability_JSONRoundTrip(t *testing.T) {
+	original := Traceability{
+		Entries: map[string][]TraceEntry{
+			"task-1": {
+				{FunctionName: "TestAlpha", TaskID: "task-1", CriterionIDs: []string{"ac-1"}, EC: nil},
+				{FunctionName: "TestBeta", TaskID: "task-1", CriterionIDs: []string{"ac-2"}, EC: []string{"EC-1"}},
+			},
+			"task-2": {
+				{FunctionName: "TestGamma", TaskID: "task-2", CriterionIDs: []string{"ac-1"}, EC: []string{"EC-2"}},
+			},
+		},
+		Coverage: map[string]float64{
+			"internal/spec/model.go": 90,
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got Traceability
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if len(got.Entries) != len(original.Entries) {
+		t.Fatalf("Entries length: got %d, want %d", len(got.Entries), len(original.Entries))
+	}
+
+	for taskID, entries := range original.Entries {
+		gotEntries, ok := got.Entries[taskID]
+		if !ok {
+			t.Errorf("missing key %q in round-tripped Entries", taskID)
+			continue
+		}
+		if len(gotEntries) != len(entries) {
+			t.Errorf("task %q: entry count got %d, want %d", taskID, len(gotEntries), len(entries))
+			continue
+		}
+		for i, e := range entries {
+			if gotEntries[i].FunctionName != e.FunctionName {
+				t.Errorf("task %q[%d].FunctionName: got %q, want %q", taskID, i, gotEntries[i].FunctionName, e.FunctionName)
+			}
+			if gotEntries[i].TaskID != e.TaskID {
+				t.Errorf("task %q[%d].TaskID: got %q, want %q", taskID, i, gotEntries[i].TaskID, e.TaskID)
+			}
+			if !reflect.DeepEqual(gotEntries[i].CriterionIDs, e.CriterionIDs) {
+				t.Errorf("task %q[%d].CriterionIDs: got %q, want %q", taskID, i, gotEntries[i].CriterionIDs, e.CriterionIDs)
+			}
+			if !reflect.DeepEqual(gotEntries[i].EC, e.EC) {
+				t.Errorf("task %q[%d].EC: got %q, want %q", taskID, i, gotEntries[i].EC, e.EC)
+			}
+		}
+	}
+
+	if len(got.Coverage) != len(original.Coverage) {
+		t.Fatalf("Coverage length: got %d, want %d", len(got.Coverage), len(original.Coverage))
+	}
+	for k, v := range original.Coverage {
+		gotV, ok := got.Coverage[k]
+		if !ok {
+			t.Errorf("Coverage missing key %q", k)
+			continue
+		}
+		if gotV != v {
+			t.Errorf("Coverage[%q]: got %v, want %v", k, gotV, v)
+		}
+	}
+}
+
+func TestTraceability_JSONTags(t *testing.T) {
+	tr := Traceability{
+		Entries:  map[string][]TraceEntry{},
+		Coverage: map[string]float64{"src/main.go": 50},
+	}
+
+	data, err := json.Marshal(tr)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	if !strings.Contains(raw, `"entries"`) {
+		t.Errorf("JSON missing tag %q in: %s", "entries", raw)
+	}
+	if !strings.Contains(raw, `"coverage"`) {
+		t.Errorf("JSON missing tag %q in: %s", "coverage", raw)
+	}
+}
+
+func TestTraceability_CoverageOmittedWhenEmpty(t *testing.T) {
+	tr := Traceability{
+		Entries:  map[string][]TraceEntry{},
+		Coverage: nil,
+	}
+
+	data, err := json.Marshal(tr)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	if strings.Contains(raw, `"coverage"`) {
+		t.Errorf("coverage should be omitted when nil, got: %s", raw)
+	}
+}
+
+func TestTraceability_EmptyEntries(t *testing.T) {
+	tr := Traceability{
+		Entries:  map[string][]TraceEntry{},
+		Coverage: map[string]float64{},
+	}
+
+	data, err := json.Marshal(tr)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got Traceability
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if len(got.Entries) != 0 {
+		t.Errorf("expected empty Entries, got length %d", len(got.Entries))
+	}
+}
+
+func TestTraceEntry_CriterionIDs_JSONKey(t *testing.T) {
+	entry := TraceEntry{
+		FunctionName: "TestSomething",
+		TaskID:       "task-1",
+		CriterionIDs: []string{"ac-1", "ac-2"},
+	}
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	raw := string(data)
+	if !strings.Contains(raw, `"criterionIds"`) {
+		t.Errorf("JSON must contain criterionIds key, got: %s", raw)
+	}
+	if strings.Contains(raw, `"ac"`) {
+		t.Errorf("JSON must not contain ac key, got: %s", raw)
+	}
+}
+
+func TestTraceEntry_CriterionIDs_RoundTrip(t *testing.T) {
+	original := TraceEntry{
+		FunctionName: "TestDoWork",
+		TaskID:       "task-2",
+		CriterionIDs: []string{"ac-1", "ac-3"},
+		EC:           []string{"EC-1"},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got TraceEntry
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if got.FunctionName != original.FunctionName {
+		t.Errorf("FunctionName: got %q, want %q", got.FunctionName, original.FunctionName)
+	}
+	if got.TaskID != original.TaskID {
+		t.Errorf("TaskID: got %q, want %q", got.TaskID, original.TaskID)
+	}
+	if !reflect.DeepEqual(got.CriterionIDs, original.CriterionIDs) {
+		t.Errorf("CriterionIDs: got %v, want %v", got.CriterionIDs, original.CriterionIDs)
+	}
+	if !reflect.DeepEqual(got.EC, original.EC) {
+		t.Errorf("EC: got %v, want %v", got.EC, original.EC)
+	}
+}
+
+
+func TestDefaultSettings_MinTestCoverage(t *testing.T) {
+	got := DefaultSettings()
+	if got.MinTestCoverage != 80 {
+		t.Fatalf("DefaultSettings().MinTestCoverage = %d, want 80", got.MinTestCoverage)
+	}
+}
+
+func TestSettings_MinTestCoverage_JSONRoundTrip(t *testing.T) {
+	s := Settings{
+		TDDEnabled:               true,
+		SkipVerifierEnabled:      false,
+		ImportantTaskGateEnabled: false,
+		MinTestCoverage:          75,
+	}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"minTestCoverage"`) {
+		t.Fatalf("JSON missing minTestCoverage key, got: %s", data)
+	}
+
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if got.MinTestCoverage != 75 {
+		t.Fatalf("round-trip MinTestCoverage = %d, want 75", got.MinTestCoverage)
+	}
+}
+
+func TestSettings_MinTestCoverage_OmittedUsesDefault(t *testing.T) {
+	raw := `{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false}`
+
+	base := DefaultSettings()
+	if err := json.Unmarshal([]byte(raw), &base); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if base.MinTestCoverage != 80 {
+		t.Fatalf("MinTestCoverage after unmarshal of omitted field = %d, want 80", base.MinTestCoverage)
+	}
+}
+
+func TestSettings_MinTestCoverage_ExplicitZeroRoundTrips(t *testing.T) {
+	s := Settings{
+		TDDEnabled:               true,
+		SkipVerifierEnabled:      false,
+		ImportantTaskGateEnabled: false,
+		MinTestCoverage:          0,
+	}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if got.MinTestCoverage != 0 {
+		t.Fatalf("round-trip MinTestCoverage = %d, want 0", got.MinTestCoverage)
+	}
+}
+
+func TestSettings_ClampCoverage(t *testing.T) {
+	cases := []struct {
+		in   int
+		want int
+	}{
+		{-5, 0},
+		{0, 0},
+		{80, 80},
+		{100, 100},
+		{150, 100},
+	}
+	for _, c := range cases {
+		s := Settings{MinTestCoverage: c.in}
+		s.ClampCoverage()
+		if s.MinTestCoverage != c.want {
+			t.Errorf("ClampCoverage(%d) = %d, want %d", c.in, s.MinTestCoverage, c.want)
+		}
+	}
+}
+
+func TestExecState_LastModifiedFiles_JSONRoundTrip(t *testing.T) {
+	es := ExecState{
+		Iteration:         1,
+		LastModifiedFiles: []string{"a.go", "b.go"},
+	}
+	data, err := json.Marshal(es)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	if !strings.Contains(string(data), `"lastModifiedFiles"`) {
+		t.Fatalf("JSON missing lastModifiedFiles key, got: %s", data)
+	}
+	var got ExecState
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if !reflect.DeepEqual(got.LastModifiedFiles, es.LastModifiedFiles) {
+		t.Fatalf("round-trip LastModifiedFiles = %v, want %v", got.LastModifiedFiles, es.LastModifiedFiles)
+	}
+}
+
+func TestExecState_LastCoverage_JSONRoundTrip(t *testing.T) {
+	es := ExecState{
+		Iteration:    1,
+		LastCoverage: map[string]float64{"task-1": 92, "task-2": 85},
+	}
+
+	data, err := json.Marshal(es)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"lastCoverage"`) {
+		t.Fatalf("JSON missing lastCoverage key, got: %s", data)
+	}
+
+	var got ExecState
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got.LastCoverage, es.LastCoverage) {
+		t.Fatalf("round-trip LastCoverage = %v, want %v", got.LastCoverage, es.LastCoverage)
+	}
+}
+
+func TestExecState_LastCoverage_OmitEmptyWhenNil(t *testing.T) {
+	es := ExecState{Iteration: 1}
+
+	data, err := json.Marshal(es)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	if strings.Contains(string(data), `"lastCoverage"`) {
+		t.Fatalf("expected lastCoverage to be omitted when nil, got: %s", data)
+	}
+}
+
+func TestTask_HasNoCoverageField(t *testing.T) {
+	task := Task{}
+	rt := reflect.TypeOf(task)
+
+	for i := 0; i < rt.NumField(); i++ {
+		name := strings.ToLower(rt.Field(i).Name)
+		if strings.Contains(name, "coverage") {
+			t.Fatalf("Task struct must not have a coverage-related field, found: %s", rt.Field(i).Name)
+		}
 	}
 }

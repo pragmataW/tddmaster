@@ -2,7 +2,7 @@
 
 `tddmaster` is a Go CLI that acts like a scrum master for AI coding agents.
 
-Its job is to keep long-running implementation work from collapsing into context rot: unclear scope, forgotten edge cases, hand-wavy verification, and "the agent kind of drifted into something else". Instead of letting an agent freestyle across a repo, `tddmaster` forces work through a phase-based engine: discovery, spec proposal, refinement, and execution — with verification wired in at every step.
+Its job is to keep long-running implementation work from collapsing into context rot: unclear scope, forgotten edge cases, hand-wavy verification, and "the agent kind of drifted into something else". Instead of letting an agent freestyle across a repo, `tddmaster` forces work through a phase-based engine: discovery, spec proposal, refinement, cross-artifact analysis, and execution — with verification wired in at every step.
 
 This is a ground-up refactor of the original `tddmaster`. The whole orchestrator now runs on a single deterministic engine: phases compose modules, modules compose steps, and the execution loop is a small ruleset of stages. The agent never freelances the workflow — it asks the engine `next` and does exactly what comes back.
 
@@ -72,7 +72,8 @@ flowchart LR
     SETTINGS --> DISCOVERY
     DISCOVERY --> SPEC_PROPOSAL
     SPEC_PROPOSAL --> REFINEMENT
-    REFINEMENT --> EXECUTION
+    REFINEMENT --> ANALYSIS
+    ANALYSIS --> EXECUTION
     EXECUTION --> DONE
 ```
 
@@ -82,6 +83,7 @@ What each phase is for:
 - `discovery`: gather requirements and pressure-test assumptions
 - `spec-proposal`: review the generated spec
 - `refinement`: shape the task list before any code is written
+- `analysis`: cross-artifact analysis of the task list — catch contradictions, gaps, and overlaps before any code is written
 - `execution`: run the actual task loop, stage by stage
 
 ## Settings phase
@@ -119,7 +121,7 @@ The discovery layer is where `tddmaster` tries to get ahead of bad implementatio
 
 Discovery is turned into a real spec, not a chat summary. The spec is rendered to `spec.md` and the task state lives in `progress.json`. Tasks carry:
 
-- acceptance criteria (`AC`)
+- acceptance criteria as Given/When/Then triples (`Criteria`) — each criterion has an optional `given`, an optional `when`, and a required `then`, instead of a free-form acceptance string
 - edge cases (`EdgeCases`)
 - a per-task `tddEnabled` flag
 - an `important` flag
@@ -133,11 +135,13 @@ Before execution starts, the task list can be shaped with a dedicated command th
 
 ```bash
 tddmaster refine <slug> --answer='{
-  "update": { "task-1": { "ac": ["new AC"], "tddEnabled": true, "important": false, "edgeCases": ["empty input"] } },
-  "add":    [{ "title": "New task", "ac": ["AC1"], "tddEnabled": false }],
+  "update": { "task-1": { "criteria": [{ "given": "a logged-out user", "when": "they submit valid credentials", "then": "a session is created" }], "tddEnabled": true, "important": false, "edgeCases": ["empty input"] } },
+  "add":    [{ "title": "New task", "criteria": [{ "given": "an empty cart", "when": "checkout is requested", "then": "the request is rejected" }], "tddEnabled": false }],
   "remove": ["task-3"]
 }'
 ```
+
+Each criterion is a Given/When/Then triple: `then` is required, `given` and `when` are optional.
 
 `refine` upserts tasks and re-renders `spec.md` in place. When the list looks right, advance with `tddmaster next <slug> --answer="approve"`. `refine` is only valid in the refinement phase.
 
@@ -248,6 +252,33 @@ When the gate is enabled and the active task is flagged `important` without an a
 - **revise / reject** → `tddmaster next <slug> --answer='{"planFeedback":"<reason>"}'` — the gate re-fires with prior feedback and an incremented attempt count
 
 Once approved, the plan is persisted and embedded in every executor spawn for that task. `touchedFiles` is binding — work that needs a file outside the list must stop and report blocked.
+
+## Cross-artifact analysis
+
+Between refinement and execution the engine runs a cross-artifact analysis phase. Unlike the important gate it is always on (no settings flag) and is no-op-safe — with 0 tasks or 0 criteria it simply passes through with nothing to report.
+
+The phase combines two sources of findings:
+
+- a **structural linter** runs locally over the task list (precomputed, no agent call)
+- `tddmaster-auditor` — a read-only sub-agent — reviews the whole task list, the Given/When/Then criteria, edge cases, and any approved plans, then returns a verdict and findings
+
+The auditor returns JSON shaped like:
+
+```json
+{"verdict": "clean | issues | block", "findings": [{"severity": "...", "category": "...", "taskId": "...", "acId": "...", "detail": "...", "suggestion": "...", "source": "..."}]}
+```
+
+Linter and auditor findings are merged. Findings fall into categories such as contradictions between tasks, missing coverage or gaps, overlapping responsibilities, and criteria that are vague or untestable.
+
+Behavior depends on whether any finding is a **block**:
+
+- no blocking finding → the phase passes through to execution; findings are displayed and the loop continues
+- at least one blocking finding → the engine returns an `ask` with options `return-to-refinement | accept-anyway | edit`:
+  - **return-to-refinement** → return to refinement to address the blocking findings
+  - **accept-anyway** → accept the analysis despite the blocking findings and continue
+  - **edit** → edit the tasks inline (a refine payload) and re-run the audit
+
+The re-audit loop is capped; once the attempt limit is reached the phase auto-accepts and continues to execution.
 
 ## Rule learning phase
 

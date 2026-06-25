@@ -10,6 +10,7 @@ const (
 	FileProgress     = "progress.json"
 	FileSpec         = "spec.md"
 	FileTraceability = "traceability.json"
+	FileAnalysis     = "analysis.json"
 )
 
 func Tddmaster(root string) string {
@@ -54,6 +55,10 @@ func SpecMd(root, slug string) string {
 
 func SpecTraceability(root, slug string) string {
 	return filepath.Join(SpecDir(root, slug), FileTraceability)
+}
+
+func SpecAnalysis(root, slug string) string {
+	return filepath.Join(SpecDir(root, slug), FileAnalysis)
 }
 
 func Rules(root string) string {

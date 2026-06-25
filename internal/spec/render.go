@@ -116,6 +116,53 @@ func ParseEdgeCases(val string) []string {
 	return items
 }
 
+func criterionSegments(c Criterion) [][2]string {
+	if c.Raw != "" {
+		return [][2]string{{"", c.Raw}}
+	}
+	var segs [][2]string
+	if c.Given != "" {
+		segs = append(segs, [2]string{"GIVEN", c.Given})
+	}
+	if c.When != "" {
+		segs = append(segs, [2]string{"WHEN", c.When})
+	}
+	if c.Then != "" {
+		segs = append(segs, [2]string{"THEN", c.Then})
+	}
+	return segs
+}
+
+func FormatCriterionInline(c Criterion) string {
+	var b strings.Builder
+	for _, seg := range criterionSegments(c) {
+		b.WriteString(" ")
+		if seg[0] != "" {
+			b.WriteString(seg[0])
+			b.WriteString(" ")
+		}
+		b.WriteString(seg[1])
+	}
+	return b.String()
+}
+
+func writeCriterionSubBlock(b *strings.Builder, c Criterion) {
+	if c.Raw != "" {
+		b.WriteString(" ")
+		b.WriteString(c.Raw)
+		b.WriteString("\n")
+		return
+	}
+	b.WriteString("\n")
+	for _, seg := range criterionSegments(c) {
+		b.WriteString("  - ")
+		b.WriteString(seg[0])
+		b.WriteString(" ")
+		b.WriteString(seg[1])
+		b.WriteString("\n")
+	}
+}
+
 func writeBullets(b *strings.Builder, header string, items []string, raw string) {
 	b.WriteString("## ")
 	b.WriteString(header)
@@ -198,10 +245,11 @@ func RenderSpecMd(slug string, st State, pr Progress) string {
 				b.WriteString(" (important)")
 			}
 			b.WriteString("\n")
-			for _, ac := range task.AC {
-				b.WriteString("  - ")
-				b.WriteString(ac)
-				b.WriteString("\n")
+			for _, c := range task.Criteria {
+				b.WriteString("- **")
+				b.WriteString(c.ID)
+				b.WriteString("**")
+				writeCriterionSubBlock(&b, c)
 			}
 		}
 	}

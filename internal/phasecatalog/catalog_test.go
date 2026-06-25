@@ -63,10 +63,10 @@ func TestStepID_Constants_Exist(t *testing.T) {
 	}
 }
 
-func TestCatalog_HasExactlyFivePhaseDefs(t *testing.T) {
+func TestCatalog_HasExactlySixPhaseDefs(t *testing.T) {
 	cat := Catalog()
-	if len(cat) != 5 {
-		t.Fatalf("Catalog length = %d, want 5", len(cat))
+	if len(cat) != 6 {
+		t.Fatalf("Catalog length = %d, want 6", len(cat))
 	}
 }
 
@@ -77,6 +77,7 @@ func TestCatalog_PhasesInCorrectLinearOrder(t *testing.T) {
 		PhaseDiscovery,
 		PhaseSpecProposal,
 		PhaseRefinement,
+		PhaseAnalysis,
 		PhaseExecution,
 	}
 	for i, def := range cat {
@@ -107,7 +108,7 @@ func TestCatalog_Phases1To3DriversAreStepTableDriver(t *testing.T) {
 
 func TestCatalog_ExecutionPhaseDriverIsStepTableDriver(t *testing.T) {
 	cat := Catalog()
-	execDef := cat[4]
+	execDef := cat[5]
 	if execDef.ID != PhaseExecution {
 		t.Fatalf("last phase ID = %q, want %q", execDef.ID, PhaseExecution)
 	}
@@ -165,11 +166,19 @@ func TestNextPhase_SpecProposalToRefinement(t *testing.T) {
 	}
 }
 
-func TestNextPhase_RefinementToExecution(t *testing.T) {
+func TestNextPhase_RefinementToAnalysis(t *testing.T) {
 	cat := Catalog()
 	got := engine.NextPhase(cat, PhaseRefinement)
+	if got != PhaseAnalysis {
+		t.Fatalf("NextPhase(refinement) = %q, want %q", got, PhaseAnalysis)
+	}
+}
+
+func TestNextPhase_AnalysisToExecution(t *testing.T) {
+	cat := Catalog()
+	got := engine.NextPhase(cat, PhaseAnalysis)
 	if got != PhaseExecution {
-		t.Fatalf("NextPhase(refinement) = %q, want %q", got, PhaseExecution)
+		t.Fatalf("NextPhase(cross-artifact-analysis) = %q, want %q", got, PhaseExecution)
 	}
 }
 
@@ -185,5 +194,25 @@ func TestCatalog_FirstPhaseAlignsWithSpecPhaseInitial(t *testing.T) {
 	cat := Catalog()
 	if string(cat[0].ID) != spec.PhaseInitial {
 		t.Fatalf("Catalog[0].ID = %q, want spec.PhaseInitial = %q", cat[0].ID, spec.PhaseInitial)
+	}
+}
+
+func TestPhaseAnalysis_ConstantValue(t *testing.T) {
+	if PhaseAnalysis != engine.PhaseID("cross-artifact-analysis") {
+		t.Fatalf("PhaseAnalysis = %q, want %q", PhaseAnalysis, "cross-artifact-analysis")
+	}
+}
+
+func TestModAnalysis_Exists(t *testing.T) {
+	var _ engine.ModuleID = ModAnalysis
+	if string(ModAnalysis) == "" {
+		t.Fatal("ModAnalysis constant is empty")
+	}
+}
+
+func TestStepAnalysisAsk_Exists(t *testing.T) {
+	var _ engine.StepID = StepAnalysisAsk
+	if string(StepAnalysisAsk) == "" {
+		t.Fatal("StepAnalysisAsk constant is empty")
 	}
 }

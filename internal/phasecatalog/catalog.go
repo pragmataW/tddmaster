@@ -37,6 +37,7 @@ func Catalog() []engine.PhaseDef {
 		singleStepPhase(PhaseDiscovery, ModDiscovery, StepDiscoveryAsk, "What are the key requirements?"),
 		singleStepPhase(PhaseSpecProposal, ModSpecProposal, StepSpecProposalAsk, "Does this spec proposal look correct?"),
 		singleStepPhase(PhaseRefinement, ModRefinement, StepRefinementAsk, "Any refinements needed?"),
+		singleStepPhase(PhaseAnalysis, ModAnalysis, StepAnalysisAsk, "Cross-artifact analysis phase."),
 		singleStepPhase(PhaseExecution, ModExecution, StepExecutionAsk, "Execution phase placeholder."),
 	}
 }

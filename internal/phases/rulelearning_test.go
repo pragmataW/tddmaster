@@ -44,7 +44,7 @@ func tasksWithLearnings() []spec.Task {
 		{
 			ID:    "task-1",
 			Title: "Alpha",
-			AC:    []string{"ac1"},
+			Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}},
 			RefactorNotes: []spec.RefactorNote{
 				{File: "foo.go", Suggestion: "extract helper", Rationale: "reduces duplication"},
 			},
@@ -53,7 +53,7 @@ func tasksWithLearnings() []spec.Task {
 		{
 			ID:    "task-2",
 			Title: "Beta",
-			AC:    []string{"ac2"},
+			Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}},
 			RefactorNotes: []spec.RefactorNote{
 				{File: "bar.go", Suggestion: "inline constant", Rationale: "clarity"},
 			},
@@ -64,8 +64,8 @@ func tasksWithLearnings() []spec.Task {
 
 func tasksWithNoLearnings() []spec.Task {
 	return []spec.Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}},
-		{ID: "task-2", Title: "Beta", AC: []string{"ac2"}},
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}}},
 	}
 }
 

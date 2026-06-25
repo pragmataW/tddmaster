@@ -38,7 +38,7 @@ func TestContext_SaveProgress_RoundTrips(t *testing.T) {
 		Spec:   slug,
 		Status: spec.StatusExecuting,
 		Tasks: []spec.Task{
-			{ID: "t-1", Title: "first task", AC: []string{"ac1"}, Done: false},
+			{ID: "t-1", Title: "first task", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, Done: false},
 		},
 	}
 
@@ -134,7 +134,7 @@ func TestContext_SaveTraceability_RoundTrips(t *testing.T) {
 				{
 					FunctionName: "TestContext_SaveTraceability_RoundTrips",
 					TaskID:       "task-2",
-					AC:           []string{"AC-3"},
+					CriterionIDs: []string{"AC-3"},
 					EC:           []string{},
 				},
 			},

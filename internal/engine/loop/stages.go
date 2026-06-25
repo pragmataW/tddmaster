@@ -16,13 +16,15 @@ func instructionFor(key promptregistry.InstructionKey) string {
 }
 
 func appendACsAndECs(b *strings.Builder, task spec.Task) {
-	if len(task.AC) > 0 {
+	if len(task.Criteria) > 0 {
 		b.WriteString("\n\nAcceptance Criteria:\n")
-		for _, ac := range task.AC {
-			b.WriteString("- ")
-			b.WriteString(ac)
-			b.WriteString("\n")
-		}
+	}
+	for _, c := range task.Criteria {
+		b.WriteString("- [")
+		b.WriteString(c.ID)
+		b.WriteString("]")
+		b.WriteString(spec.FormatCriterionInline(c))
+		b.WriteString("\n")
 	}
 	if len(task.EdgeCases) > 0 {
 		b.WriteString("\nEdge Cases:\n")

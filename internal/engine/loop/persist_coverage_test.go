@@ -60,7 +60,7 @@ func TestPersistCoverage_MergesFileCoverageIntoTraceability(t *testing.T) {
 
 	existing := spec.Traceability{
 		Entries: map[string][]spec.TraceEntry{
-			"foo_test.go": {{FunctionName: "TestFoo", TaskID: "t1", AC: []string{"AC-1"}}},
+			"foo_test.go": {{FunctionName: "TestFoo", TaskID: "t1", CriterionIDs: []string{"AC-1"}}},
 		},
 		Coverage: map[string]float64{
 			"existing.go": 70,

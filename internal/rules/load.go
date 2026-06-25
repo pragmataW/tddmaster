@@ -11,7 +11,7 @@ import (
 	"github.com/pragmataW/tddmaster/internal/paths"
 )
 
-var KnownAgents = []string{"test-writer", "executor", "verifier", "planner"}
+var KnownAgents = []string{"test-writer", "executor", "verifier", "planner", "auditor"}
 
 type Set struct {
 	global []string

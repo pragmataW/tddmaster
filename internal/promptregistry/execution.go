@@ -62,7 +62,7 @@ const ReportExampleTestWriter = `{"testsWritten":["TestFoo_HappyPath","TestFoo_E
 
 const ReportExampleRuleSynthesizer = `{"rules":[{"scope":"executor","name":"prefer-table-tests","content":"Use table-driven tests for all functions with multiple input cases.","rationale":"Reduces duplication and makes edge cases explicit."}]}`
 
-const ruleLearnProposeText = "Synthesize rules from the accumulated learnings gathered during execution. " +
+const ruleLearnProposeText ="Synthesize rules from the accumulated learnings gathered during execution. " +
 	"Analyze the refactor note suggestions and failed AC reasons provided. " +
 	"For each rule, decide its SCOPE: use 'global' to apply to all agents, or one of 'executor', 'test-writer', 'verifier', 'planner' for a specific agent. " +
 	"Return ONLY a JSON proposal without writing any files: {\"rules\":[{\"scope\":\"<scope>\",\"name\":\"<name>\",\"content\":\"<rule text>\",\"rationale\":\"<why>\"}]}."

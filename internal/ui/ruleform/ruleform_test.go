@@ -12,7 +12,7 @@ import (
 
 func TestTargets_ContainsFiveKnownTargets(t *testing.T) {
 	got := ruleform.Targets()
-	want := []string{"global", "test-writer", "executor", "verifier", "planner"}
+	want := []string{"global", "test-writer", "executor", "verifier", "planner", "auditor"}
 	if len(got) != len(want) {
 		t.Fatalf("Targets() len = %d, want %d; got %v", len(got), len(want), got)
 	}

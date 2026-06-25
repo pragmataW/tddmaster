@@ -53,6 +53,7 @@ func Start(root, slug string, now time.Time) (Result, error) {
 			paths.SpecSettings(root, slug),
 			paths.SpecProgress(root, slug),
 			paths.SpecTraceability(root, slug),
+			paths.SpecAnalysis(root, slug),
 		},
 		AlreadyExists: false,
 	}, nil
@@ -85,10 +86,15 @@ func writeInitialFiles(root, slug string, now time.Time) error {
 		return err
 	}
 
-	return SaveTraceability(root, slug, Traceability{})
+	if err := SaveTraceability(root, slug, Traceability{}); err != nil {
+		return err
+	}
+
+	return SaveAnalysis(root, slug, Analysis{Verdict: "", Findings: []Finding{}})
 }
 
 func cleanupStart(root, slug string, dirExisted bool) {
+	os.Remove(paths.SpecAnalysis(root, slug))
 	os.Remove(paths.SpecTraceability(root, slug))
 	os.Remove(paths.SpecProgress(root, slug))
 	os.Remove(paths.SpecSettings(root, slug))

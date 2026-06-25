@@ -79,7 +79,7 @@ func TestContextSaveTraceability_RoundTrip(t *testing.T) {
 	tr := spec.Traceability{
 		Entries: map[string][]spec.TraceEntry{
 			"testfile_test.go": {
-				{FunctionName: "TestSomething", TaskID: "task-1", AC: []string{"ac1"}, EC: nil},
+				{FunctionName: "TestSomething", TaskID: "task-1", CriterionIDs: []string{"ac1"}, EC: nil},
 			},
 		},
 	}

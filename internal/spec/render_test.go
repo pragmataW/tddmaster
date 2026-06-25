@@ -44,7 +44,7 @@ func buildFullProgress() Progress {
 			{
 				ID:         "task-1",
 				Title:      "Bootstrap",
-				AC:         []string{"ac line one", "ac line two"},
+				Criteria:   []Criterion{{ID: "ac-1", Then: "ac line one"}, {ID: "ac-2", Then: "ac line two"}},
 				Done:       false,
 				TDDEnabled: true,
 				Important:  true,
@@ -52,7 +52,7 @@ func buildFullProgress() Progress {
 			{
 				ID:         "task-2",
 				Title:      "Other title",
-				AC:         []string{},
+				Criteria:   []Criterion{},
 				Done:       true,
 				TDDEnabled: false,
 				Important:  false,
@@ -83,8 +83,10 @@ func TestRenderSpecMd_GoldenFullSpec(t *testing.T) {
 		"- Empty payload must return 400\n\n" +
 		"## Tasks\n" +
 		"- [ ] task-1: Bootstrap (TDD) (important)\n" +
-		"  - ac line one\n" +
-		"  - ac line two\n" +
+		"- **ac-1**\n" +
+		"  - THEN ac line one\n" +
+		"- **ac-2**\n" +
+		"  - THEN ac line two\n" +
 		"- [x] task-2: Other title\n\n" +
 		"## Verification\n" +
 		"Run integration tests.\n"
@@ -344,17 +346,17 @@ func TestRenderSpecMd_TaskACSubBullets(t *testing.T) {
 		Spec:   "s",
 		Status: StatusDraft,
 		Tasks: []Task{
-			{ID: "task-1", Title: "T", Done: false, AC: []string{"first ac", "second ac"}},
+			{ID: "task-1", Title: "T", Done: false, Criteria: []Criterion{{ID: "ac-1", Then: "first ac"}, {ID: "ac-2", Then: "second ac"}}},
 		},
 	}
 
 	got := RenderSpecMd("s", st, pr)
 
-	if !strings.Contains(got, "  - first ac\n") {
-		t.Errorf("expected AC sub-bullet '  - first ac', got:\n%s", got)
+	if !strings.Contains(got, "  - THEN first ac\n") {
+		t.Errorf("expected criterion sub-bullet '  - THEN first ac', got:\n%s", got)
 	}
-	if !strings.Contains(got, "  - second ac\n") {
-		t.Errorf("expected AC sub-bullet '  - second ac', got:\n%s", got)
+	if !strings.Contains(got, "  - THEN second ac\n") {
+		t.Errorf("expected criterion sub-bullet '  - THEN second ac', got:\n%s", got)
 	}
 }
 
@@ -628,6 +630,98 @@ func TestParseEdgeCases_Exported_EmptyString_ReturnsNil(t *testing.T) {
 	got := ParseEdgeCases("")
 	if got != nil {
 		t.Errorf("ParseEdgeCases(\"\") = %v, want nil", got)
+	}
+}
+
+func buildProgressWithCriteria(criteria []Criterion) Progress {
+	return Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "T", Done: false, Criteria: criteria},
+		},
+	}
+}
+
+func emptyState() State {
+	return State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+}
+
+func TestRender_CriteriaSubBlock_GivenWhenThen(t *testing.T) {
+	pr := buildProgressWithCriteria([]Criterion{
+		{ID: "ac-1", Given: "a user", When: "they submit", Then: "it succeeds"},
+	})
+	got := RenderSpecMd("s", emptyState(), pr)
+	if !strings.Contains(got, "- **ac-1**\n") {
+		t.Errorf("render criteria: missing '- **ac-1**' header, got:\n%s", got)
+	}
+	if !strings.Contains(got, "  - GIVEN a user\n") {
+		t.Errorf("render criteria: missing '  - GIVEN a user', got:\n%s", got)
+	}
+	if !strings.Contains(got, "  - WHEN they submit\n") {
+		t.Errorf("render criteria: missing '  - WHEN they submit', got:\n%s", got)
+	}
+	if !strings.Contains(got, "  - THEN it succeeds\n") {
+		t.Errorf("render criteria: missing '  - THEN it succeeds', got:\n%s", got)
+	}
+}
+
+func TestRender_Criteria_OmitsEmptyGivenWhen(t *testing.T) {
+	pr := buildProgressWithCriteria([]Criterion{
+		{ID: "ac-1", Given: "", When: "", Then: "it succeeds"},
+	})
+	got := RenderSpecMd("s", emptyState(), pr)
+	if !strings.Contains(got, "- **ac-1**\n") {
+		t.Errorf("render criteria omit empty: missing '- **ac-1**' header, got:\n%s", got)
+	}
+	if !strings.Contains(got, "  - THEN it succeeds\n") {
+		t.Errorf("render criteria omit empty: missing '  - THEN it succeeds', got:\n%s", got)
+	}
+	if strings.Contains(got, "  - GIVEN") {
+		t.Errorf("render criteria omit empty: GIVEN line must be omitted when Given is empty, got:\n%s", got)
+	}
+	if strings.Contains(got, "  - WHEN") {
+		t.Errorf("render criteria omit empty: WHEN line must be omitted when When is empty, got:\n%s", got)
+	}
+}
+
+func TestRender_Criteria_GivenEmptyWhenPresent(t *testing.T) {
+	pr := buildProgressWithCriteria([]Criterion{
+		{ID: "ac-1", Given: "", When: "they submit", Then: "it succeeds"},
+	})
+	got := RenderSpecMd("s", emptyState(), pr)
+	if !strings.Contains(got, "  - WHEN they submit\n") {
+		t.Errorf("render criteria: missing WHEN line when Given empty, got:\n%s", got)
+	}
+	if strings.Contains(got, "  - GIVEN") {
+		t.Errorf("render criteria: GIVEN line must be absent when Given is empty, got:\n%s", got)
+	}
+}
+
+func TestRender_Criteria_RawFallback(t *testing.T) {
+	pr := buildProgressWithCriteria([]Criterion{
+		{ID: "ac-1", Given: "ignored", When: "ignored", Then: "ignored", Raw: "custom raw text"},
+	})
+	got := RenderSpecMd("s", emptyState(), pr)
+	wantLine := "- **ac-1** custom raw text\n"
+	if !strings.Contains(got, wantLine) {
+		t.Errorf("render criteria raw fallback: want %q on single line, got:\n%s", wantLine, got)
+	}
+	if strings.Contains(got, "  - GIVEN") || strings.Contains(got, "  - WHEN") || strings.Contains(got, "  - THEN") {
+		t.Errorf("render criteria raw fallback: no child GIVEN/WHEN/THEN lines expected, got:\n%s", got)
+	}
+}
+
+func TestRender_Criteria_EmptyThenAndRaw_NoPanic(t *testing.T) {
+	pr := buildProgressWithCriteria([]Criterion{
+		{ID: "ac-1", Given: "", When: "", Then: "", Raw: ""},
+	})
+	got := RenderSpecMd("s", emptyState(), pr)
+	if !strings.Contains(got, "- **ac-1**") {
+		t.Errorf("render criteria empty then+raw: criterion header '- **ac-1**' must appear, got:\n%s", got)
+	}
+	if strings.Contains(got, "  - THEN") {
+		t.Errorf("render criteria empty then+raw: THEN child line must not appear, got:\n%s", got)
 	}
 }
 

@@ -45,8 +45,8 @@ func buildSpecProposalCtx(t *testing.T, root, slug string) *engine.Context {
 func TestBuildTasksFromGen_ValidPayload_ReturnsTasks(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}, LinkedEdgeCases: []string{"ec1"}},
-			{Title: "T2", AC: []string{"a2", "a3"}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}, LinkedEdgeCases: []string{"ec1"}},
+			{Title: "T2", Criteria: []spec.Criterion{{Then: "a2"}, {Then: "a3"}}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, true, nil)
@@ -61,9 +61,9 @@ func TestBuildTasksFromGen_ValidPayload_ReturnsTasks(t *testing.T) {
 func TestBuildTasksFromGen_IDsAreOneBased(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}},
-			{Title: "T2", AC: []string{"a2"}},
-			{Title: "T3", AC: []string{"a3"}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}},
+			{Title: "T2", Criteria: []spec.Criterion{{Then: "a2"}}},
+			{Title: "T3", Criteria: []spec.Criterion{{Then: "a3"}}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, nil)
@@ -81,7 +81,7 @@ func TestBuildTasksFromGen_IDsAreOneBased(t *testing.T) {
 func TestBuildTasksFromGen_TitleCopied(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "My Title", AC: []string{"ac1"}},
+			{Title: "My Title", Criteria: []spec.Criterion{{Then: "ac1"}}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, nil)
@@ -96,21 +96,21 @@ func TestBuildTasksFromGen_TitleCopied(t *testing.T) {
 func TestBuildTasksFromGen_ACCopied(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"ac1", "ac2"}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "ac1"}, {Then: "ac2"}}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, nil)
 	if err != nil {
 		t.Fatalf("BuildTasksFromGen: %v", err)
 	}
-	if len(tasks[0].AC) != 2 || tasks[0].AC[0] != "ac1" || tasks[0].AC[1] != "ac2" {
-		t.Errorf("AC = %v, want [ac1 ac2]", tasks[0].AC)
+	if len(tasks[0].Criteria) != 2 || tasks[0].Criteria[0].Then != "ac1" || tasks[0].Criteria[1].Then != "ac2" {
+		t.Errorf("Criteria = %v, want [ac1 ac2]", tasks[0].Criteria)
 	}
 }
 
 func TestBuildTasksFromGen_DoneIsFalse(t *testing.T) {
 	p := TaskGenPayload{
-		Tasks: []TaskGenItem{{Title: "T1", AC: []string{"a"}}},
+		Tasks: []TaskGenItem{{Title: "T1", Criteria: []spec.Criterion{{Then: "a"}}}},
 	}
 	tasks, _ := BuildTasksFromGen(p, false, nil)
 	if tasks[0].Done {
@@ -120,7 +120,7 @@ func TestBuildTasksFromGen_DoneIsFalse(t *testing.T) {
 
 func TestBuildTasksFromGen_ImportantIsFalse(t *testing.T) {
 	p := TaskGenPayload{
-		Tasks: []TaskGenItem{{Title: "T1", AC: []string{"a"}}},
+		Tasks: []TaskGenItem{{Title: "T1", Criteria: []spec.Criterion{{Then: "a"}}}},
 	}
 	tasks, _ := BuildTasksFromGen(p, false, nil)
 	if tasks[0].Important {
@@ -130,7 +130,7 @@ func TestBuildTasksFromGen_ImportantIsFalse(t *testing.T) {
 
 func TestBuildTasksFromGen_TDDEnabled_MatchesDefault_True(t *testing.T) {
 	p := TaskGenPayload{
-		Tasks: []TaskGenItem{{Title: "T1", AC: []string{"a"}}},
+		Tasks: []TaskGenItem{{Title: "T1", Criteria: []spec.Criterion{{Then: "a"}}}},
 	}
 	tasks, _ := BuildTasksFromGen(p, true, nil)
 	if !tasks[0].TDDEnabled {
@@ -140,7 +140,7 @@ func TestBuildTasksFromGen_TDDEnabled_MatchesDefault_True(t *testing.T) {
 
 func TestBuildTasksFromGen_TDDEnabled_MatchesDefault_False(t *testing.T) {
 	p := TaskGenPayload{
-		Tasks: []TaskGenItem{{Title: "T1", AC: []string{"a"}}},
+		Tasks: []TaskGenItem{{Title: "T1", Criteria: []spec.Criterion{{Then: "a"}}}},
 	}
 	tasks, _ := BuildTasksFromGen(p, false, nil)
 	if tasks[0].TDDEnabled {
@@ -159,7 +159,7 @@ func TestBuildTasksFromGen_ZeroTasks_ReturnsError(t *testing.T) {
 func TestBuildTasksFromGen_EmptyTitle_ReturnsError(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "", AC: []string{"a1"}},
+			{Title: "", Criteria: []spec.Criterion{{Then: "a1"}}},
 		},
 	}
 	_, err := BuildTasksFromGen(p, false, nil)
@@ -171,7 +171,7 @@ func TestBuildTasksFromGen_EmptyTitle_ReturnsError(t *testing.T) {
 func TestBuildTasksFromGen_EmptyAC_ReturnsError(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{}},
+			{Title: "T1", Criteria: []spec.Criterion{}},
 		},
 	}
 	_, err := BuildTasksFromGen(p, false, nil)
@@ -236,7 +236,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_UpdatesProgressTasks(t *testing.T
 		t.Fatalf("Next(): %v", err)
 	}
 
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit valid task-gen JSON: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_FirstTaskID(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_FirstTaskTitle(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -297,15 +297,15 @@ func TestSpecProposalDriver_SubmitValidTaskGen_FirstTaskAC(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
 
 	ctx2 := buildSpecProposalCtx(t, root, slug)
-	ac := ctx2.Progress().Tasks[0].AC
-	if len(ac) != 1 || ac[0] != "a1" {
-		t.Errorf("Tasks[0].AC = %v, want [a1]", ac)
+	crit := ctx2.Progress().Tasks[0].Criteria
+	if len(crit) != 1 || crit[0].Then != "a1" {
+		t.Errorf("Tasks[0].Criteria = %v, want one criterion with Then a1", crit)
 	}
 }
 
@@ -318,7 +318,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_SecondTaskID(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_TDDEnabledMatchesSettings(t *test
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_ProgressStatusIsDraft(t *testing.
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_SpecMdWritten(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_SpecMdContainsT1(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_SpecMdContainsTask1(t *testing.T)
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -445,7 +445,7 @@ func TestSpecProposalDriver_SubmitValidTaskGen_TasksGeneratedAnswered(t *testing
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestSpecProposalDriver_SubmitEmptyTitle_ReturnsError(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	_, err := ctx.Submit([]byte(`{"tasks":[{"title":"","ac":["x"]}]}`))
+	_, err := ctx.Submit([]byte(`{"tasks":[{"title":"","criteria":[{"then":"x"}]}]}`))
 	if err == nil {
 		t.Fatal("expected error for empty title, got nil")
 	}
@@ -578,7 +578,7 @@ func TestSpecProposalDriver_SubmitEmptyTitle_TasksUnchanged(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	ctx.Submit([]byte(`{"tasks":[{"title":"","ac":["x"]}]}`))
+	ctx.Submit([]byte(`{"tasks":[{"title":"","criteria":[{"then":"x"}]}]}`))
 
 	ctx2 := buildSpecProposalCtx(t, root, slug)
 	if len(ctx2.Progress().Tasks) != 0 {
@@ -595,7 +595,7 @@ func TestSpecProposalDriver_SubmitEmptyTitle_NotAnswered(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	ctx.Submit([]byte(`{"tasks":[{"title":"","ac":["x"]}]}`))
+	ctx.Submit([]byte(`{"tasks":[{"title":"","criteria":[{"then":"x"}]}]}`))
 
 	ctx2 := buildSpecProposalCtx(t, root, slug)
 	if ctx2.HasAnswer("tasks_generated") {
@@ -612,7 +612,7 @@ func TestSpecProposalDriver_SubmitEmptyAC_ReturnsError(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	_, err := ctx.Submit([]byte(`{"tasks":[{"title":"X","ac":[]}]}`))
+	_, err := ctx.Submit([]byte(`{"tasks":[{"title":"X","criteria":[]}]}`))
 	if err == nil {
 		t.Fatal("expected error for empty AC, got nil")
 	}
@@ -627,7 +627,7 @@ func TestSpecProposalDriver_SubmitEmptyAC_TasksUnchanged(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	ctx.Submit([]byte(`{"tasks":[{"title":"X","ac":[]}]}`))
+	ctx.Submit([]byte(`{"tasks":[{"title":"X","criteria":[]}]}`))
 
 	ctx2 := buildSpecProposalCtx(t, root, slug)
 	if len(ctx2.Progress().Tasks) != 0 {
@@ -644,7 +644,7 @@ func TestSpecProposalDriver_SubmitEmptyAC_NotAnswered(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("Next(): %v", err)
 	}
-	ctx.Submit([]byte(`{"tasks":[{"title":"X","ac":[]}]}`))
+	ctx.Submit([]byte(`{"tasks":[{"title":"X","criteria":[]}]}`))
 
 	ctx2 := buildSpecProposalCtx(t, root, slug)
 	if ctx2.HasAnswer("tasks_generated") {
@@ -661,7 +661,7 @@ func TestSpecProposalDriver_AfterTaskGen_NextReturnsSelfReviewPrompt(t *testing.
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -685,7 +685,7 @@ func TestSpecProposalDriver_AfterTaskGen_NextFormatIsFlag(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -708,7 +708,7 @@ func TestSpecProposalDriver_SelfReviewApprove_PhaseDone(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -738,7 +738,7 @@ func TestSpecProposalDriver_SelfReviewNope_ReturnsError(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -761,7 +761,7 @@ func TestSpecProposalDriver_SelfReviewNope_PhaseNotAdvanced(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -789,7 +789,7 @@ func TestSpecProposalDriver_SelfReviewNope_NotRecorded(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}
@@ -808,7 +808,7 @@ func TestSpecProposalDriver_SelfReviewNope_NotRecorded(t *testing.T) {
 func TestBuildTasksFromGen_LinkedEdgeCasesPersist(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}, LinkedEdgeCases: []string{"ec-1", "ec-2"}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}, LinkedEdgeCases: []string{"ec-1", "ec-2"}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, nil)
@@ -831,7 +831,7 @@ func TestBuildTasksFromGen_FallbackWhenEmpty(t *testing.T) {
 	fallback := []string{"ec-a", "ec-b"}
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}, LinkedEdgeCases: []string{}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}, LinkedEdgeCases: []string{}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, fallback)
@@ -852,7 +852,7 @@ func TestBuildTasksFromGen_FallbackWhenEmpty(t *testing.T) {
 func TestBuildTasksFromGen_NoFallbackNoLinked(t *testing.T) {
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}, LinkedEdgeCases: []string{}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}, LinkedEdgeCases: []string{}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, nil)
@@ -865,12 +865,72 @@ func TestBuildTasksFromGen_NoFallbackNoLinked(t *testing.T) {
 	}
 }
 
+func TestBuildTasksFromGen_PopulatesCriteria(t *testing.T) {
+	p := TaskGenPayload{
+		Tasks: []TaskGenItem{
+			{
+				Title: "T1",
+				Criteria: []spec.Criterion{
+					{Given: "a user", When: "they act", Then: "something happens"},
+				},
+			},
+		},
+	}
+	tasks, err := BuildTasksFromGen(p, false, nil)
+	if err != nil {
+		t.Fatalf("BuildTasksFromGen: %v", err)
+	}
+	if len(tasks[0].Criteria) != 1 {
+		t.Fatalf("Criteria len = %d, want 1", len(tasks[0].Criteria))
+	}
+	c := tasks[0].Criteria[0]
+	if c.Given != "a user" {
+		t.Errorf("Given = %q, want %q", c.Given, "a user")
+	}
+	if c.When != "they act" {
+		t.Errorf("When = %q, want %q", c.When, "they act")
+	}
+	if c.Then != "something happens" {
+		t.Errorf("Then = %q, want %q", c.Then, "something happens")
+	}
+	if c.ID == "" {
+		t.Error("criterion ID is empty; want ac-N assigned by AssignCriterionIDs")
+	}
+}
+
+func TestBuildTasksFromGen_AssignsStableCriterionIDs(t *testing.T) {
+	p := TaskGenPayload{
+		Tasks: []TaskGenItem{
+			{
+				Title: "T1",
+				Criteria: []spec.Criterion{
+					{Then: "first outcome"},
+					{Then: "second outcome"},
+				},
+			},
+		},
+	}
+	tasks, err := BuildTasksFromGen(p, false, nil)
+	if err != nil {
+		t.Fatalf("BuildTasksFromGen: %v", err)
+	}
+	if len(tasks[0].Criteria) != 2 {
+		t.Fatalf("Criteria len = %d, want 2", len(tasks[0].Criteria))
+	}
+	if tasks[0].Criteria[0].ID != "ac-1" {
+		t.Errorf("Criteria[0].ID = %q, want ac-1", tasks[0].Criteria[0].ID)
+	}
+	if tasks[0].Criteria[1].ID != "ac-2" {
+		t.Errorf("Criteria[1].ID = %q, want ac-2", tasks[0].Criteria[1].ID)
+	}
+}
+
 func TestBuildTasksFromGen_MixedTasks(t *testing.T) {
 	fallback := []string{"ec-x", "ec-y"}
 	p := TaskGenPayload{
 		Tasks: []TaskGenItem{
-			{Title: "T1", AC: []string{"a1"}, LinkedEdgeCases: []string{"linked-1"}},
-			{Title: "T2", AC: []string{"a2"}, LinkedEdgeCases: []string{}},
+			{Title: "T1", Criteria: []spec.Criterion{{Then: "a1"}}, LinkedEdgeCases: []string{"linked-1"}},
+			{Title: "T2", Criteria: []spec.Criterion{{Then: "a2"}}, LinkedEdgeCases: []string{}},
 		},
 	}
 	tasks, err := BuildTasksFromGen(p, false, fallback)
@@ -894,7 +954,7 @@ func TestSpecProposalDriver_BothAnswered_NextReturnsDone(t *testing.T) {
 	if _, err := ctx.Next(); err != nil {
 		t.Fatalf("First Next(): %v", err)
 	}
-	payload := `{"tasks":[{"title":"T1","ac":["a1"],"linkedEdgeCases":["ec1"]},{"title":"T2","ac":["a2","a3"]}]}`
+	payload := `{"tasks":[{"title":"T1","criteria":[{"then":"a1"}],"linkedEdgeCases":["ec1"]},{"title":"T2","criteria":[{"then":"a2"},{"then":"a3"}]}]}`
 	if _, err := ctx.Submit([]byte(payload)); err != nil {
 		t.Fatalf("Submit task-gen: %v", err)
 	}

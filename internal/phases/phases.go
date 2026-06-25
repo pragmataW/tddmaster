@@ -13,6 +13,7 @@ func Enabled(s spec.Settings) []engine.PhaseDef {
 		{ID: phasecatalog.PhaseDiscovery, Driver: DiscoveryDriver()},
 		{ID: phasecatalog.PhaseSpecProposal, Driver: SpecProposalDriver()},
 		{ID: phasecatalog.PhaseRefinement, Driver: RefinementDriver()},
+		{ID: phasecatalog.PhaseAnalysis, Driver: AnalysisDriver()},
 		{ID: phasecatalog.PhaseExecution, Driver: loop.NewLoopDriver()},
 	}
 	if s.RuleLearningEnabled {

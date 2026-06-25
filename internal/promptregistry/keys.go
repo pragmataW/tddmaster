@@ -10,6 +10,7 @@ const (
 	AgentPlanner         AgentRegistryKey = "tddmaster-planner"
 	AgentTestWriter      AgentRegistryKey = "tddmaster-test-writer"
 	AgentRuleSynthesizer AgentRegistryKey = "tddmaster-rule-synthesizer"
+	AgentAuditor         AgentRegistryKey = "tddmaster-auditor"
 )
 
 var AllAgentKeys = []AgentRegistryKey{
@@ -18,6 +19,7 @@ var AllAgentKeys = []AgentRegistryKey{
 	AgentPlanner,
 	AgentTestWriter,
 	AgentRuleSynthesizer,
+	AgentAuditor,
 }
 
 const (

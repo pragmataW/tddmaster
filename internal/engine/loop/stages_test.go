@@ -709,7 +709,7 @@ func makeTaskWithACAndEC(id string, tddEnabled bool) spec.Task {
 		ID:         id,
 		Title:      id,
 		TDDEnabled: tddEnabled,
-		AC:         []string{"ac-1: foo", "ac-2: bar"},
+		Criteria:   []spec.Criterion{{ID: "ac-1", Then: "ac-1: foo"}, {ID: "ac-2", Then: "ac-2: bar"}},
 		EdgeCases:  []string{"ec-1: x", "ec-2: y"},
 	}
 }
@@ -1185,6 +1185,112 @@ func TestGateOnReport_NilMaps_InitializedSafely(t *testing.T) {
 	}
 	if newCtx2.State.PlanAttempts == nil {
 		t.Error("PlanAttempts must be initialized after revise")
+	}
+}
+
+func makeTaskWithCriteria(id string, tddEnabled bool, criteria []spec.Criterion) spec.Task {
+	return spec.Task{
+		ID:         id,
+		Title:      id,
+		TDDEnabled: tddEnabled,
+		Criteria:   criteria,
+	}
+}
+
+func TestAppendACsAndECs_FullTriple_RendersGivenWhenThen(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "a user", When: "they submit", Then: "it succeeds"},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	want := "- [ac-1] GIVEN a user WHEN they submit THEN it succeeds"
+	if !strings.Contains(got, want) {
+		t.Errorf("appendACsAndECs full triple: want %q in output, got:\n%s", want, got)
+	}
+}
+
+func TestAppendACsAndECs_OmitsEmptyGivenAndWhen(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "", When: "", Then: "it succeeds"},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	wantLine := "- [ac-1] THEN it succeeds"
+	if !strings.Contains(got, wantLine) {
+		t.Errorf("appendACsAndECs empty given+when: want %q, got:\n%s", wantLine, got)
+	}
+	if strings.Contains(got, "GIVEN") || strings.Contains(got, "WHEN") {
+		t.Errorf("appendACsAndECs: GIVEN/WHEN must be omitted when empty, got:\n%s", got)
+	}
+}
+
+func TestAppendACsAndECs_GivenEmptyWhenPresent(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "", When: "they submit", Then: "it succeeds"},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	wantLine := "- [ac-1] WHEN they submit THEN it succeeds"
+	if !strings.Contains(got, wantLine) {
+		t.Errorf("appendACsAndECs empty given, when+then present: want %q, got:\n%s", wantLine, got)
+	}
+	if strings.Contains(got, "GIVEN") {
+		t.Errorf("appendACsAndECs: GIVEN must be omitted when empty, got:\n%s", got)
+	}
+}
+
+func TestAppendACsAndECs_RawFallback(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "ignored", When: "ignored", Then: "ignored", Raw: "custom raw text"},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	wantLine := "- [ac-1] custom raw text"
+	if !strings.Contains(got, wantLine) {
+		t.Errorf("appendACsAndECs raw fallback: want %q, got:\n%s", wantLine, got)
+	}
+	if strings.Contains(got, "GIVEN") || strings.Contains(got, "WHEN") || strings.Contains(got, "THEN") {
+		t.Errorf("appendACsAndECs raw fallback: GIVEN/WHEN/THEN must not appear when Raw is used, got:\n%s", got)
+	}
+}
+
+func TestAppendACsAndECs_EmptyThenAndRaw_NoPanic(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "", When: "", Then: "", Raw: ""},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	if !strings.Contains(got, "[ac-1]") {
+		t.Errorf("appendACsAndECs empty then+raw: criterion id [ac-1] must still appear, got:\n%s", got)
+	}
+	if strings.Contains(got, "THEN") {
+		t.Errorf("appendACsAndECs empty then+raw: THEN must not appear when Then is empty, got:\n%s", got)
+	}
+}
+
+func TestAppendACsAndECs_MultipleCriteria_EachOnOwnLineWithId(t *testing.T) {
+	task := makeTaskWithCriteria("t-1", true, []spec.Criterion{
+		{ID: "ac-1", Given: "g1", When: "w1", Then: "t1"},
+		{ID: "ac-2", Given: "g2", When: "w2", Then: "t2"},
+	})
+	var b strings.Builder
+	appendACsAndECs(&b, task)
+	got := b.String()
+	if !strings.Contains(got, "- [ac-1] GIVEN g1 WHEN w1 THEN t1") {
+		t.Errorf("appendACsAndECs multiple criteria: missing ac-1 line, got:\n%s", got)
+	}
+	if !strings.Contains(got, "- [ac-2] GIVEN g2 WHEN w2 THEN t2") {
+		t.Errorf("appendACsAndECs multiple criteria: missing ac-2 line, got:\n%s", got)
+	}
+	ac1Idx := strings.Index(got, "[ac-1]")
+	ac2Idx := strings.Index(got, "[ac-2]")
+	if ac1Idx == -1 || ac2Idx == -1 || ac1Idx >= ac2Idx {
+		t.Errorf("appendACsAndECs multiple criteria: ac-1 must appear before ac-2, got:\n%s", got)
 	}
 }
 

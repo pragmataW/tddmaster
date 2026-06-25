@@ -76,7 +76,7 @@ func Test_RefineCmd_WrongPhase_ReturnsRefinementError(t *testing.T) {
 	p := spec.Progress{
 		Spec:      slug,
 		Status:    spec.StatusDraft,
-		Tasks:     []spec.Task{{ID: "task-1", Title: initialTitle, AC: []string{}}},
+		Tasks:     []spec.Task{{ID: "task-1", Title: initialTitle}},
 		UpdatedAt: time.Now().UTC(),
 	}
 	if err := spec.SaveProgress(root, slug, p); err != nil {
@@ -104,7 +104,7 @@ func Test_RefineCmd_Update_HappyPath(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
 	tddTrue := true
-	initialTasks := []spec.Task{{ID: "task-1", Title: "Old", AC: []string{}}}
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Old"}}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
 	answer := `{"update":{"task-1":{"title":"New","tddEnabled":true}}}`
@@ -140,10 +140,10 @@ func Test_RefineCmd_Update_HappyPath(t *testing.T) {
 func Test_RefineCmd_Add_HappyPath(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing", AC: []string{}}}
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing"}}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
-	answer := `{"add":[{"title":"Added","ac":["a1"]}]}`
+	answer := `{"add":[{"title":"Added","criteria":[{"then":"a1"}]}]}`
 	_, err := executeRefine(t, root, slug, "--answer", answer)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -172,8 +172,8 @@ func Test_RefineCmd_Remove_HappyPath(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
 	initialTasks := []spec.Task{
-		{ID: "task-1", Title: "Keep", AC: []string{}},
-		{ID: "task-2", Title: "Remove", AC: []string{}},
+		{ID: "task-1", Title: "Keep"},
+		{ID: "task-2", Title: "Remove"},
 	}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
@@ -198,7 +198,7 @@ func Test_RefineCmd_Remove_HappyPath(t *testing.T) {
 func Test_RefineCmd_UnknownIDUpdate_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing", AC: []string{}}}
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing"}}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
 	answer := `{"update":{"task-9":{"title":"X"}}}`
@@ -219,7 +219,7 @@ func Test_RefineCmd_UnknownIDUpdate_ReturnsError(t *testing.T) {
 func Test_RefineCmd_InvalidJSONAnswer_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	scaffoldRefinementState(t, root, slug, []spec.Task{{ID: "task-1", Title: "T", AC: []string{}}})
+	scaffoldRefinementState(t, root, slug, []spec.Task{{ID: "task-1", Title: "T"}})
 
 	_, err := executeRefine(t, root, slug, "--answer", "{bad")
 	if err == nil {
@@ -230,7 +230,7 @@ func Test_RefineCmd_InvalidJSONAnswer_ReturnsError(t *testing.T) {
 func Test_RefineCmd_MissingAnswerFlag_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	scaffoldRefinementState(t, root, slug, []spec.Task{{ID: "task-1", Title: "T", AC: []string{}}})
+	scaffoldRefinementState(t, root, slug, []spec.Task{{ID: "task-1", Title: "T"}})
 
 	_, err := executeRefine(t, root, slug)
 	if err == nil {
@@ -241,7 +241,7 @@ func Test_RefineCmd_MissingAnswerFlag_ReturnsError(t *testing.T) {
 func Test_RefineCmd_SuccessOutput_ContainsTaskIDsAndNextHint(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	initialTasks := []spec.Task{{ID: "task-1", Title: "Old", AC: []string{}}}
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Old"}}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
 	answer := `{"update":{"task-1":{"title":"Updated"}}}`
@@ -267,10 +267,10 @@ func Test_RefineCmd_SuccessOutput_ContainsTaskIDsAndNextHint(t *testing.T) {
 func Test_RefineCmd_OutputIncludesEdgeCases(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"
-	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing", AC: []string{}}}
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing"}}
 	scaffoldRefinementState(t, root, slug, initialTasks)
 
-	answer := `{"add":[{"title":"WithEC","ac":["a1"],"edgeCases":["ec-alpha","ec-beta"]}]}`
+	answer := `{"add":[{"title":"WithEC","criteria":[{"then":"a1"}],"edgeCases":["ec-alpha","ec-beta"]}]}`
 	out, err := executeRefine(t, root, slug, "--answer", answer)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -284,6 +284,43 @@ func Test_RefineCmd_OutputIncludesEdgeCases(t *testing.T) {
 	}
 	if !strings.Contains(out, "ec-beta") {
 		t.Errorf("expected output to contain 'ec-beta', got: %q", out)
+	}
+}
+
+func Test_RefineCmd_DecodesCriteriaPayload(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{{ID: "task-1", Title: "T", Criteria: []spec.Criterion{{ID: "ac-1", Then: "a1"}}}}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	answer := `{"update":{"task-1":{"criteria":[{"given":"a user","when":"they act","then":"it works"}]}}}`
+	_, err := executeRefine(t, root, slug, "--answer", answer)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress: %v", loadErr)
+	}
+	if len(loaded.Tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(loaded.Tasks))
+	}
+	if len(loaded.Tasks[0].Criteria) != 1 {
+		t.Fatalf("expected 1 criterion on task-1, got %d", len(loaded.Tasks[0].Criteria))
+	}
+	c := loaded.Tasks[0].Criteria[0]
+	if c.Given != "a user" {
+		t.Errorf("Criterion.Given = %q, want 'a user'", c.Given)
+	}
+	if c.When != "they act" {
+		t.Errorf("Criterion.When = %q, want 'they act'", c.When)
+	}
+	if c.Then != "it works" {
+		t.Errorf("Criterion.Then = %q, want 'it works'", c.Then)
+	}
+	if c.ID == "" {
+		t.Error("Criterion.ID is empty; want ac-N assigned by AssignCriterionIDs")
 	}
 }
 

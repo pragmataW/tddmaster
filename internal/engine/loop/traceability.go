@@ -40,7 +40,7 @@ func validateAndPersistTraceability(c *engine.Context, task spec.Task, report St
 		newEntry := spec.TraceEntry{
 			FunctionName: entry.FunctionName,
 			TaskID:       taskID,
-			AC:           entry.AC,
+			CriterionIDs: entry.AC,
 			EC:           entry.EC,
 		}
 

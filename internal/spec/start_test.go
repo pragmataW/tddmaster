@@ -22,7 +22,7 @@ func writeManifest(t *testing.T, root string) {
 	}
 }
 
-func TestStart_CreatesFourFiles(t *testing.T) {
+func TestStart_CreatesFiveFiles(t *testing.T) {
 	root := t.TempDir()
 	writeManifest(t, root)
 
@@ -34,8 +34,8 @@ func TestStart_CreatesFourFiles(t *testing.T) {
 	if result.AlreadyExists {
 		t.Fatal("expected AlreadyExists false")
 	}
-	if len(result.FilesWritten) != 4 {
-		t.Fatalf("expected 4 files written, got %d", len(result.FilesWritten))
+	if len(result.FilesWritten) != 5 {
+		t.Fatalf("expected 5 files written, got %d", len(result.FilesWritten))
 	}
 
 	for _, p := range []string{
@@ -43,10 +43,36 @@ func TestStart_CreatesFourFiles(t *testing.T) {
 		paths.SpecSettings(root, "my-feature"),
 		paths.SpecProgress(root, "my-feature"),
 		paths.SpecTraceability(root, "my-feature"),
+		paths.SpecAnalysis(root, "my-feature"),
 	} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("expected file to exist: %s, got err: %v", p, err)
 		}
+	}
+}
+
+func TestStart_CreatesAnalysisFileEmpty(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+
+	_, err := Start(root, "my-feature", fixedNow)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(paths.SpecAnalysis(root, "my-feature")); err != nil {
+		t.Fatalf("expected analysis.json to exist at start: %v", err)
+	}
+
+	a, err := LoadAnalysis(root, "my-feature")
+	if err != nil {
+		t.Fatalf("LoadAnalysis error: %v", err)
+	}
+	if a.Verdict != "" {
+		t.Errorf("expected empty verdict at start, got %q", a.Verdict)
+	}
+	if len(a.Findings) != 0 {
+		t.Errorf("expected no findings at start, got %d", len(a.Findings))
 	}
 }
 

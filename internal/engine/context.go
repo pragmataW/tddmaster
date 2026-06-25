@@ -163,6 +163,10 @@ func (c *Context) SaveTraceability(t spec.Traceability) error {
 	return spec.SaveTraceability(c.root, c.slug, t)
 }
 
+func (c *Context) SaveAnalysis(a spec.Analysis) error {
+	return spec.SaveAnalysis(c.root, c.slug, a)
+}
+
 func (c *Context) AnswerValue(key string) string {
 	entries, ok := c.state.Answers[key]
 	if !ok || len(entries) == 0 {

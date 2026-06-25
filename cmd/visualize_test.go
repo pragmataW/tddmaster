@@ -250,7 +250,7 @@ func TestTraceabilityRoute_Returns200AndValidJSON(t *testing.T) {
 	traceability := spec.Traceability{
 		Entries: map[string][]spec.TraceEntry{
 			"task-1": {
-				{FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+				{FunctionName: "TestFoo", TaskID: "task-1", CriterionIDs: []string{"AC1"}, EC: []string{}},
 			},
 		},
 	}
@@ -323,7 +323,7 @@ func TestCalculateHash_IncludesTraceabilityFile(t *testing.T) {
 	initial := spec.Traceability{
 		Entries: map[string][]spec.TraceEntry{
 			"task-1": {
-				{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
+				{FunctionName: "TestAlpha", TaskID: "task-1", CriterionIDs: []string{"AC1"}, EC: []string{}},
 			},
 		},
 	}
@@ -336,8 +336,8 @@ func TestCalculateHash_IncludesTraceabilityFile(t *testing.T) {
 	updated := spec.Traceability{
 		Entries: map[string][]spec.TraceEntry{
 			"task-1": {
-				{FunctionName: "TestAlpha", TaskID: "task-1", AC: []string{"AC1"}, EC: []string{}},
-				{FunctionName: "TestBeta", TaskID: "task-1", AC: []string{"AC2"}, EC: []string{}},
+				{FunctionName: "TestAlpha", TaskID: "task-1", CriterionIDs: []string{"AC1"}, EC: []string{}},
+				{FunctionName: "TestBeta", TaskID: "task-1", CriterionIDs: []string{"AC2"}, EC: []string{}},
 			},
 		},
 	}

@@ -11,7 +11,7 @@ func boolPtr(b bool) *bool    { return &b }
 
 func TestApplyRefinement_EmptyPayload_ReturnsUnchanged(t *testing.T) {
 	tasks := []Task{
-		{ID: "task-1", Title: "Alpha", AC: []string{"ac1"}, Done: false, TDDEnabled: true, Important: false},
+		{ID: "task-1", Title: "Alpha", Criteria: []Criterion{{ID: "ac-1", Then: "ac1"}}, Done: false, TDDEnabled: true, Important: false},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{}, false, 0)
 	if err != nil {
@@ -76,36 +76,6 @@ func TestApplyRefinement_Update_NilTitle_KeepsExisting(t *testing.T) {
 	}
 	if result[0].Title != "Keep Me" {
 		t.Fatalf("got title %q, want Keep Me", result[0].Title)
-	}
-}
-
-func TestApplyRefinement_Update_ReplacesACList(t *testing.T) {
-	tasks := []Task{
-		{ID: "task-1", Title: "T", AC: []string{"old-ac"}},
-	}
-	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Update: map[string]RefineOp{"task-1": {AC: []string{"new-ac1", "new-ac2"}}},
-	}, false, 0)
-	if err != nil {
-		t.Fatalf("got error %v, want nil", err)
-	}
-	if !reflect.DeepEqual(result[0].AC, []string{"new-ac1", "new-ac2"}) {
-		t.Fatalf("got AC %v, want [new-ac1 new-ac2]", result[0].AC)
-	}
-}
-
-func TestApplyRefinement_Update_NilAC_KeepsExisting(t *testing.T) {
-	tasks := []Task{
-		{ID: "task-1", Title: "T", AC: []string{"keep-this"}},
-	}
-	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Update: map[string]RefineOp{"task-1": {}},
-	}, false, 0)
-	if err != nil {
-		t.Fatalf("got error %v, want nil", err)
-	}
-	if !reflect.DeepEqual(result[0].AC, []string{"keep-this"}) {
-		t.Fatalf("got AC %v, want [keep-this]", result[0].AC)
 	}
 }
 
@@ -345,18 +315,6 @@ func TestApplyRefinement_Add_Important_DefaultsFalse(t *testing.T) {
 	}
 }
 
-func TestApplyRefinement_Add_AC_EmptyWhenNotSet(t *testing.T) {
-	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T")}},
-	}, false, 0)
-	if err != nil {
-		t.Fatalf("got error %v, want nil", err)
-	}
-	if len(result[0].AC) != 0 {
-		t.Fatalf("got AC %v, want empty slice", result[0].AC)
-	}
-}
-
 func TestApplyRefinement_Order_RemoveThenAdd_DoesNotReuseRemovedID(t *testing.T) {
 	tasks := []Task{
 		{ID: "task-1", Title: "A"},
@@ -414,7 +372,7 @@ func TestRefineOp_EdgeCases_JSONTag(t *testing.T) {
 
 func TestApplyRefinement_Update_SetsEdgeCases(t *testing.T) {
 	tasks := []Task{
-		{ID: "task-1", Title: "T", AC: []string{"ac1"}},
+		{ID: "task-1", Title: "T", Criteria: []Criterion{{ID: "ac-1", Then: "ac1"}}},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {EdgeCases: []string{"ec-x"}}},
@@ -429,7 +387,7 @@ func TestApplyRefinement_Update_SetsEdgeCases(t *testing.T) {
 
 func TestApplyRefinement_Update_NilEdgeCases_Preserves(t *testing.T) {
 	tasks := []Task{
-		{ID: "task-1", Title: "T", AC: []string{"ac1"}, EdgeCases: []string{"old"}},
+		{ID: "task-1", Title: "T", Criteria: []Criterion{{ID: "ac-1", Then: "ac1"}}, EdgeCases: []string{"old"}},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Update: map[string]RefineOp{"task-1": {Title: strPtr("T2")}},
@@ -444,7 +402,7 @@ func TestApplyRefinement_Update_NilEdgeCases_Preserves(t *testing.T) {
 
 func TestApplyRefinement_Add_WithEdgeCases(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("New"), AC: []string{"a"}, EdgeCases: []string{"ec-1"}}},
+		Add: []RefineOp{{Title: strPtr("New"), Criteria: []Criterion{{Then: "a"}}, EdgeCases: []string{"ec-1"}}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -522,6 +480,92 @@ func TestApplyRefinement_Seq_PreventsIDReuseAcrossCalls(t *testing.T) {
 	}
 	if seq2 != 4 {
 		t.Fatalf("got seq %d, want 4", seq2)
+	}
+}
+
+func TestApplyRefinement_Criteria_ReplacesTaskCriteria(t *testing.T) {
+	tasks := []Task{
+		{
+			ID:       "task-1",
+			Title:    "T",
+			Criteria: []Criterion{{ID: "ac-1", Then: "old outcome"}},
+		},
+	}
+	newCriteria := []Criterion{
+		{Given: "new context", When: "new action", Then: "new outcome"},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {Criteria: newCriteria}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if len(result[0].Criteria) != 1 {
+		t.Fatalf("got Criteria len %d, want 1", len(result[0].Criteria))
+	}
+	if result[0].Criteria[0].Then != "new outcome" {
+		t.Fatalf("got Then %q, want 'new outcome'", result[0].Criteria[0].Then)
+	}
+	if result[0].Criteria[0].ID == "" {
+		t.Error("criterion ID is empty after update; want ac-N assigned by AssignCriterionIDs")
+	}
+}
+
+func TestApplyRefinement_Criteria_IDsStableAcrossAddRemove(t *testing.T) {
+	tasks := []Task{
+		{
+			ID:    "task-1",
+			Title: "T",
+			Criteria: []Criterion{
+				{ID: "ac-1", Then: "first"},
+				{ID: "ac-2", Then: "second"},
+			},
+		},
+	}
+	newCriterion := Criterion{Then: "third"}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{
+			"task-1": {
+				Criteria: append(
+					[]Criterion{{ID: "ac-1", Then: "first"}, {ID: "ac-2", Then: "second"}},
+					newCriterion,
+				),
+			},
+		},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if len(result[0].Criteria) != 3 {
+		t.Fatalf("got Criteria len %d, want 3", len(result[0].Criteria))
+	}
+	if result[0].Criteria[0].ID != "ac-1" {
+		t.Errorf("Criteria[0].ID = %q, want ac-1 (must remain stable)", result[0].Criteria[0].ID)
+	}
+	if result[0].Criteria[1].ID != "ac-2" {
+		t.Errorf("Criteria[1].ID = %q, want ac-2 (must remain stable)", result[0].Criteria[1].ID)
+	}
+	if result[0].Criteria[2].ID != "ac-3" {
+		t.Errorf("Criteria[2].ID = %q, want ac-3 (new criterion must get next available id)", result[0].Criteria[2].ID)
+	}
+}
+
+func TestApplyRefinement_Criteria_NilCriteria_PreservesExisting(t *testing.T) {
+	tasks := []Task{
+		{
+			ID:       "task-1",
+			Title:    "T",
+			Criteria: []Criterion{{ID: "ac-1", Then: "keep me"}},
+		},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {Title: strPtr("T-updated")}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if len(result[0].Criteria) != 1 || result[0].Criteria[0].ID != "ac-1" {
+		t.Fatalf("got Criteria %v, want original ac-1 preserved when Criteria not set in op", result[0].Criteria)
 	}
 }
 

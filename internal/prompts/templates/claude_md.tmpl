@@ -18,7 +18,7 @@ Every `{{.Command}} next` call returns an `Action` object:
 {
   "action": "ask|instruct|notify|terminal|error",
   "instruction": "...",
-  "delegateAgent": "tddmaster-executor|tddmaster-planner|tddmaster-test-writer|tddmaster-verifier",
+  "delegateAgent": "tddmaster-executor|tddmaster-planner|tddmaster-test-writer|tddmaster-verifier|tddmaster-auditor",
   "expectedInput": {
     "format": "json|text|flag",
     "submitCmd": "{{.Command}} next <slug> --answer='...'",
@@ -66,6 +66,26 @@ Once approved, `touchedFiles` in the plan is binding — if work needs a file ou
 
 The gate is configured per spec in the spec-settings step (`importantTaskGateEnabled`).
 
+### Cross-artifact analysis phase (runtime-delegated)
+
+After refinement and before execution, the engine runs a cross-artifact analysis phase that pressure-tests the whole task list for contradictions, gaps, and overlaps. It is always on and is no-op-safe — with 0 tasks or 0 criteria nothing special is needed; the phase simply passes through.
+
+When `next` returns an `action: "instruct"` with `delegateAgent: "tddmaster-auditor"`, spawn `tddmaster-auditor` (read-only) with the `instruction`. The auditor inspects the tasks, their Given/When/Then criteria, edge cases, and any approved plans, then returns JSON:
+
+```json
+{"verdict": "clean|issues|block", "findings": [{"severity": "...", "category": "...", "taskId": "...", "acId": "...", "detail": "...", "suggestion": "...", "source": "..."}]}
+```
+
+Submit the auditor JSON via `--answer`. The engine merges the auditor findings with precomputed structural linter findings.
+
+- Severity policy is STRICT: only `info`-severity findings are advisory. If every finding is `info` (or there are none), the phase passes through to execution — display the findings and continue.
+- If ANY finding has severity other than `info` (e.g. `warn` or `block`), `next` returns an `action: "ask"` whose `interactiveOptions` are `return-to-refinement | accept-anyway | edit`. Display the flagged findings prominently, then ask the user via AskUserQuestion and resolve the selection through `commandMap`:
+  - `return-to-refinement` — apply a refinement `payload` inline to address the flagged findings and re-run the audit in place (no phase transition); submit `{{.Command}} next <slug> --answer='{"action":"return-to-refinement","payload":{...}}'`. The `payload` is required — an empty payload leaves the tasks unchanged and the same findings recur.
+  - `accept-anyway` — accept the analysis despite the flagged findings and continue; submit `{{.Command}} next <slug> --answer='accept-anyway'`.
+  - `edit` — edit the tasks inline (a refine payload) and re-run the audit; submit `{{.Command}} next <slug> --answer='{"action":"edit","payload":{...}}'`.
+
+The re-audit loop is capped; after the attempt limit the phase auto-accepts and continues to execution.
+
 ### TDD protocol (runtime-delegated)
 
 When TDD is enabled the engine emits stage-specific `delegateAgent` values in the `instruct` action. Drive off the JSON — do not hardcode the flow:
@@ -87,11 +107,13 @@ Before setting per-task `tddEnabled` or `important` flags, ask the USER via AskU
 
 ```json
 {
-  "update": {"task-1": {"ac": ["new AC"], "tddEnabled": true, "important": false, "edgeCases": ["empty input", "concurrent access"]}},
-  "add":    [{"title": "New task", "ac": ["AC1"], "tddEnabled": false, "edgeCases": ["nil pointer", "max length exceeded"]}],
+  "update": {"task-1": {"criteria": [{"given": "a logged-out user", "when": "they submit valid credentials", "then": "a session is created"}], "tddEnabled": true, "important": false, "edgeCases": ["empty input", "concurrent access"]}},
+  "add":    [{"title": "New task", "criteria": [{"given": "an empty cart", "when": "checkout is requested", "then": "the request is rejected"}], "tddEnabled": false, "edgeCases": ["nil pointer", "max length exceeded"]}],
   "remove": ["task-3"]
 }
 ```
+
+Each criterion is a Given/When/Then triple (`given`/`when`/`then`); `then` is required, `given` and `when` are optional.
 
 When satisfied with the task list, advance with:
 

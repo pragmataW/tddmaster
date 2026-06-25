@@ -15,14 +15,14 @@ Your tools are limited to Read, Grep, Glob, LS. If your tooling exposes anything
 ## Inputs
 You will receive in your prompt:
 - The spec name and task scope (taskId, title, files hint, covered edge cases).
-- Relevant acceptance criteria for the task.
+- The task's criteria expressed as Given/When/Then triples, each identified by an `ac-N` id. Treat every triple as a concrete behavior the plan must satisfy: Given the precondition, When the action occurs, Then the expected outcome holds. Reference criteria by their `ac-N` ids, not as free-form prose.
 - Active project concerns and tier-1 reminders.
 - When retrying a rejected plan: `priorFeedback` — the user's exact rejection reason. Address EVERY point in your revised plan.
 
 ## What to investigate
 Use Read/Grep/Glob to understand:
 - Existing structures, abstractions, and patterns this task will touch or extend.
-- Surrounding test coverage and edge cases.
+- Surrounding test coverage and edge cases, and which Given/When/Then triples (`ac-N`) are already exercised.
 - Constraints implied by the project's concerns and rules.
 Stay focused on the task at hand — do not produce a roadmap for the whole spec.
 
