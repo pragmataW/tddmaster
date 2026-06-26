@@ -29,6 +29,18 @@ func ClaudeMd(root string) string {
 	return filepath.Join(root, "CLAUDE.md")
 }
 
+func CursorAgents(root string) string {
+	return filepath.Join(root, ".cursor", "agents")
+}
+
+func CodexAgents(root string) string {
+	return filepath.Join(root, ".codex", "agents")
+}
+
+func AgentsMd(root string) string {
+	return filepath.Join(root, "AGENTS.md")
+}
+
 func Specs(root string) string {
 	return filepath.Join(Tddmaster(root), DirSpecs)
 }

@@ -2,7 +2,11 @@ package manifest
 
 type ToolID string
 
-const ToolClaudeCode ToolID = "claude-code"
+const (
+	ToolClaudeCode ToolID = "claude-code"
+	ToolCursor     ToolID = "cursor"
+	ToolCodexCLI   ToolID = "codex-cli"
+)
 
 type CatalogEntry struct {
 	Label string
@@ -11,4 +15,6 @@ type CatalogEntry struct {
 
 var Catalog = []CatalogEntry{
 	{Label: "Claude Code", ID: ToolClaudeCode},
+	{Label: "Cursor", ID: ToolCursor},
+	{Label: "Codex CLI", ID: ToolCodexCLI},
 }

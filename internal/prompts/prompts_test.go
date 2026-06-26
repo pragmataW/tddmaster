@@ -60,7 +60,7 @@ func TestRender_ClaudeMd_UsesStartSlugNotSpecNew(t *testing.T) {
 	}
 }
 
-func TestRender_AgentTemplates_StartsWithFrontmatterDelimiter(t *testing.T) {
+func TestRender_AgentTemplates_AreBodyOnly_NoFrontmatter(t *testing.T) {
 	agentNames := []string{"executor", "verifier", "planner", "test-writer", "auditor"}
 	for _, name := range agentNames {
 		t.Run(name, func(t *testing.T) {
@@ -68,26 +68,29 @@ func TestRender_AgentTemplates_StartsWithFrontmatterDelimiter(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected no error for %q, got: %v", name, err)
 			}
-			if !strings.HasPrefix(out, "---") {
-				t.Fatalf("expected output for %q to start with ---, got: %s", name, out[:min(len(out), 50)])
+			if strings.HasPrefix(strings.TrimLeft(out, "\n"), "---") {
+				t.Fatalf("expected body-only template for %q; frontmatter must live in the adapter, got leading ---", name)
 			}
 		})
 	}
 }
 
-func TestRender_AgentTemplates_ContainNameAndDescription(t *testing.T) {
-	agentNames := []string{"executor", "verifier", "planner", "test-writer", "auditor"}
-	for _, name := range agentNames {
+func TestRender_AgentTemplates_ContainBodyContent(t *testing.T) {
+	cases := map[string]string{
+		"executor":    "You are executing a single task",
+		"verifier":    "You are verifying another agent's work",
+		"planner":     "You are tddmaster-planner",
+		"test-writer": "You are a TDD test-writer agent",
+		"auditor":     "You are tddmaster-auditor",
+	}
+	for name, phrase := range cases {
 		t.Run(name, func(t *testing.T) {
 			out, err := Render(name, RenderData{Command: "tddmaster"})
 			if err != nil {
 				t.Fatalf("expected no error for %q, got: %v", name, err)
 			}
-			if !strings.Contains(out, "name:") {
-				t.Fatalf("expected output for %q to contain 'name:'", name)
-			}
-			if !strings.Contains(out, "description:") {
-				t.Fatalf("expected output for %q to contain 'description:'", name)
+			if !strings.Contains(out, phrase) {
+				t.Fatalf("expected output for %q to contain %q", name, phrase)
 			}
 		})
 	}
@@ -119,13 +122,6 @@ func TestRender_AgentTemplates_NoUnresolvedTemplateSyntax(t *testing.T) {
 			}
 		})
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func TestVerifierTmpl_GreenBlock_AuditsACsAndEdgeCases(t *testing.T) {

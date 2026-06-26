@@ -4,16 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/prompts"
-)
-
-const (
-	markerStart = "<!-- tddmasterStart -->"
-	markerEnd   = "<!-- tddmasterEnd -->"
 )
 
 type ClaudeCodeAdapter struct{}
@@ -29,67 +23,34 @@ func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 	if err != nil {
 		return fmt.Errorf("render claude_md: %w", err)
 	}
-
-	block := markerStart + "\n" + rendered + "\n" + markerEnd
-
-	claudeMdPath := paths.ClaudeMd(ctx.Root)
-	existing, readErr := os.ReadFile(claudeMdPath)
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return fmt.Errorf("read CLAUDE.md: %w", readErr)
+	if err := injectMarkedDoc(paths.ClaudeMd(ctx.Root), rendered); err != nil {
+		return err
 	}
 
-	var newContent string
-	if readErr != nil {
-		newContent = block
-	} else {
-		content := string(existing)
-		startIdx := strings.Index(content, markerStart)
-		endIdx := -1
-		if startIdx != -1 {
-			rel := strings.Index(content[startIdx+len(markerStart):], markerEnd)
-			if rel != -1 {
-				endIdx = startIdx + len(markerStart) + rel
-			}
-		}
-		if startIdx != -1 && endIdx != -1 {
-			newContent = content[:startIdx] + block + content[endIdx+len(markerEnd):]
-		} else {
-			content = strings.ReplaceAll(content, markerStart, "")
-			content = strings.ReplaceAll(content, markerEnd, "")
-			if len(content) > 0 && !strings.HasSuffix(content, "\n") {
-				newContent = content + "\n" + block
-			} else {
-				newContent = content + block
-			}
-		}
-	}
-
-	if err := os.WriteFile(claudeMdPath, []byte(newContent), 0o644); err != nil {
-		return fmt.Errorf("write CLAUDE.md: %w", err)
-	}
-
-	agentFiles := []struct {
-		filename string
-		template string
-	}{
-		{"tddmaster-executor.md", "executor"},
-		{"tddmaster-verifier.md", "verifier"},
-		{"tddmaster-planner.md", "planner"},
-		{"tddmaster-test-writer.md", "test-writer"},
-		{"tddmaster-rule-synthesizer.md", "rule-synthesizer"},
-		{"tddmaster-auditor.md", "auditor"},
-	}
-
-	for _, af := range agentFiles {
-		content, err := prompts.Render(af.template, prompts.RenderData{Command: ctx.CommandPrefix})
+	for _, spec := range AgentSpecs {
+		content, err := claudeAgentFile(spec, ctx.CommandPrefix)
 		if err != nil {
-			return fmt.Errorf("render %s: %w", af.template, err)
+			return err
 		}
-		filePath := filepath.Join(paths.ClaudeAgents(ctx.Root), af.filename)
+		filePath := filepath.Join(paths.ClaudeAgents(ctx.Root), spec.File+".md")
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write agent file %s: %w", af.filename, err)
+			return fmt.Errorf("write agent file %s: %w", spec.File, err)
 		}
 	}
 
 	return nil
+}
+
+func claudeAgentFile(spec AgentSpec, cmd string) (string, error) {
+	body, err := renderBody(spec, cmd)
+	if err != nil {
+		return "", err
+	}
+	frontmatter := "---\n" +
+		"name: " + spec.Name + "\n" +
+		"description: \"" + spec.Description + "\"\n" +
+		"tools: " + spec.Tools + "\n" +
+		"model: " + spec.Model + "\n" +
+		"---\n"
+	return frontmatter + body, nil
 }

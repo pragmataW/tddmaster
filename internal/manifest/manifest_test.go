@@ -133,11 +133,17 @@ func TestToolClaudeCode_ConstantValue(t *testing.T) {
 	}
 }
 
-func TestCatalog_ContainsExactlyOneEntry_WithClaudeCodeID(t *testing.T) {
-	if len(Catalog) != 1 {
-		t.Fatalf("Catalog must have exactly 1 entry, got %d", len(Catalog))
+func TestCatalog_ContainsClaudeCursorAndCodex(t *testing.T) {
+	want := []ToolID{ToolClaudeCode, ToolCursor, ToolCodexCLI}
+	if len(Catalog) != len(want) {
+		t.Fatalf("Catalog must have exactly %d entries, got %d", len(want), len(Catalog))
 	}
-	if Catalog[0].ID != ToolClaudeCode {
-		t.Fatalf("Catalog[0].ID want %q, got %q", ToolClaudeCode, Catalog[0].ID)
+	for i, id := range want {
+		if Catalog[i].ID != id {
+			t.Fatalf("Catalog[%d].ID want %q, got %q", i, id, Catalog[i].ID)
+		}
+		if Catalog[i].Label == "" {
+			t.Fatalf("Catalog[%d] (%q) must have a non-empty label", i, id)
+		}
 	}
 }

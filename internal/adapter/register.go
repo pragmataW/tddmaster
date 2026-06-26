@@ -1,3 +1,7 @@
 package adapter
 
-func init() { Register(ClaudeCodeAdapter{}) }
+func init() {
+	Register(ClaudeCodeAdapter{})
+	Register(CursorAdapter{})
+	Register(CodexCLIAdapter{})
+}
