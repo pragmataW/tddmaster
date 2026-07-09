@@ -37,6 +37,10 @@ func CodexAgents(root string) string {
 	return filepath.Join(root, ".codex", "agents")
 }
 
+func OpenCodeAgents(root string) string {
+	return filepath.Join(root, ".opencode", "agents")
+}
+
 func AgentsMd(root string) string {
 	return filepath.Join(root, "AGENTS.md")
 }

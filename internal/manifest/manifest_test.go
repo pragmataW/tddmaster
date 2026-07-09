@@ -133,8 +133,8 @@ func TestToolClaudeCode_ConstantValue(t *testing.T) {
 	}
 }
 
-func TestCatalog_ContainsClaudeCursorAndCodex(t *testing.T) {
-	want := []ToolID{ToolClaudeCode, ToolCursor, ToolCodexCLI}
+func TestCatalog_ContainsAllTools(t *testing.T) {
+	want := []ToolID{ToolClaudeCode, ToolCursor, ToolCodexCLI, ToolOpenCode}
 	if len(Catalog) != len(want) {
 		t.Fatalf("Catalog must have exactly %d entries, got %d", len(want), len(Catalog))
 	}
