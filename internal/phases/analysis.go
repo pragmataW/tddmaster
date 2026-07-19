@@ -78,7 +78,6 @@ func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.F
 	parts = append(parts, "Severity must be one of: block, warn, info. STRICT POLICY: any finding with severity other than info pauses the phase for an explicit user decision. Use info ONLY for purely advisory notes that need no action; if a finding implies any change to the tasks or criteria, use warn or block.")
 	parts = append(parts, "")
 	parts = append(parts, "Tasks:")
-	pr := c.Progress()
 	for _, t := range tasks {
 		parts = append(parts, fmt.Sprintf("- %s: %s", t.ID, t.Title))
 		for _, cr := range t.Criteria {
@@ -90,12 +89,10 @@ func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.F
 				parts = append(parts, "    - "+ec)
 			}
 		}
-		if pr.Execution != nil && pr.Execution.TaskPlans != nil {
-			if plan, ok := pr.Execution.TaskPlans[t.ID]; ok && len(plan.TouchedFiles) > 0 {
-				parts = append(parts, "  approved touched files:")
-				for _, f := range plan.TouchedFiles {
-					parts = append(parts, "    - "+f)
-				}
+		if t.Exec != nil && t.Exec.Plan != nil && len(t.Exec.Plan.TouchedFiles) > 0 {
+			parts = append(parts, "  approved touched files:")
+			for _, f := range t.Exec.Plan.TouchedFiles {
+				parts = append(parts, "    - "+f)
 			}
 		}
 	}

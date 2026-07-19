@@ -8,12 +8,12 @@ import (
 func TestFinding_IsBlock(t *testing.T) {
 	cases := []struct {
 		name     string
-		severity string
+		severity Severity
 		want     bool
 	}{
-		{"BlockSeverity_True", "block", true},
-		{"WarnSeverity_False", "warn", false},
-		{"InfoSeverity_False", "info", false},
+		{"BlockSeverity_True", SeverityBlock, true},
+		{"WarnSeverity_False", SeverityWarn, false},
+		{"InfoSeverity_False", SeverityInfo, false},
 		{"EmptySeverity_False", "", false},
 	}
 	for _, tc := range cases {

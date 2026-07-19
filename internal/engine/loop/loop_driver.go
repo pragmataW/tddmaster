@@ -3,6 +3,7 @@ package loop
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"slices"
 	"strings"
@@ -28,15 +29,6 @@ func NewLoopDriver() *LoopDriver {
 	return &LoopDriver{ruleset: newRuleSet()}
 }
 
-func findFirstPendingTask(tasks []spec.Task) (spec.Task, int, bool) {
-	for i, t := range tasks {
-		if !t.Done {
-			return t, i, true
-		}
-	}
-	return spec.Task{}, -1, false
-}
-
 func allTasksDone(tasks []spec.Task) bool {
 	for _, t := range tasks {
 		if !t.Done {
@@ -50,27 +42,112 @@ func canTerminate(pr spec.Progress) bool {
 	return len(pr.Tasks) == 0 || allTasksDone(pr.Tasks)
 }
 
-func (d *LoopDriver) initExecution(c *engine.Context, task spec.Task) error {
-	pr := c.Progress()
-	if pr.Execution == nil {
-		st := spec.ExecState{}
-		st = reseedCycle(st, c.Settings().TDDEnabled && task.TDDEnabled)
-		pr.Execution = &st
-		return c.SaveProgress(pr)
+func worktreeHint(slug, taskID string) spec.WorktreeRef {
+	return spec.WorktreeRef{
+		Path:   ".tddmaster/worktrees/" + slug + "/" + taskID,
+		Branch: "tddmaster/" + slug + "/" + taskID,
 	}
-	return nil
+}
+
+func seedTaskExec(c *engine.Context, task *spec.Task) bool {
+	if task.Exec != nil {
+		return false
+	}
+	st := reseedCycle(spec.ExecState{}, c.Settings().TDDEnabled && task.TDDEnabled)
+	wt := worktreeHint(c.Slug(), task.ID)
+	st.Worktree = &wt
+	task.Exec = &st
+	return true
 }
 
 func (d *LoopDriver) buildExecCtx(c *engine.Context, task spec.Task, taskIdx int) ExecCtx {
 	return ExecCtx{
 		Settings:          c.Settings(),
 		Task:              task,
-		State:             *c.Progress().Execution,
+		State:             *task.Exec,
 		TaskIdx:           taskIdx,
 		MaxRefactorRounds: defaultMaxRefactorRounds,
 		UserContext:       c.AnswerValue("listen_context"),
 		Rules:             c.Rules(),
 	}
+}
+
+func worktreeInstructionBlock(w *spec.WorktreeRef) string {
+	if w == nil {
+		return ""
+	}
+	return "=== WORKTREE (binding) ===\ncwd: " + w.Path + "\nbranch: " + w.Branch +
+		"\nAll file reads, edits, tests and coverage runs MUST happen inside this cwd. " +
+		"Writing outside it is a protocol violation. Do not run git; the orchestrator owns worktree lifecycle. " +
+		"NO-GIT FALLBACK: if the project is not a git repository, ignore this block entirely and work in the project root.\n===\n\n"
+}
+
+func injectTaskIDIntoExample(in engine.ExpectedInput, taskID string) engine.ExpectedInput {
+	if idx := strings.Index(in.Example, "{"); idx >= 0 {
+		in.Example = in.Example[:idx+1] + `"taskId":"` + taskID + `",` + in.Example[idx+1:]
+	}
+	return in
+}
+
+func deadlockAction(tasks []spec.Task) engine.Action {
+	blocked := spec.BlockedSet(tasks)
+	done := make(map[string]bool, len(tasks))
+	for _, t := range tasks {
+		if t.Done {
+			done[t.ID] = true
+		}
+	}
+	var b strings.Builder
+	b.WriteString("Deadlock detected: no ready task remains.")
+	var blockedLines, waitingLines []string
+	for _, t := range tasks {
+		if t.Done {
+			continue
+		}
+		pending := make([]string, 0, len(t.DependsOn))
+		for _, dep := range t.DependsOn {
+			if !done[dep] {
+				pending = append(pending, dep)
+			}
+		}
+		switch {
+		case t.Blocked:
+			reason := t.BlockedReason
+			if reason == "" {
+				reason = "blocked"
+			}
+			blockedLines = append(blockedLines, t.ID+": "+reason)
+		case blocked[t.ID]:
+			waitingLines = append(waitingLines, t.ID+": waiting on blocked dependency ("+strings.Join(pending, ", ")+")")
+		default:
+			waitingLines = append(waitingLines, t.ID+": waiting on dependencies ("+strings.Join(pending, ", ")+")")
+		}
+	}
+	if len(blockedLines) > 0 {
+		b.WriteString("\nBlocked tasks:\n")
+		for _, line := range blockedLines {
+			b.WriteString("- ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	if len(waitingLines) > 0 {
+		b.WriteString("\nWaiting tasks:\n")
+		for _, line := range waitingLines {
+			b.WriteString("- ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	return engine.Action{Action: engine.ActionError, Instruction: b.String()}
+}
+
+func batchSummary(entries []string) string {
+	return fmt.Sprintf(
+		"%d task(s) ready for parallel execution: %s. Run each in its own worktree via a separate sub-agent. "+
+			"Submit one report per task; every report MUST include taskId. "+
+			"Only spawn sub-agents for tasks without an in-flight report.",
+		len(entries), strings.Join(entries, ", "))
 }
 
 func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action, bool) {
@@ -84,48 +161,139 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 		return engine.Action{}, true
 	}
 
-	task, taskIdx, found := findFirstPendingTask(pr.Tasks)
-	if !found {
-		pr.Status = spec.StatusCompleted
-		if err := c.SaveProgress(pr); err != nil {
-			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
-		}
-		return engine.Action{}, true
-	}
-
-	if pr.Execution == nil {
-		if err := d.initExecution(c, task); err != nil {
-			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
-		}
-		pr = c.Progress()
-	}
-
-	if pr.Execution.Iteration >= c.MaxIteration() {
-		pr.Execution.Iteration = 0
+	if iterationLimitReached(c, &pr) {
 		if err := c.SaveProgress(pr); err != nil {
 			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
 		}
 		return engine.Action{Action: engine.ActionNotify, Instruction: promptregistry.RestartRecommendedText}, false
 	}
 
-	ctx := d.buildExecCtx(c, task, taskIdx)
-
-	stage, ok := d.ruleset.Next(ctx)
-	if !ok {
-		return engine.Action{Action: engine.ActionNotify}, false
+	ready := spec.ReadyTaskIndices(pr.Tasks)
+	if len(ready) == 0 {
+		return deadlockAction(pr.Tasks), false
 	}
 
-	return stage.Prompt(ctx), false
+	seeded := false
+	for _, i := range ready {
+		if seedTaskExec(c, &pr.Tasks[i]) {
+			seeded = true
+		}
+	}
+	if seeded {
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{Action: engine.ActionError, Instruction: err.Error()}, false
+		}
+	}
+
+	var gateAction *engine.Action
+	var gateTask engine.TaskAction
+	var taskActions []engine.TaskAction
+	var summary []string
+	var stuck []string
+
+	for _, i := range ready {
+		ctx := d.buildExecCtx(c, pr.Tasks[i], i)
+		stage, ok := d.ruleset.Next(ctx)
+		if !ok {
+			stuck = append(stuck, fmt.Sprintf("%s (exec: %+v)", pr.Tasks[i].ID, *pr.Tasks[i].Exec))
+			continue
+		}
+		stageAction := stage.Prompt(ctx)
+		if stage.ID() == StageIDGate {
+			if gateAction == nil {
+				gateTask = taskActionFor(pr.Tasks[i], stage.ID(), stageAction, false)
+				gateAction = &stageAction
+			}
+			continue
+		}
+		taskActions = append(taskActions, taskActionFor(pr.Tasks[i], stage.ID(), stageAction, true))
+		summary = append(summary, pr.Tasks[i].ID+" ("+stage.ID()+")")
+	}
+
+	if len(stuck) > 0 {
+		return engine.Action{
+			Action:      engine.ActionError,
+			Instruction: "no applicable stage for ready tasks: " + strings.Join(stuck, "; "),
+		}, false
+	}
+
+	if gateAction != nil {
+		action := *gateAction
+		action.Tasks = append([]engine.TaskAction{gateTask}, taskActions...)
+		action.ExpectedInput = gateTask.ExpectedInput
+		if len(taskActions) > 0 {
+			action.Instruction += "\n\nWhile the plan gate is pending, dispatch the non-gate entries in `tasks` as parallel sub-agents; the entry with stage \"gate\" is the question itself, not a task to spawn."
+		}
+		action.Instruction += "\n\nThis gate re-appears after every sibling report submit until its answer is submitted. If the planner was already spawned and the plan already presented, do NOT spawn the planner or re-ask the user again — just submit the pending gate answer when it is ready."
+		return action, false
+	}
+
+	if len(taskActions) == 0 {
+		return engine.Action{
+			Action:      engine.ActionError,
+			Instruction: "no applicable stage for ready tasks",
+		}, false
+	}
+
+	return engine.Action{
+		Action:        engine.ActionInstruct,
+		Instruction:   batchSummary(summary),
+		ExpectedInput: engine.ExpectedInput{Format: engine.FormatJSON},
+		Tasks:         taskActions,
+	}, false
+}
+
+func taskActionFor(task spec.Task, stageID string, stageAction engine.Action, withWorktree bool) engine.TaskAction {
+	ta := engine.TaskAction{
+		TaskID:        task.ID,
+		Stage:         stageID,
+		Instruction:   stageAction.Instruction,
+		DelegateAgent: stageAction.DelegateAgent,
+		ExpectedInput: injectTaskIDIntoExample(stageAction.ExpectedInput, task.ID),
+	}
+	if withWorktree {
+		ta.Instruction = worktreeInstructionBlock(task.Exec.Worktree) + ta.Instruction
+		ta.Worktree = task.Exec.Worktree
+	}
+	return ta
+}
+
+func routeReportTask(pr spec.Progress, taskID string, ready []int) (int, error) {
+	readyIDs := make([]string, 0, len(ready))
+	for _, i := range ready {
+		readyIDs = append(readyIDs, pr.Tasks[i].ID)
+	}
+	readyList := strings.Join(readyIDs, ", ")
+
+	if taskID == "" {
+		return -1, fmt.Errorf("report missing taskId; ready tasks: %s", readyList)
+	}
+	for _, i := range ready {
+		if pr.Tasks[i].ID == taskID {
+			return i, nil
+		}
+	}
+	for i, t := range pr.Tasks {
+		if t.ID != taskID {
+			continue
+		}
+		if t.Done {
+			return -1, fmt.Errorf("task %q is already done; ready tasks: %s", taskID, readyList)
+		}
+		if t.Blocked {
+			return i, nil
+		}
+		return -1, fmt.Errorf("task %q is not ready (waiting on dependencies); ready tasks: %s", taskID, readyList)
+	}
+	return -1, fmt.Errorf("unknown taskId %q; ready tasks: %s", taskID, readyList)
 }
 
 func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byte) (engine.Action, bool, error) {
 	if strings.TrimSpace(string(answer)) == "continue" {
 		pr := c.Progress()
-		if pr.Execution != nil {
-			pr.Execution.Iteration = 0
-			if err := c.SaveProgress(pr); err != nil {
-				return engine.Action{}, false, err
-			}
+		pr.Iterations = 0
+		if err := c.SaveProgress(pr); err != nil {
+			return engine.Action{}, false, err
 		}
 		return engine.Action{}, false, nil
 	}
@@ -145,43 +313,62 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 		return engine.Action{}, true, nil
 	}
 
-	task, taskIdx, found := findFirstPendingTask(pr.Tasks)
-	if !found {
-		return engine.Action{}, true, nil
+	ready := spec.ReadyTaskIndices(pr.Tasks)
+
+	taskIdx, err := routeReportTask(pr, report.TaskID, ready)
+	if err != nil {
+		return engine.Action{}, false, err
 	}
 
-	if pr.Execution == nil {
-		if err := d.initExecution(c, task); err != nil {
-			return engine.Action{}, false, err
+	seedTaskExec(c, &pr.Tasks[taskIdx])
+
+	blocked := len(report.Blocked) > 0
+	if pr.Tasks[taskIdx].Blocked && !blocked {
+		pr.Tasks[taskIdx].Blocked = false
+		pr.Tasks[taskIdx].BlockedReason = ""
+		if !report.HasStageResult() {
+			return d.finishSubmit(c, pr)
 		}
-		pr = c.Progress()
 	}
+	if blocked {
+		pr.Tasks[taskIdx].Blocked = true
+		pr.Tasks[taskIdx].BlockedReason = strings.Join(report.Blocked, "; ")
+	}
+	task := pr.Tasks[taskIdx]
 
 	ctx := d.buildExecCtx(c, task, taskIdx)
 
 	stage, ok := d.ruleset.Next(ctx)
 	if !ok {
-		return engine.Action{Action: engine.ActionNotify}, false, nil
+		return engine.Action{}, false, fmt.Errorf("no applicable stage for task %s (exec: %+v)", task.ID, ctx.State)
 	}
 
-	if stage.ID() == StageIDRed {
+	if report.HasGateAnswer() && stage.ID() != StageIDGate {
+		return d.finishSubmit(c, pr)
+	}
+
+	if stage.ID() == StageIDRed && (!blocked || len(report.Traceability) > 0) {
 		if err := validateAndPersistTraceability(c, task, report); err != nil {
 			return engine.Action{}, false, err
 		}
 	}
 
 	if stage.ID() == StageIDVerifier && tddActive(ctx) && ctx.State.TDDCycle == cycleGreen && len(report.FileCoverage) > 0 {
-		if err := persistCoverage(c, report); err != nil {
+		if err := persistCoverage(c, task.ID, report); err != nil {
 			return engine.Action{}, false, err
 		}
 	}
 
-	newCtx, err := stage.OnReport(ctx, report)
-	if err != nil {
-		return engine.Action{}, false, err
+	newCtx := ctx
+	if !blocked || (stage.ID() == StageIDGate && report.HasGateAnswer()) {
+		var err error
+		newCtx, err = stage.OnReport(ctx, report)
+		if err != nil {
+			return engine.Action{}, false, err
+		}
 	}
 
-	if reportFromVerifier(stage.ID(), ctx.State) {
+	if reportFromVerifier(stage.ID(), ctx.State) && (!blocked || len(report.FailedACs) > 0 || len(report.UncoveredEdgeCases) > 0) {
 		if report.EffectivePassed() {
 			newCtx.State.LastFailedACs = nil
 			newCtx.State.LastUncoveredEC = nil
@@ -191,7 +378,10 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 		}
 	}
 
-	pr.Execution = &newCtx.State
+	newState := newCtx.State
+	pr.Tasks[taskIdx].Exec = &newState
+
+	taskComplete := !blocked && isTaskComplete(c.Settings().TDDEnabled && task.TDDEnabled, c.Settings().SkipVerifierEnabled, ctx.State, newState, report)
 
 	pr.Tasks[taskIdx].RefactorNotes = appendUniqueNotes(pr.Tasks[taskIdx].RefactorNotes, report.RefactorNotes)
 	combined := make([]string, 0, len(report.FailedACs)+len(report.UncoveredEdgeCases))
@@ -199,18 +389,21 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 	combined = append(combined, report.UncoveredEdgeCases...)
 	pr.Tasks[taskIdx].FailedACReasons = appendUniqueStrings(pr.Tasks[taskIdx].FailedACReasons, combined)
 
-	taskComplete := isTaskComplete(c.Settings().TDDEnabled && task.TDDEnabled, c.Settings().SkipVerifierEnabled, ctx.State, newCtx.State, report)
 	if taskComplete {
 		pr.Tasks = completeCurrentTask(pr.Tasks, taskIdx)
-
-		nextTask, _, hasNext := findFirstPendingTask(pr.Tasks)
-		if hasNext {
-			newSt := reseedCycle(*pr.Execution, c.Settings().TDDEnabled && nextTask.TDDEnabled)
-			pr.Execution = &newSt
-		}
 	}
 
-	pr.Execution.Iteration++
+	return d.finishSubmit(c, pr)
+}
+
+func (d *LoopDriver) finishSubmit(c *engine.Context, pr spec.Progress) (engine.Action, bool, error) {
+	pr.Iterations++
+
+	done := allTasksDone(pr.Tasks)
+	if done {
+		pr.Status = spec.StatusCompleted
+	}
+	limitHit := !done && iterationLimitReached(c, &pr)
 
 	if err := c.SaveProgress(pr); err != nil {
 		return engine.Action{}, false, err
@@ -218,25 +411,23 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 
 	writeSpecMd(c)
 
-	pr = c.Progress()
-	if allTasksDone(pr.Tasks) {
-		pr.Status = spec.StatusCompleted
-		if err := c.SaveProgress(pr); err != nil {
-			return engine.Action{}, false, err
-		}
-		writeSpecMd(c)
+	if done {
 		return engine.Action{}, true, nil
 	}
 
-	if pr.Execution.Iteration >= c.MaxIteration() {
-		pr.Execution.Iteration = 0
-		if err := c.SaveProgress(pr); err != nil {
-			return engine.Action{}, false, err
-		}
+	if limitHit {
 		return engine.Action{Action: engine.ActionNotify, Instruction: promptregistry.RestartRecommendedText}, false, nil
 	}
 
 	return engine.Action{}, false, nil
+}
+
+func iterationLimitReached(c *engine.Context, pr *spec.Progress) bool {
+	if pr.Iterations < c.MaxIteration() {
+		return false
+	}
+	pr.Iterations = 0
+	return true
 }
 
 func appendUnique[T any](dst, src []T, eq func(a, b T) bool) []T {
@@ -275,7 +466,7 @@ func isTaskComplete(tddActive, skipVerifier bool, oldState, newState spec.ExecSt
 		return oldState.TDDCycle != cycleEmpty && newState.TDDCycle == cycleEmpty
 	}
 	if skipVerifier {
-		return len(report.Blocked) == 0 && (report.EffectivePassed() || len(report.Completed) > 0)
+		return report.EffectivePassed() || len(report.Completed) > 0
 	}
 	return oldState.Implemented && report.EffectivePassed()
 }

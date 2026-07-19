@@ -113,7 +113,7 @@ func TestRuleSet_Next_GateEnabled_ImportantApproved_GateFallsThrough(t *testing.
 	rs := newRuleSet()
 	settings := makeSettings(false, false, true)
 	task := makeImportantTask("t-gate", false)
-	st := stateWithApprovedPlan("t-gate")
+	st := stateWithApprovedPlan()
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
 	stage, ok := rs.Next(ctx)

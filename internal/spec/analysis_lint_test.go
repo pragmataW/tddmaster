@@ -137,3 +137,68 @@ func TestBuildLint_DistinctCriteria_NoDuplicateFinding(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildLint_SelfDependency_BlockDepSelf(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "t"}}, DependsOn: []string{"task-1"}},
+	}
+	findings := BuildLint(tasks)
+	found := false
+	for _, f := range findings {
+		if f.Severity == "block" && f.Category == "dep-self" && f.TaskID == "task-1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected block/dep-self finding for task-1, got %+v", findings)
+	}
+}
+
+func TestBuildLint_UnknownDependency_BlockDepUnknown(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "t"}}, DependsOn: []string{"task-9"}},
+	}
+	findings := BuildLint(tasks)
+	found := false
+	for _, f := range findings {
+		if f.Severity == "block" && f.Category == "dep-unknown" && f.TaskID == "task-1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected block/dep-unknown finding for task-1, got %+v", findings)
+	}
+}
+
+func TestBuildLint_DependencyCycle_BlockDepCycle(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "t"}}, DependsOn: []string{"task-2"}},
+		{ID: "task-2", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "u"}}, DependsOn: []string{"task-1"}},
+	}
+	findings := BuildLint(tasks)
+	found := false
+	for _, f := range findings {
+		if f.Severity == "block" && f.Category == "dep-cycle" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected block/dep-cycle finding, got %+v", findings)
+	}
+}
+
+func TestBuildLint_ValidDependencies_NoDepFindings(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "t"}}},
+		{ID: "task-2", Criteria: []Criterion{{ID: "ac-1", Given: "g", When: "w", Then: "u"}}, DependsOn: []string{"task-1"}},
+	}
+	findings := BuildLint(tasks)
+	for _, f := range findings {
+		if f.Category == "dep-self" || f.Category == "dep-unknown" || f.Category == "dep-cycle" {
+			t.Errorf("expected no dependency findings for a valid DAG, got %+v", f)
+		}
+	}
+}

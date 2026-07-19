@@ -19,11 +19,11 @@ func seedLoopSpecForTrace(t *testing.T, root, slug string, task spec.Task) *engi
 	if err := spec.SaveState(root, slug, st); err != nil {
 		t.Fatalf("SaveState: %v", err)
 	}
+	task.Exec = &spec.ExecState{TDDCycle: cycleRed}
 	pr := spec.Progress{
-		Spec:      slug,
-		Status:    spec.StatusDraft,
-		Tasks:     []spec.Task{task},
-		Execution: &spec.ExecState{TDDCycle: cycleRed},
+		Spec:   slug,
+		Status: spec.StatusDraft,
+		Tasks:  []spec.Task{task},
 	}
 	if err := spec.SaveProgress(root, slug, pr); err != nil {
 		t.Fatalf("SaveProgress: %v", err)
@@ -426,7 +426,9 @@ func TestSubmit_RedStage_EmptyTraceability_ReturnsError(t *testing.T) {
 	ctx = seedLoopSpec(t, root, slug, tasks, execution)
 
 	report := StageReport{
+		TaskID:       "t1",
 		Passed:       true,
+		TestsWritten: []string{"TestFoo"},
 		Traceability: []TraceReportEntry{},
 	}
 
@@ -451,6 +453,7 @@ func TestSubmit_RedStage_ValidTraceability_NoError(t *testing.T) {
 	ctx = seedLoopSpec(t, root, slug, tasks, execution)
 
 	report := StageReport{
+		TaskID: "t1",
 		Passed: true,
 		Traceability: []TraceReportEntry{
 			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "t1", AC: []string{"ac1"}},
@@ -473,6 +476,7 @@ func TestSubmit_GreenStage_EmptyTraceability_NoError(t *testing.T) {
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	report := StageReport{
+		TaskID:       "t1",
 		Completed:    []string{"impl"},
 		Traceability: []TraceReportEntry{},
 	}

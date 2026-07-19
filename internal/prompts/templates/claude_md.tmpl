@@ -32,6 +32,27 @@ Every `{{.Command}} next` call returns an `Action` object:
 }
 ```
 
+In the execution phase, `instruct` actions ALWAYS carry a `tasks` array — even when there is only one ready task. Each entry is a self-contained unit of work:
+
+```json
+{
+  "action": "instruct",
+  "instruction": "orchestration summary...",
+  "tasks": [
+    {
+      "taskId": "task-1",
+      "stage": "green",
+      "instruction": "...",
+      "delegateAgent": "tddmaster-executor",
+      "expectedInput": { "format": "json", "submitCmd": "{{.Command}} next <slug> --answer='...'", "example": "..." },
+      "worktree": { "path": ".tddmaster/worktrees/<slug>/task-1", "branch": "tddmaster/<slug>/task-1" }
+    }
+  ]
+}
+```
+
+Report submits in the execution phase MUST include the `taskId` of the task they belong to.
+
 Drive entirely off the JSON:
 
 - `action: "ask"` — present the question or delegate to `delegateAgent` if set; submit the answer via `--answer`.
@@ -56,11 +77,14 @@ Drive entirely off the JSON:
 
 When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`, the engine has detected an important task without an approved plan. The JSON will contain an `importantTaskGate` block. Required behavior:
 
+- The gate action may carry a `tasks` array. The entry with stage `"gate"` is the question itself — do NOT spawn it as a worker. Every other entry is a regular ready task: dispatch them as parallel sub-agents (worktree protocol applies) while the plan gate is being handled; submit their reports as usual.
 - Spawn `tddmaster-planner` (read-only: Read/Grep/Glob/LS) with the task scope plus `priorFeedback` when present. Do NOT edit files in this phase.
 - Present the planner output to the user in full detail — a single-line summary is NOT acceptable. The presentation must include: the full `approach` narrative, each entry in `touchedFiles` with an explicit reason why that file is touched, each `designPattern` with how it is applied, each `bestPractice`, and every `assumption`. Omitting any of these fields is a protocol violation.
 - After presenting the full plan, ask the user via AskUserQuestion with options `accept | revise | reject`.
-- On accept: submit `{{.Command}} next <slug> --answer='{"plan":{...},"accepted":true}'`.
-- On revise/reject: submit `{{.Command}} next <slug> --answer='{"planFeedback":"<reason>"}'` — gate re-fires with `priorFeedback` populated and `attemptCount` incremented.
+- Gate submits MUST include the `taskId` of the gated task (take it from the stage `"gate"` entry in `tasks`).
+- On accept: submit `{{.Command}} next <slug> --answer='{"taskId":"<taskId>","plan":{...},"accepted":true}'`.
+- On revise/reject: submit `{{.Command}} next <slug> --answer='{"taskId":"<taskId>","planFeedback":"<reason>"}'` — gate re-fires with `priorFeedback` populated and `attemptCount` incremented.
+- The gate re-appears idempotently after every sibling report submit until its answer is submitted. Spawn the planner and present the plan ONCE; when the same gate re-appears, do NOT re-spawn the planner or re-ask the user — just submit the pending gate answer when it is ready.
 
 Once approved, `touchedFiles` in the plan is binding — if work needs a file outside the list, STOP and report `blocked`.
 
@@ -95,7 +119,20 @@ When TDD is enabled the engine emits stage-specific `delegateAgent` values in th
 - `delegateAgent: "tddmaster-executor"` and stage `refactor` — apply every refactor note VERBATIM; behavior must not change and all tests must continue to pass.
 - `delegateAgent: "tddmaster-verifier"` — verify the work; submit a pass/fail report.
 
-Include `tddPhase` in status reports. When `tddFailureReport` is present in the instruction, address `failedACs` before reporting done.
+Include `tddPhase` in status reports. When `tddFailureReport` is present in the instruction, address `failedACs` before reporting done. In parallel execution, stage actions carry a `taskId` and every stage runs inside that task's worktree.
+
+### Parallel execution (worktree protocol)
+
+- For each entry in the `tasks` array, spawn a sub-agent: {{if .ParallelSubagents}}spawn ALL entries as sub-agents in the SAME message so they run in parallel.{{else}}this host does not support parallel sub-agent spawning — run the entries one by one, sequentially; the rest of the protocol is unchanged.{{end}}
+- Before spawning a task's sub-agent, create its worktree: `git worktree add <worktree.path> -b <worktree.branch>` (base = current branch HEAD). If the worktree already exists, reuse it (resume). Run `git worktree prune` once at session start.
+- ALL stages of a task (red, green, refactor, verify) run in the SAME worktree. The verifier runs read-only in that same worktree. Tests and coverage run inside the worktree.
+- Each sub-agent instruction includes the engine-provided `worktree` block verbatim. Sub-agents NEVER call the {{.Command}} CLI — submitting is exclusively the orchestrator's job, and submits are serialized.
+- MERGE-THEN-SUBMIT (binding): BEFORE submitting a task's terminal (done) report, commit in the worktree → `git merge --no-ff <worktree.branch>` on the main working branch → `git worktree remove <worktree.path>` → `git branch -d <worktree.branch>` → THEN submit the report. This guarantees dependent tasks open their worktrees from an up-to-date base.
+- Merge conflict: the orchestrator resolves it. If it cannot, run `git merge --abort`, leave the worktree in place, and submit `{"taskId":"...","blocked":["merge-conflict: <files>"],...}`.
+- UNBLOCK: a blocked task stays out of the ready set until a new report clears it. Once the obstacle is resolved (e.g. the user fixed the conflict), submit a report for that `taskId` with no `blocked` entries. A bare report (only `taskId`) just clears the flag and the flow resumes from the stage where the task stopped; a report carrying real stage results (e.g. the completed done report held back by a merge conflict) is processed as that stage's result — do not re-run work that already finished.
+- NO-GIT FALLBACK: before processing a batch, run `git rev-parse --is-inside-work-tree`. If the project is not a git repo, skip all worktree steps and run the batch tasks SEQUENTIALLY in the project root (no isolation for concurrent writes); DAG, `taskId`, and submit rules apply unchanged.
+- On a deadlock/all-blocked `error` action, stop the loop, display the blocked and waiting tasks as a table, and ask the user. After the user resolves an obstacle, use the UNBLOCK report above — do NOT enter a retry loop.
+- Spawn sub-agents only for tasks whose report has not yet been submitted — the engine idempotently re-lists a task that is still running.
 
 ### Refinement
 
@@ -107,13 +144,15 @@ Before setting per-task `tddEnabled` or `important` flags, ask the USER via AskU
 
 ```json
 {
-  "update": {"task-1": {"criteria": [{"given": "a logged-out user", "when": "they submit valid credentials", "then": "a session is created"}], "tddEnabled": true, "important": false, "edgeCases": ["empty input", "concurrent access"]}},
-  "add":    [{"title": "New task", "criteria": [{"given": "an empty cart", "when": "checkout is requested", "then": "the request is rejected"}], "tddEnabled": false, "edgeCases": ["nil pointer", "max length exceeded"]}],
+  "update": {"task-1": {"criteria": [{"given": "a logged-out user", "when": "they submit valid credentials", "then": "a session is created"}], "tddEnabled": true, "important": false, "edgeCases": ["empty input", "concurrent access"], "dependsOn": []}},
+  "add":    [{"title": "New task", "criteria": [{"given": "an empty cart", "when": "checkout is requested", "then": "the request is rejected"}], "tddEnabled": false, "edgeCases": ["nil pointer", "max length exceeded"], "dependsOn": ["task-1"]}],
   "remove": ["task-3"]
 }
 ```
 
 Each criterion is a Given/When/Then triple (`given`/`when`/`then`); `then` is required, `given` and `when` are optional.
+
+`dependsOn` is a list of task IDs that must be `done` before the task becomes ready; tasks without dependencies run in parallel during execution. Self-dependencies, unknown IDs, and cycles are rejected. Removing a task that others depend on is rejected — update the dependents' `dependsOn` in the same payload.
 
 When satisfied with the task list, advance with:
 
@@ -161,7 +200,7 @@ When `next` returns `action: "notify"` and the payload includes `RestartRecommen
 
 ### Git
 
-Read-only: log, diff, status, show, blame. No write commands (commit, push, checkout, etc.).
+Read-only: log, diff, status, show, blame. No write commands (commit, push, checkout, etc.). NARROW EXCEPTION — worktree lifecycle only: `git worktree add/remove/prune/list`, `git add`/`git commit` inside a task worktree, `git merge` on the main working branch, `git branch -d`. `push`, `rebase`, and `reset --hard` remain forbidden.
 
 ### Execution
 
