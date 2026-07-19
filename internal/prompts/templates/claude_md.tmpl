@@ -2,6 +2,10 @@
 
 State-driven orchestration. Do NOT read `.tddmaster/` files directly — tddmaster provides everything via JSON.
 
+### When to use tddmaster (opt-in)
+
+tddmaster is strictly OPT-IN. Run it ONLY when the user explicitly asks — e.g. "use tddmaster", "start a spec", "run this with tddmaster", or a direct `{{.Command}}` command. For any other task, work normally: do NOT run `{{.Command}}` commands, do NOT start a spec, and do NOT suggest routing the task through tddmaster. Once the user has started a spec, the protocol below is binding until that spec reaches a terminal state or the user cancels it.
+
 ### Protocol
 
     {{.Command}} start <slug>                         # create and start a new spec
@@ -68,7 +72,7 @@ Drive entirely off the JSON:
 - Call `{{.Command}} next` ONCE per interaction. One action, one response, one submit.
 - Never batch-submit. Never answer discovery questions yourself.
 - Never skip steps or infer decisions. Ask first. Explicit > Clever.
-- NEVER suggest bypassing or skipping tddmaster. Discovery is not overhead.
+- Once a spec is active, NEVER suggest bypassing or skipping tddmaster. Discovery is not overhead.
 - NEVER ask permission to run the next command. Each step has one next step. Just run it.
 - Execute tddmaster commands IMMEDIATELY — the JSON output has all context needed.
 - Display `roadmap` before content. Display `gate` prominently.
