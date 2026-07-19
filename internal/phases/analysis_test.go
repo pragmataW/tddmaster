@@ -562,3 +562,38 @@ func TestAnalysisDriver_EditKeepsCriterionIDsStable(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalysisDriver_InstructIncludesTaskExecPlanTouchedFiles(t *testing.T) {
+	root := t.TempDir()
+	tasks := cleanTasks()
+	tasks[0].Exec = &spec.ExecState{
+		Plan: &spec.TaskPlan{
+			TaskID:       "task-1",
+			TouchedFiles: []string{"internal/auth/login.go", "internal/auth/session.go"},
+		},
+	}
+	seedAnalysisSpec(t, root, "s", tasks)
+	ctx := buildAnalysisCtx(t, root, "s")
+
+	action, _ := AnalysisDriver().Next(ctx, &engine.PhaseDef{ID: "cross-artifact-analysis"})
+	if !strings.Contains(action.Instruction, "approved touched files:") {
+		t.Error("instruction must contain 'approved touched files:' when a task has an approved plan")
+	}
+	if !strings.Contains(action.Instruction, "internal/auth/login.go") {
+		t.Error("instruction must list touched file 'internal/auth/login.go'")
+	}
+	if !strings.Contains(action.Instruction, "internal/auth/session.go") {
+		t.Error("instruction must list touched file 'internal/auth/session.go'")
+	}
+}
+
+func TestAnalysisDriver_InstructOmitsTouchedFiles_WhenNoPlan(t *testing.T) {
+	root := t.TempDir()
+	seedAnalysisSpec(t, root, "s", cleanTasks())
+	ctx := buildAnalysisCtx(t, root, "s")
+
+	action, _ := AnalysisDriver().Next(ctx, &engine.PhaseDef{ID: "cross-artifact-analysis"})
+	if strings.Contains(action.Instruction, "approved touched files:") {
+		t.Error("instruction must not contain 'approved touched files:' when no task has a plan")
+	}
+}

@@ -3,6 +3,7 @@ package spec
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -584,5 +585,249 @@ func TestApplyRefinement_Seq_TakesMaxOfSeqAndTaskIDs(t *testing.T) {
 	}
 	if seq != 6 {
 		t.Fatalf("got seq %d, want 6", seq)
+	}
+}
+
+func depsPtr(deps ...string) *[]string {
+	s := append([]string{}, deps...)
+	return &s
+}
+
+func TestApplyRefinement_Update_SetsDependsOn(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B"},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-2": {DependsOn: depsPtr("task-1")}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if !reflect.DeepEqual(result[1].DependsOn, []string{"task-1"}) {
+		t.Fatalf("got DependsOn %v, want [task-1]", result[1].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Update_NilDependsOn_Preserves(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-2": {Title: strPtr("B2")}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if !reflect.DeepEqual(result[1].DependsOn, []string{"task-1"}) {
+		t.Fatalf("got DependsOn %v, want [task-1] — nil DependsOn must not erase existing", result[1].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Update_EmptyDependsOn_Clears(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-2": {DependsOn: depsPtr()}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if len(result[1].DependsOn) != 0 {
+		t.Fatalf("got DependsOn %v, want empty — empty slice must clear dependencies", result[1].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Add_WithDependsOn(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("B"), DependsOn: depsPtr("task-1")}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if !reflect.DeepEqual(result[1].DependsOn, []string{"task-1"}) {
+		t.Fatalf("got DependsOn %v, want [task-1]", result[1].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Add_NoDependsOn_DefaultsEmptyNonNil(t *testing.T) {
+	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("A")}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil", err)
+	}
+	if result[0].DependsOn == nil {
+		t.Fatal("got nil DependsOn, want non-nil empty slice for new task")
+	}
+	if len(result[0].DependsOn) != 0 {
+		t.Fatalf("got DependsOn %v, want empty", result[0].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Remove_WithDependents_ReturnsError(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+		{ID: "task-3", Title: "C", DependsOn: []string{"task-1"}},
+	}
+	_, _, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-1"}}, false, 0)
+	if err == nil {
+		t.Fatal("got nil error, want non-nil when removing a task with dependents")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "cannot remove task-1") {
+		t.Errorf("error %q missing 'cannot remove task-1'", msg)
+	}
+	if !strings.Contains(msg, "task-2") || !strings.Contains(msg, "task-3") {
+		t.Errorf("error %q missing dependent task ids task-2/task-3", msg)
+	}
+	if !strings.Contains(msg, "dependsOn in the same payload") {
+		t.Errorf("error %q missing same-payload hint", msg)
+	}
+}
+
+func TestApplyRefinement_RemoveAndUpdate_SamePayload_Succeeds(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+	}
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Remove: []string{"task-1"},
+		Update: map[string]RefineOp{"task-2": {DependsOn: depsPtr()}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("got error %v, want nil — dependents fixed in the same payload", err)
+	}
+	if len(result) != 1 || result[0].ID != "task-2" {
+		t.Fatalf("got %+v, want only task-2", result)
+	}
+	if len(result[0].DependsOn) != 0 {
+		t.Fatalf("got DependsOn %v, want empty", result[0].DependsOn)
+	}
+}
+
+func TestApplyRefinement_Update_SelfDependency_ReturnsError(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+	}
+	_, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {DependsOn: depsPtr("task-1")}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("got nil error, want non-nil for self-dependency")
+	}
+	if !strings.Contains(err.Error(), "task-1") {
+		t.Errorf("error %q missing offending task id", err.Error())
+	}
+}
+
+func TestApplyRefinement_Update_UnknownDependency_ReturnsError(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+	}
+	_, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {DependsOn: depsPtr("task-99")}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("got nil error, want non-nil for unknown dependency id")
+	}
+	if !strings.Contains(err.Error(), "task-99") {
+		t.Errorf("error %q missing invalid id task-99", err.Error())
+	}
+}
+
+func TestApplyRefinement_Update_Cycle_ReturnsError(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A", DependsOn: []string{"task-2"}},
+		{ID: "task-2", Title: "B"},
+	}
+	_, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-2": {DependsOn: depsPtr("task-1")}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("got nil error, want non-nil for dependency cycle")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "cycle") {
+		t.Errorf("error %q missing 'cycle'", msg)
+	}
+	if !strings.Contains(msg, "task-1") || !strings.Contains(msg, "task-2") {
+		t.Errorf("error %q missing cycle task ids", msg)
+	}
+}
+
+func TestApplyRefinement_Add_UnknownDependency_ReturnsError(t *testing.T) {
+	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("A"), DependsOn: depsPtr("task-42")}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("got nil error, want non-nil for add with unknown dependency")
+	}
+	if !strings.Contains(err.Error(), "task-42") {
+		t.Errorf("error %q missing invalid id task-42", err.Error())
+	}
+}
+
+func TestRefineOp_DependsOn_JSONNilVsEmpty(t *testing.T) {
+	var absent RefineOp
+	if err := json.Unmarshal([]byte(`{"title":"T"}`), &absent); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if absent.DependsOn != nil {
+		t.Fatalf("got DependsOn %v, want nil pointer when field absent", absent.DependsOn)
+	}
+	var empty RefineOp
+	if err := json.Unmarshal([]byte(`{"dependsOn":[]}`), &empty); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if empty.DependsOn == nil {
+		t.Fatal("got nil DependsOn pointer, want non-nil for explicit empty list")
+	}
+	if len(*empty.DependsOn) != 0 {
+		t.Fatalf("got DependsOn %v, want empty slice", *empty.DependsOn)
+	}
+}
+
+func TestApplyRefinement_RemoveWithDependents_AndUnknownDep_BothReported(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B"},
+		{ID: "task-3", Title: "C", DependsOn: []string{"task-2"}},
+	}
+	payload := RefinePayload{
+		Remove: []string{"task-2"},
+		Add:    []RefineOp{{Title: strPtr("D"), DependsOn: &[]string{"task-9"}}},
+	}
+	_, _, err := ApplyRefinement(tasks, payload, false, 0)
+	if err == nil {
+		t.Fatal("expected error for removal-with-dependents plus unknown dep")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "cannot remove task-2") {
+		t.Errorf("error %q missing 'cannot remove task-2'", msg)
+	}
+	if !strings.Contains(msg, "task-9") {
+		t.Errorf("error %q missing unknown dep task-9", msg)
+	}
+}
+
+func TestApplyRefinement_Remove_DuplicateID_ReturnsError(t *testing.T) {
+	tasks := []Task{
+		{ID: "task-1", Title: "Alpha"},
+		{ID: "task-2", Title: "Beta"},
+	}
+	_, _, err := ApplyRefinement(tasks, RefinePayload{Remove: []string{"task-2", "task-2"}}, false, 0)
+	if err == nil {
+		t.Fatal("duplicate remove id must error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate task id in remove: task-2") {
+		t.Fatalf("expected duplicate-remove error, got %q", err.Error())
 	}
 }

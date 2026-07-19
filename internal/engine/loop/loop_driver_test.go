@@ -14,7 +14,20 @@ import (
 
 var _ engine.Driver = (*LoopDriver)(nil)
 
-func seedLoopSpec(t *testing.T, root, slug string, tasks []spec.Task, execution *spec.ExecState) *engine.Context {
+func attachExecToFirstPending(tasks []spec.Task, execution *spec.ExecState) {
+	if execution == nil {
+		return
+	}
+	for i := range tasks {
+		if !tasks[i].Done {
+			st := *execution
+			tasks[i].Exec = &st
+			return
+		}
+	}
+}
+
+func seedLoopSpecCore(t *testing.T, root, slug string, tasks []spec.Task, mutate func(*spec.Settings), iterations int) *engine.Context {
 	t.Helper()
 	st := spec.State{
 		Version: 1,
@@ -26,16 +39,19 @@ func seedLoopSpec(t *testing.T, root, slug string, tasks []spec.Task, execution 
 		t.Fatalf("SaveState: %v", err)
 	}
 	pr := spec.Progress{
-		Spec:      slug,
-		Status:    spec.StatusDraft,
-		Tasks:     tasks,
-		Execution: execution,
+		Spec:       slug,
+		Status:     spec.StatusDraft,
+		Tasks:      tasks,
+		Iterations: iterations,
 	}
 	if err := spec.SaveProgress(root, slug, pr); err != nil {
 		t.Fatalf("SaveProgress: %v", err)
 	}
 	settings := spec.DefaultSettings()
 	settings.MinTestCoverage = 0
+	if mutate != nil {
+		mutate(&settings)
+	}
 	if err := spec.SaveSettings(root, slug, settings); err != nil {
 		t.Fatalf("SaveSettings: %v", err)
 	}
@@ -52,39 +68,50 @@ func seedLoopSpec(t *testing.T, root, slug string, tasks []spec.Task, execution 
 	return ctx
 }
 
-func reportWith(t *testing.T, passed bool, refactorNotes bool) []byte {
+func seedLoopSpecIter(t *testing.T, root, slug string, tasks []spec.Task, execution *spec.ExecState, iterations int) *engine.Context {
+	t.Helper()
+	attachExecToFirstPending(tasks, execution)
+	return seedLoopSpecCore(t, root, slug, tasks, nil, iterations)
+}
+
+func seedLoopSpec(t *testing.T, root, slug string, tasks []spec.Task, execution *spec.ExecState) *engine.Context {
+	t.Helper()
+	return seedLoopSpecIter(t, root, slug, tasks, execution, 0)
+}
+
+func reportWith(t *testing.T, taskID string, passed bool, refactorNotes bool) []byte {
 	t.Helper()
 	var notes []RefactorNote
 	if refactorNotes {
 		notes = []RefactorNote{{Suggestion: "refactor notes"}}
 	}
-	b, err := json.Marshal(StageReport{Passed: passed, RefactorNotes: notes})
+	b, err := json.Marshal(StageReport{TaskID: taskID, Passed: passed, RefactorNotes: notes})
 	if err != nil {
 		t.Fatalf("marshal report: %v", err)
 	}
 	return b
 }
 
-func greenImpl(t *testing.T) []byte {
+func greenImpl(t *testing.T, taskID string) []byte {
 	t.Helper()
-	b, err := json.Marshal(StageReport{Completed: []string{"impl"}})
+	b, err := json.Marshal(StageReport{TaskID: taskID, Completed: []string{"impl"}})
 	if err != nil {
 		t.Fatalf("marshal green impl report: %v", err)
 	}
 	return b
 }
 
-func submitGreenPass(t *testing.T, ctx *engine.Context, refactorNotes bool) {
+func submitGreenPass(t *testing.T, ctx *engine.Context, taskID string, refactorNotes bool) {
 	t.Helper()
-	if _, err := ctx.Submit(greenImpl(t)); err != nil {
+	if _, err := ctx.Submit(greenImpl(t, taskID)); err != nil {
 		t.Fatalf("Submit green impl: %v", err)
 	}
-	if _, err := ctx.Submit(reportWith(t, true, refactorNotes)); err != nil {
+	if _, err := ctx.Submit(reportWith(t, taskID, true, refactorNotes)); err != nil {
 		t.Fatalf("Submit green verify: %v", err)
 	}
 }
 
-func TestLoopDriver_Edge2_NilExecution_InitializesOnFirstNext(t *testing.T) {
+func TestLoopDriver_Edge2_NilExec_InitializesOnFirstNext(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge2"
 	tasks := []spec.Task{
@@ -99,6 +126,17 @@ func TestLoopDriver_Edge2_NilExecution_InitializesOnFirstNext(t *testing.T) {
 	}
 	if action.Action == "" {
 		t.Fatal("Next returned empty ActionType; expected a valid Action")
+	}
+
+	pr, err := spec.LoadProgress(root, slug)
+	if err != nil {
+		t.Fatalf("LoadProgress: %v", err)
+	}
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected task Exec seeded on first Next")
+	}
+	if pr.Tasks[0].Exec.TDDCycle != cycleRed {
+		t.Fatalf("expected seeded TDDCycle %q for TDD task, got %q", cycleRed, pr.Tasks[0].Exec.TDDCycle)
 	}
 }
 
@@ -138,8 +176,7 @@ func TestLoopDriver_Edge3_AllTasksDone_NextReturnsPhaseDoneAndStatusCompleted(t 
 	tasks := []spec.Task{
 		{ID: "t1", Title: "done task", Done: true, TDDEnabled: false},
 	}
-	execution := &spec.ExecState{Iteration: 1}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	ctx := seedLoopSpecIter(t, root, slug, tasks, nil, 1)
 
 	action, err := ctx.Next()
 	if err != nil {
@@ -168,6 +205,7 @@ func TestLoopDriver_Edge14_TDDTask_RedToGreenOnPassingReport(t *testing.T) {
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
+		TaskID:       "t1",
 		Passed:       true,
 		TestsWritten: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
@@ -182,11 +220,11 @@ func TestLoopDriver_Edge14_TDDTask_RedToGreenOnPassingReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadProgress: %v", err)
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution after Submit")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected non-nil task Exec after Submit")
 	}
-	if pr.Execution.TDDCycle != cycleGreen {
-		t.Fatalf("expected TDDCycle %q after red→green, got %q", cycleGreen, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
+		t.Fatalf("expected TDDCycle %q after red→green, got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
 	}
 }
 
@@ -199,7 +237,7 @@ func TestLoopDriver_Edge10_GreenPassWithoutRefactorNotes_TaskDone(t *testing.T) 
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, false)
+	submitGreenPass(t, ctx, "t1", false)
 
 	pr, err := spec.LoadProgress(root, slug)
 	if err != nil {
@@ -219,17 +257,17 @@ func TestLoopDriver_Edge10_GreenPassWithRefactorNotes_CycleAdvancesToRefactor(t 
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, true)
+	submitGreenPass(t, ctx, "t1", true)
 
 	pr, err := spec.LoadProgress(root, slug)
 	if err != nil {
 		t.Fatalf("LoadProgress: %v", err)
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected non-nil task Exec")
 	}
-	if pr.Execution.TDDCycle != cycleRefactor {
-		t.Fatalf("expected TDDCycle %q after green+refactorNotes, got %q", cycleRefactor, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleRefactor {
+		t.Fatalf("expected TDDCycle %q after green+refactorNotes, got %q", cycleRefactor, pr.Tasks[0].Exec.TDDCycle)
 	}
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task NOT done when advancing to refactor")
@@ -246,7 +284,7 @@ func TestLoopDriver_Edge5_RefactorCap_TaskDoneAfterCapReached(t *testing.T) {
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	for i := 0; i < 3*defaultMaxRefactorRounds; i++ {
-		_, err := ctx.Submit(reportWith(t, true, true))
+		_, err := ctx.Submit(reportWith(t, "t1", true, true))
 		if err != nil {
 			t.Fatalf("Submit iteration %d: %v", i, err)
 		}
@@ -258,11 +296,6 @@ func TestLoopDriver_Edge5_RefactorCap_TaskDoneAfterCapReached(t *testing.T) {
 		if pr.Tasks[0].Done {
 			return
 		}
-		if pr.Execution != nil && pr.Execution.TDDCycle == cycleRefactor {
-			execution = pr.Execution
-		}
-
-		ctx = seedLoopSpec(t, root, slug, pr.Tasks, pr.Execution)
 	}
 
 	pr, err := spec.LoadProgress(root, slug)
@@ -283,7 +316,7 @@ func TestLoopDriver_Edge9_RefactorApplyHead_WaitsForVerifier(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleRefactor, RefactorApplied: false}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	applyReport, err := json.Marshal(StageReport{Passed: true, RefactorApplied: true, RefactorNotes: []RefactorNote{{Suggestion: "refactor notes"}}})
+	applyReport, err := json.Marshal(StageReport{TaskID: "t1", Passed: true, RefactorApplied: true, RefactorNotes: []RefactorNote{{Suggestion: "refactor notes"}}})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -296,14 +329,14 @@ func TestLoopDriver_Edge9_RefactorApplyHead_WaitsForVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadProgress: %v", err)
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected Execution to remain non-nil")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected task Exec to remain non-nil")
 	}
-	if !pr.Execution.RefactorApplied {
+	if !pr.Tasks[0].Exec.RefactorApplied {
 		t.Fatal("expected RefactorApplied=true after apply head")
 	}
-	if pr.Execution.TDDCycle != cycleRefactor {
-		t.Fatalf("expected cycle still refactor (waiting for verifier), got %q", pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleRefactor {
+		t.Fatalf("expected cycle still refactor (waiting for verifier), got %q", pr.Tasks[0].Exec.TDDCycle)
 	}
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task NOT done after apply head")
@@ -316,8 +349,8 @@ func TestLoopDriver_Edge12_MalformedJSON_SubmitReturnsErrorStateUnchanged(t *tes
 	tasks := []spec.Task{
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: 2}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 2)
 
 	_, err := ctx.Submit([]byte(`not-valid-json`))
 	if err == nil {
@@ -328,11 +361,11 @@ func TestLoopDriver_Edge12_MalformedJSON_SubmitReturnsErrorStateUnchanged(t *tes
 	if err != nil {
 		t.Fatalf("LoadProgress: %v", err)
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected Execution persisted from seed")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected task Exec persisted from seed")
 	}
-	if pr.Execution.Iteration != 2 {
-		t.Fatalf("expected Iteration unchanged at 2, got %d", pr.Execution.Iteration)
+	if pr.Iterations != 2 {
+		t.Fatalf("expected Iterations unchanged at 2, got %d", pr.Iterations)
 	}
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task unchanged (not done) after bad JSON")
@@ -354,7 +387,7 @@ func TestLoopDriver_Edge12_EmptyAnswer_SubmitReturnsError(t *testing.T) {
 	}
 }
 
-func TestLoopDriver_Edge13_MixedTDDEnabled_ReseedCycleSetsEmptyForNonTDD(t *testing.T) {
+func TestLoopDriver_Edge13_MixedTDDEnabled_NextTaskSeededEmptyForNonTDD(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge13"
 	tasks := []spec.Task{
@@ -364,7 +397,7 @@ func TestLoopDriver_Edge13_MixedTDDEnabled_ReseedCycleSetsEmptyForNonTDD(t *test
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, false)
+	submitGreenPass(t, ctx, "t1", false)
 
 	pr, err := spec.LoadProgress(root, slug)
 	if err != nil {
@@ -373,20 +406,28 @@ func TestLoopDriver_Edge13_MixedTDDEnabled_ReseedCycleSetsEmptyForNonTDD(t *test
 	if !pr.Tasks[0].Done {
 		t.Fatal("expected t1 Done after green pass")
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution")
-	}
-	if pr.Execution.TDDCycle != cycleEmpty {
-		t.Fatalf("expected empty TDDCycle for non-TDD next task, got %q", pr.Execution.TDDCycle)
-	}
 
-	ctx2 := seedLoopSpec(t, root, slug, pr.Tasks, pr.Execution)
+	ctx2 := seedLoopSpecIter(t, root, slug, pr.Tasks, nil, 0)
 	action, err := ctx2.Next()
 	if err != nil {
 		t.Fatalf("Next for t2: %v", err)
 	}
-	if action.DelegateAgent == "" {
+	if len(action.Tasks) != 1 {
+		t.Fatalf("expected 1 task action for t2, got %d", len(action.Tasks))
+	}
+	if action.Tasks[0].DelegateAgent == "" {
 		t.Fatal("expected executor-stage action for non-TDD task t2")
+	}
+
+	pr2, err := spec.LoadProgress(root, slug)
+	if err != nil {
+		t.Fatalf("LoadProgress after Next: %v", err)
+	}
+	if pr2.Tasks[1].Exec == nil {
+		t.Fatal("expected t2 Exec seeded")
+	}
+	if pr2.Tasks[1].Exec.TDDCycle != cycleEmpty {
+		t.Fatalf("expected empty TDDCycle for non-TDD task t2, got %q", pr2.Tasks[1].Exec.TDDCycle)
 	}
 }
 
@@ -397,8 +438,8 @@ func TestLoopDriver_Edge11_IterationExceedsMax_ReturnsStopAction(t *testing.T) {
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
 	maxIter := 15
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: maxIter}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, maxIter)
 
 	action, err := ctx.Next()
 	if err != nil {
@@ -412,7 +453,7 @@ func TestLoopDriver_Edge11_IterationExceedsMax_ReturnsStopAction(t *testing.T) {
 	}
 }
 
-func TestLoopDriver_Persistence_SubmitPersistsExecutionAndTaskDone(t *testing.T) {
+func TestLoopDriver_Persistence_SubmitPersistsExecAndTaskDone(t *testing.T) {
 	root := t.TempDir()
 	slug := "persist"
 	tasks := []spec.Task{
@@ -422,6 +463,7 @@ func TestLoopDriver_Persistence_SubmitPersistsExecutionAndTaskDone(t *testing.T)
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
+		TaskID:       "t1",
 		Passed:       true,
 		TestsWritten: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
@@ -436,11 +478,11 @@ func TestLoopDriver_Persistence_SubmitPersistsExecutionAndTaskDone(t *testing.T)
 	if err != nil {
 		t.Fatalf("LoadProgress: %v", err)
 	}
-	if pr.Execution == nil {
-		t.Fatal("Execution must be persisted after Submit")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("task Exec must be persisted after Submit")
 	}
-	if pr.Execution.TDDCycle != cycleGreen {
-		t.Fatalf("expected persisted TDDCycle %q, got %q", cycleGreen, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
+		t.Fatalf("expected persisted TDDCycle %q, got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
 	}
 }
 
@@ -453,7 +495,7 @@ func TestLoopDriver_Persistence_AllTasksDone_StatusPersistedAsCompleted(t *testi
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, false)
+	submitGreenPass(t, ctx, "t1", false)
 
 	pr, err := spec.LoadProgress(root, slug)
 	if err != nil {
@@ -464,9 +506,10 @@ func TestLoopDriver_Persistence_AllTasksDone_StatusPersistedAsCompleted(t *testi
 	}
 }
 
-func reportWithCoverage(t *testing.T, passed bool, failedACs []string, uncoveredEdgeCases []string) []byte {
+func reportWithCoverage(t *testing.T, taskID string, passed bool, failedACs []string, uncoveredEdgeCases []string) []byte {
 	t.Helper()
 	b, err := json.Marshal(StageReport{
+		TaskID:             taskID,
 		Passed:             passed,
 		FailedACs:          failedACs,
 		UncoveredEdgeCases: uncoveredEdgeCases,
@@ -486,7 +529,7 @@ func TestLoopDriver_Edge3_GreenPassWithFailedACs_TaskNotDone(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	_, err := ctx.Submit(reportWithCoverage(t, true, []string{"ac-1"}, nil))
+	_, err := ctx.Submit(reportWithCoverage(t, "t1", true, []string{"ac-1"}, nil))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -498,14 +541,14 @@ func TestLoopDriver_Edge3_GreenPassWithFailedACs_TaskNotDone(t *testing.T) {
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false when FailedACs present despite Passed=true")
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected non-nil task Exec")
 	}
-	if pr.Execution.TDDCycle != cycleGreen {
-		t.Fatalf("expected TDDCycle=%q (unchanged), got %q", cycleGreen, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
+		t.Fatalf("expected TDDCycle=%q (unchanged), got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
 	}
-	if len(pr.Execution.LastFailedACs) == 0 || pr.Execution.LastFailedACs[0] != "ac-1" {
-		t.Fatalf("expected LastFailedACs=[\"ac-1\"], got %v", pr.Execution.LastFailedACs)
+	if len(pr.Tasks[0].Exec.LastFailedACs) == 0 || pr.Tasks[0].Exec.LastFailedACs[0] != "ac-1" {
+		t.Fatalf("expected LastFailedACs=[\"ac-1\"], got %v", pr.Tasks[0].Exec.LastFailedACs)
 	}
 }
 
@@ -518,7 +561,7 @@ func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_TaskNotDone(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	_, err := ctx.Submit(reportWithCoverage(t, true, nil, []string{"ec-2"}))
+	_, err := ctx.Submit(reportWithCoverage(t, "t1", true, nil, []string{"ec-2"}))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -530,14 +573,14 @@ func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_TaskNotDone(t *testing.T) {
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false when UncoveredEdgeCases present despite Passed=true")
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected non-nil task Exec")
 	}
-	if pr.Execution.TDDCycle != cycleGreen {
-		t.Fatalf("expected TDDCycle=%q (unchanged), got %q", cycleGreen, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
+		t.Fatalf("expected TDDCycle=%q (unchanged), got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
 	}
-	if len(pr.Execution.LastUncoveredEC) == 0 || pr.Execution.LastUncoveredEC[0] != "ec-2" {
-		t.Fatalf("expected LastUncoveredEC=[\"ec-2\"], got %v", pr.Execution.LastUncoveredEC)
+	if len(pr.Tasks[0].Exec.LastUncoveredEC) == 0 || pr.Tasks[0].Exec.LastUncoveredEC[0] != "ec-2" {
+		t.Fatalf("expected LastUncoveredEC=[\"ec-2\"], got %v", pr.Tasks[0].Exec.LastUncoveredEC)
 	}
 }
 
@@ -553,10 +596,10 @@ func TestLoopDriver_CoverageCleared_OnCleanPass(t *testing.T) {
 	}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	if _, err := ctx.Submit(greenImpl(t)); err != nil {
+	if _, err := ctx.Submit(greenImpl(t, "t1")); err != nil {
 		t.Fatalf("Submit green impl: %v", err)
 	}
-	_, err := ctx.Submit(reportWithCoverage(t, true, nil, nil))
+	_, err := ctx.Submit(reportWithCoverage(t, "t1", true, nil, nil))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -568,14 +611,14 @@ func TestLoopDriver_CoverageCleared_OnCleanPass(t *testing.T) {
 	if !pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=true after clean pass")
 	}
-	if pr.Execution != nil && len(pr.Execution.LastFailedACs) > 0 {
-		t.Fatalf("expected LastFailedACs cleared, got %v", pr.Execution.LastFailedACs)
+	if pr.Tasks[0].Exec != nil && len(pr.Tasks[0].Exec.LastFailedACs) > 0 {
+		t.Fatalf("expected LastFailedACs cleared, got %v", pr.Tasks[0].Exec.LastFailedACs)
 	}
 }
 
 func executorCompletedReport(t *testing.T, taskID string) []byte {
 	t.Helper()
-	b, err := json.Marshal(StageReport{Completed: []string{taskID}})
+	b, err := json.Marshal(StageReport{TaskID: taskID, Completed: []string{taskID}})
 	if err != nil {
 		t.Fatalf("marshal executor report: %v", err)
 	}
@@ -617,7 +660,7 @@ func TestLoopDriver_NonTDD_SkipOff_ExecutorReportAdvancesToVerifier_NotComplete(
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false after executor report (verifier still pending, skipVerify off)")
 	}
-	if pr.Execution == nil || !pr.Execution.Implemented {
+	if pr.Tasks[0].Exec == nil || !pr.Tasks[0].Exec.Implemented {
 		t.Fatal("expected Implemented=true after executor report so verifier stage runs next")
 	}
 
@@ -625,8 +668,11 @@ func TestLoopDriver_NonTDD_SkipOff_ExecutorReportAdvancesToVerifier_NotComplete(
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
-	if action.DelegateAgent != string(promptregistry.AgentVerifier) {
-		t.Fatalf("expected verifier instruction after executor, got delegate %q", action.DelegateAgent)
+	if len(action.Tasks) != 1 {
+		t.Fatalf("expected 1 task action, got %d", len(action.Tasks))
+	}
+	if action.Tasks[0].DelegateAgent != string(promptregistry.AgentVerifier) {
+		t.Fatalf("expected verifier instruction after executor, got delegate %q", action.Tasks[0].DelegateAgent)
 	}
 }
 
@@ -642,7 +688,7 @@ func TestLoopDriver_NonTDD_SkipOff_TwoStage_CompletesOnVerifierPass(t *testing.T
 	if _, err := ctx.Submit(executorCompletedReport(t, "t1")); err != nil {
 		t.Fatalf("Submit executor: %v", err)
 	}
-	if _, err := ctx.Submit(reportWithCoverage(t, true, nil, nil)); err != nil {
+	if _, err := ctx.Submit(reportWithCoverage(t, "t1", true, nil, nil)); err != nil {
 		t.Fatalf("Submit verifier: %v", err)
 	}
 
@@ -667,7 +713,7 @@ func TestLoopDriver_NonTDD_SkipOff_VerifierFail_NotComplete(t *testing.T) {
 	if _, err := ctx.Submit(executorCompletedReport(t, "t1")); err != nil {
 		t.Fatalf("Submit executor: %v", err)
 	}
-	if _, err := ctx.Submit(reportWithCoverage(t, true, []string{"ac-1"}, nil)); err != nil {
+	if _, err := ctx.Submit(reportWithCoverage(t, "t1", true, []string{"ac-1"}, nil)); err != nil {
 		t.Fatalf("Submit verifier: %v", err)
 	}
 
@@ -678,7 +724,7 @@ func TestLoopDriver_NonTDD_SkipOff_VerifierFail_NotComplete(t *testing.T) {
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false when verifier reports FailedACs (skipVerify off)")
 	}
-	if pr.Execution == nil || pr.Execution.Implemented {
+	if pr.Tasks[0].Exec == nil || pr.Tasks[0].Exec.Implemented {
 		t.Fatal("expected Implemented reset to false after verifier fail so executor re-runs")
 	}
 }
@@ -721,8 +767,8 @@ func TestLoopDriver_NonTDD_SkipOn_StaleImplemented_NoDeadlock_Completes(t *testi
 	if action.Action == engine.ActionNotify {
 		t.Fatal("expected an executor instruction, got empty notify (deadlock) on stale Implemented + skipVerify on")
 	}
-	if action.DelegateAgent != string(promptregistry.AgentExecutor) {
-		t.Fatalf("expected executor instruction, got delegate %q", action.DelegateAgent)
+	if len(action.Tasks) != 1 || action.Tasks[0].DelegateAgent != string(promptregistry.AgentExecutor) {
+		t.Fatalf("expected executor instruction, got tasks %+v", action.Tasks)
 	}
 
 	if _, err := ctx.Submit(executorCompletedReport(t, "t1")); err != nil {
@@ -747,7 +793,7 @@ func TestLoopDriver_NonTDD_SkipOn_BlockedReport_NotComplete(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleEmpty}
 	ctx := seedLoopSpecSkipVerify(t, root, slug, tasks, execution)
 
-	report, err := json.Marshal(StageReport{Blocked: []string{"t1"}})
+	report, err := json.Marshal(StageReport{TaskID: "t1", Blocked: []string{"missing schema"}})
 	if err != nil {
 		t.Fatalf("marshal blocked report: %v", err)
 	}
@@ -762,6 +808,12 @@ func TestLoopDriver_NonTDD_SkipOn_BlockedReport_NotComplete(t *testing.T) {
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false when executor reports blocked (skipVerify on)")
 	}
+	if !pr.Tasks[0].Blocked {
+		t.Fatal("expected task.Blocked=true after blocked report")
+	}
+	if pr.Tasks[0].BlockedReason != "missing schema" {
+		t.Fatalf("expected BlockedReason=%q, got %q", "missing schema", pr.Tasks[0].BlockedReason)
+	}
 }
 
 func TestLoopDriver_TaskDone_RerendersSpecMd(t *testing.T) {
@@ -773,7 +825,7 @@ func TestLoopDriver_TaskDone_RerendersSpecMd(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, false)
+	submitGreenPass(t, ctx, "t1", false)
 
 	data, err := os.ReadFile(paths.SpecMd(root, slug))
 	if err != nil {
@@ -794,7 +846,7 @@ func TestLoopDriver_AllTasksDone_SpecMdStatusCompleted(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	submitGreenPass(t, ctx, false)
+	submitGreenPass(t, ctx, "t1", false)
 
 	data, err := os.ReadFile(paths.SpecMd(root, slug))
 	if err != nil {
@@ -818,7 +870,7 @@ func TestLoopDriver_TaskNotDone_SpecMdNotMarked(t *testing.T) {
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
-	_, err := ctx.Submit(reportWithCoverage(t, true, nil, []string{"ec-1"}))
+	_, err := ctx.Submit(reportWithCoverage(t, "t1", true, nil, []string{"ec-1"}))
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -848,30 +900,30 @@ func TestLoopDriver_IterationMax_NextNotifyHasRestartText(t *testing.T) {
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
 	maxIter := 15
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: maxIter}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, maxIter)
 
 	action, err := ctx.Next()
 	if err != nil {
 		t.Fatalf("Next: %v", err)
 	}
 	if action.Action != engine.ActionNotify {
-		t.Fatalf("expected ActionNotify when iteration >= max, got %q", action.Action)
+		t.Fatalf("expected ActionNotify when iterations >= max, got %q", action.Action)
 	}
 	if !strings.Contains(action.Instruction, promptregistry.RestartRecommendedText) {
 		t.Fatalf("expected Instruction to contain RestartRecommendedText, got %q", action.Instruction)
 	}
 }
 
-func TestLoopDriver_Continue_ResetsIterationToZero(t *testing.T) {
+func TestLoopDriver_Continue_ResetsIterationsToZero(t *testing.T) {
 	root := t.TempDir()
 	slug := "continue-reset"
 	tasks := []spec.Task{
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
 	maxIter := 15
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: maxIter}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, maxIter)
 
 	action, err := ctx.Submit([]byte("continue"))
 	if err != nil {
@@ -885,11 +937,8 @@ func TestLoopDriver_Continue_ResetsIterationToZero(t *testing.T) {
 	if loadErr != nil {
 		t.Fatalf("LoadProgress: %v", loadErr)
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution after continue")
-	}
-	if pr.Execution.Iteration != 0 {
-		t.Fatalf("expected Iteration=0 after continue, got %d", pr.Execution.Iteration)
+	if pr.Iterations != 0 {
+		t.Fatalf("expected Iterations=0 after continue, got %d", pr.Iterations)
 	}
 }
 
@@ -900,8 +949,8 @@ func TestLoopDriver_Continue_NotTreatedAsInvalidJSON(t *testing.T) {
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
 	maxIter := 15
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: maxIter}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, maxIter)
 
 	_, err := ctx.Submit([]byte("continue"))
 	if err != nil {
@@ -915,9 +964,8 @@ func TestLoopDriver_InvalidJSON_StillErrors(t *testing.T) {
 	tasks := []spec.Task{
 		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
 	}
-	maxIter := 15
-	execution := &spec.ExecState{TDDCycle: cycleRed, Iteration: maxIter}
-	ctx := seedLoopSpec(t, root, slug, tasks, execution)
+	execution := &spec.ExecState{TDDCycle: cycleRed}
+	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 15)
 
 	_, err := ctx.Submit([]byte("{bozuk"))
 	if err == nil {
@@ -935,6 +983,7 @@ func TestLoopDriver_Edge5_GreenExecutorSelfReport_DoesNotAdvance(t *testing.T) {
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	selfReport, err := json.Marshal(StageReport{
+		TaskID:    "t1",
 		Passed:    false,
 		Completed: []string{"impl"},
 	})
@@ -954,10 +1003,10 @@ func TestLoopDriver_Edge5_GreenExecutorSelfReport_DoesNotAdvance(t *testing.T) {
 	if pr.Tasks[0].Done {
 		t.Fatal("expected task.Done=false for executor self-report (Passed=false)")
 	}
-	if pr.Execution == nil {
-		t.Fatal("expected non-nil Execution")
+	if pr.Tasks[0].Exec == nil {
+		t.Fatal("expected non-nil task Exec")
 	}
-	if pr.Execution.TDDCycle != cycleGreen {
-		t.Fatalf("expected TDDCycle=%q unchanged, got %q", cycleGreen, pr.Execution.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
+		t.Fatalf("expected TDDCycle=%q unchanged, got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
 	}
 }

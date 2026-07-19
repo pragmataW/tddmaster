@@ -139,8 +139,8 @@ func TestContext_SaveTraceability_RoundTrips(t *testing.T) {
 				},
 			},
 		},
-		Coverage: map[string]float64{
-			"internal/engine/context.go": 82.5,
+		Coverage: map[string]map[string]float64{
+			"task-2": {"internal/engine/context.go": 82.5},
 		},
 	}
 
@@ -163,7 +163,7 @@ func TestContext_SaveTraceability_RoundTrips(t *testing.T) {
 	if entries[0].TaskID != "task-2" {
 		t.Fatalf("persisted TaskID = %q, want %q", entries[0].TaskID, "task-2")
 	}
-	if cov, exists := persisted.Coverage["internal/engine/context.go"]; !exists || cov != 82.5 {
+	if cov, exists := persisted.Coverage["task-2"]["internal/engine/context.go"]; !exists || cov != 82.5 {
 		t.Fatalf("persisted Coverage unexpected: %v", persisted.Coverage)
 	}
 

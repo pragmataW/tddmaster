@@ -8,24 +8,24 @@ func LintCriteria(t Task) []Finding {
 		then := strings.TrimSpace(c.Then)
 		if then == "" && strings.TrimSpace(c.Raw) == "" {
 			findings = append(findings, Finding{
-				Severity:   "block",
+				Severity:   SeverityBlock,
 				Category:   "untestable",
 				TaskID:     t.ID,
 				AcID:       c.ID,
 				Detail:     "Then is empty and cannot be verified",
 				Suggestion: "Describe a concrete, observable outcome in Then",
-				Source:     "linter",
+				Source:     SourceLinter,
 			})
 		}
 		if strings.TrimSpace(c.When) == "" && strings.TrimSpace(c.Raw) == "" {
 			findings = append(findings, Finding{
-				Severity:   "warn",
+				Severity:   SeverityWarn,
 				Category:   "weak-criterion",
 				TaskID:     t.ID,
 				AcID:       c.ID,
 				Detail:     "When and Raw are both empty, leaving the trigger unspecified",
 				Suggestion: "State the action or input that triggers this criterion",
-				Source:     "linter",
+				Source:     SourceLinter,
 			})
 		}
 	}

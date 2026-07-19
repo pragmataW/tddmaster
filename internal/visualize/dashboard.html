@@ -808,6 +808,7 @@
 
     let currentHash = '';
     let activeTaskID = '';
+    let activeTaskIDs = new Set();
     let selectedTaskID = null;
     let progressData = null;
     let stateData = null;
@@ -927,13 +928,23 @@
       return tasks;
     }
 
+    function computeActiveIDs(tasks) {
+      const doneSet = new Set(tasks.filter(t => t.done).map(t => t.id));
+      const ids = [];
+      for (const t of tasks) {
+        if (t.done || t.blocked) continue;
+        const deps = t.dependsOn || [];
+        if (deps.every(d => doneSet.has(d))) ids.push(t.id);
+      }
+      return ids;
+    }
+
     function renderStepper() {
       const tasks = sortedTasks();
 
-      activeTaskID = '';
-      for (const t of tasks) {
-        if (!t.done) { activeTaskID = t.id; break; }
-      }
+      const activeIDs = computeActiveIDs(tasks);
+      activeTaskIDs = new Set(activeIDs);
+      activeTaskID = activeIDs[0] || '';
 
       const stepper = document.getElementById('stepper');
       stepper.innerHTML = '';
@@ -945,7 +956,7 @@
       }
 
       tasks.forEach(t => {
-        const isActive = t.id === activeTaskID;
+        const isActive = activeTaskIDs.has(t.id);
         const node = document.createElement('div');
         node.className = 'task-node' + (t.done ? ' done' : '') + (isActive ? ' active' : '') + (t.id === selectedTaskID ? ' selected' : '');
 
@@ -979,10 +990,6 @@
       if (focusTask) showTaskDetails(focusTask);
     }
 
-    function plansMap() {
-      return (progressData && progressData.execution && progressData.execution.taskPlans) || {};
-    }
-
     function showTaskDetails(task) {
       const card = document.getElementById('task-detail-card');
       const panel = document.getElementById('task-detail-panel');
@@ -991,7 +998,7 @@
 
       let st = 'Todo';
       if (task.done) st = 'Done';
-      else if (task.id === activeTaskID) st = 'Active';
+      else if (activeTaskIDs.has(task.id)) st = 'Active';
 
       let html =
         '<div class="detail-item"><div class="detail-lbl">Title</div>' +
@@ -1008,7 +1015,7 @@
           task.edgeCases.map(a => '<li>' + esc(a) + '</li>').join('') + '</ul></div>';
       }
 
-      const plan = plansMap()[task.id];
+      const plan = (task.exec && task.exec.plan) || null;
       if (plan) {
         if (plan.approach) {
           html += '<div class="detail-item"><div class="detail-lbl">Approved Plan</div>' +
@@ -1040,17 +1047,26 @@
     }
 
     function renderStats() {
-      const ex = (progressData && progressData.execution) || {};
-      document.getElementById('stat-iteration').textContent = ex.iteration != null ? ex.iteration : '0';
-
       const tasks = (progressData && progressData.tasks) || [];
+      document.getElementById('stat-iteration').textContent =
+        (progressData && progressData.iterations != null) ? progressData.iterations : '0';
+
       const done = tasks.filter(t => t.done).length;
       document.getElementById('stat-completed').textContent = done + '/' + tasks.length;
 
-      document.getElementById('stat-refactors').textContent = ex.refactorRounds != null ? ex.refactorRounds : '0';
+      let refactors = 0;
+      for (const t of tasks) {
+        if (t.exec && t.exec.refactorRounds) refactors += t.exec.refactorRounds;
+      }
+      document.getElementById('stat-refactors').textContent = refactors;
 
-      const cycle = ex.tddCycle && ex.tddCycle.length ? ex.tddCycle : '—';
-      document.getElementById('stat-debt').textContent = cycle;
+      const cycles = computeActiveIDs(tasks)
+        .map(id => {
+          const t = tasks.find(x => x.id === id);
+          return (t && t.exec && t.exec.tddCycle) ? (id + ':' + t.exec.tddCycle) : '';
+        })
+        .filter(Boolean);
+      document.getElementById('stat-debt').textContent = cycles.length ? cycles.join(', ') : '—';
     }
 
     function renderSettings() {
@@ -1077,9 +1093,24 @@
       document.getElementById('footer-updated').textContent = u ? ('updated ' + new Date(u).toLocaleString()) : '';
     }
 
+    function taskCoverageMap() {
+      return (traceData && traceData.coverage && typeof traceData.coverage === 'object') ? traceData.coverage : {};
+    }
+
+    function fileCoveragePct(file) {
+      const coverage = taskCoverageMap();
+      let pct = null;
+      Object.keys(coverage).forEach(taskId => {
+        const files = coverage[taskId];
+        if (!files || typeof files !== 'object') return;
+        const v = files[file];
+        if (typeof v === 'number' && (pct == null || v > pct)) pct = v;
+      });
+      return pct;
+    }
+
     function coverageBadge(file) {
-      if (!traceData || !traceData.coverage) return '';
-      const pct = traceData.coverage[file];
+      const pct = fileCoveragePct(file);
       if (pct == null) return '';
       const minCov = (settingsData && settingsData.minTestCoverage != null) ? settingsData.minTestCoverage : 0;
       if (minCov === 0) return '';
@@ -1091,42 +1122,48 @@
       const ct = document.getElementById('container-coverage');
       if (!ct) return;
       ct.innerHTML = '';
-      const coverage = (traceData && traceData.coverage && typeof traceData.coverage === 'object') ? traceData.coverage : {};
-      const files = Object.keys(coverage).sort();
-      if (!files.length) {
-        ct.innerHTML = '<div class="panel"><div class="empty">No coverage measured yet. Coverage is recorded by the TDD green-phase verifier when min coverage is enabled.</div></div>';
-        return;
-      }
+      const coverage = taskCoverageMap();
       const minCov = (settingsData && settingsData.minTestCoverage != null) ? settingsData.minTestCoverage : 0;
-      const panel = document.createElement('div');
-      panel.className = 'panel trace-task-block';
-      const title = document.createElement('div');
-      title.className = 'trace-task-title';
-      title.textContent = 'File Coverage' + (minCov > 0 ? ' · min ' + minCov + '%' : ' · gate disabled');
-      panel.appendChild(title);
-      const table = document.createElement('table');
-      table.style.borderCollapse = 'collapse';
-      const tbody = document.createElement('tbody');
-      files.forEach(file => {
-        const pct = coverage[file];
-        const tr = document.createElement('tr');
-        const tdFile = document.createElement('td');
-        tdFile.className = 'trace-td trace-td-label';
-        tdFile.textContent = file;
-        tr.appendChild(tdFile);
-        const tdPct = document.createElement('td');
-        tdPct.className = 'trace-td';
-        const color = (minCov > 0 && pct < minCov) ? 'var(--accent)' : 'var(--ok)';
-        tdPct.innerHTML = '<span style="font-family:var(--display);font-weight:700;color:' + color + ';">' + pct + '%</span>';
-        tr.appendChild(tdPct);
-        tbody.appendChild(tr);
+      let rendered = 0;
+      Object.keys(coverage).sort().forEach(taskId => {
+        const taskFiles = coverage[taskId];
+        if (!taskFiles || typeof taskFiles !== 'object') return;
+        const files = Object.keys(taskFiles).sort();
+        if (!files.length) return;
+        rendered++;
+        const panel = document.createElement('div');
+        panel.className = 'panel trace-task-block';
+        const title = document.createElement('div');
+        title.className = 'trace-task-title';
+        title.textContent = taskId + ' · File Coverage' + (minCov > 0 ? ' · min ' + minCov + '%' : ' · gate disabled');
+        panel.appendChild(title);
+        const table = document.createElement('table');
+        table.style.borderCollapse = 'collapse';
+        const tbody = document.createElement('tbody');
+        files.forEach(file => {
+          const pct = taskFiles[file];
+          const tr = document.createElement('tr');
+          const tdFile = document.createElement('td');
+          tdFile.className = 'trace-td trace-td-label';
+          tdFile.textContent = file;
+          tr.appendChild(tdFile);
+          const tdPct = document.createElement('td');
+          tdPct.className = 'trace-td';
+          const color = (minCov > 0 && pct < minCov) ? 'var(--accent)' : 'var(--ok)';
+          tdPct.innerHTML = '<span style="font-family:var(--display);font-weight:700;color:' + color + ';">' + pct + '%</span>';
+          tr.appendChild(tdPct);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const wrap = document.createElement('div');
+        wrap.className = 'trace-table-wrap';
+        wrap.appendChild(table);
+        panel.appendChild(wrap);
+        ct.appendChild(panel);
       });
-      table.appendChild(tbody);
-      const wrap = document.createElement('div');
-      wrap.className = 'trace-table-wrap';
-      wrap.appendChild(table);
-      panel.appendChild(wrap);
-      ct.appendChild(panel);
+      if (!rendered) {
+        ct.innerHTML = '<div class="panel"><div class="empty">No coverage measured yet. Coverage is recorded by the TDD green-phase verifier when min coverage is enabled.</div></div>';
+      }
     }
 
     function gwtRow(label, value) {

@@ -59,6 +59,40 @@ func TestOpenCodeAdapter_Sync_WritesAgentsMd_WithMarkers(t *testing.T) {
 	}
 }
 
+func TestOpenCodeAdapter_Sync_ParallelWorktreeProtocol(t *testing.T) {
+	tmp := t.TempDir()
+	if err := (OpenCodeAdapter{}).Sync(newOpenCodeCtx(tmp)); err != nil {
+		t.Fatalf("Sync returned error: %v", err)
+	}
+	data, err := os.ReadFile(paths.AgentsMd(tmp))
+	if err != nil {
+		t.Fatalf("AGENTS.md unreadable: %v", err)
+	}
+	content := string(data)
+
+	checks := []struct {
+		name    string
+		snippet string
+	}{
+		{"parallel spawn instruction", "in the SAME message so they run in parallel"},
+		{"worktree protocol section", "### Parallel execution (worktree protocol)"},
+		{"worktree add command", "git worktree add <worktree.path> -b <worktree.branch>"},
+		{"merge-then-submit rule", "MERGE-THEN-SUBMIT (binding)"},
+		{"no-git fallback", "git rev-parse --is-inside-work-tree"},
+		{"git worktree exception", "NARROW EXCEPTION — worktree lifecycle only"},
+		{"tasks array contract", "\"taskId\": \"task-1\""},
+	}
+	for _, c := range checks {
+		if !strings.Contains(content, c.snippet) {
+			t.Errorf("AGENTS.md missing %s: %q", c.name, c.snippet)
+		}
+	}
+
+	if strings.Contains(content, "does not support parallel sub-agent spawning") {
+		t.Error("AGENTS.md must not contain the sequential fallback sentence")
+	}
+}
+
 func TestOpenCodeAdapter_Sync_WritesAllAgentFiles_Frontmatter(t *testing.T) {
 	tmp := t.TempDir()
 	if err := (OpenCodeAdapter{}).Sync(newOpenCodeCtx(tmp)); err != nil {

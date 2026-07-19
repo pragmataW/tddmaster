@@ -167,12 +167,11 @@ func TestProgress_EmptyTasksSerializesAsArray(t *testing.T) {
 	}
 }
 
-func TestProgress_NilExecution_OmittedFromJSON(t *testing.T) {
+func TestTask_NilExec_OmittedFromJSON(t *testing.T) {
 	p := Progress{
-		Spec:      "s",
-		Status:    "draft",
-		Tasks:     []Task{},
-		Execution: nil,
+		Spec:   "s",
+		Status: "draft",
+		Tasks:  []Task{{ID: "task-1", Title: "t", Exec: nil}},
 	}
 
 	data, err := json.Marshal(p)
@@ -181,15 +180,13 @@ func TestProgress_NilExecution_OmittedFromJSON(t *testing.T) {
 	}
 
 	raw := string(data)
-	if strings.Contains(raw, `"execution"`) {
-		t.Errorf("expected no execution key in JSON when Execution is nil, got: %s", raw)
+	if strings.Contains(raw, `"exec"`) {
+		t.Errorf("expected no exec key in JSON when Exec is nil, got: %s", raw)
 	}
 }
 
-func TestExecState_OnlyIteration_OmitsOptionalFields(t *testing.T) {
-	e := ExecState{
-		Iteration: 5,
-	}
+func TestExecState_ZeroValue_OmitsOptionalFields(t *testing.T) {
+	e := ExecState{}
 
 	data, err := json.Marshal(e)
 	if err != nil {
@@ -197,10 +194,7 @@ func TestExecState_OnlyIteration_OmitsOptionalFields(t *testing.T) {
 	}
 
 	raw := string(data)
-	if !strings.Contains(raw, `"iteration"`) {
-		t.Errorf("expected iteration key in JSON, got: %s", raw)
-	}
-	for _, key := range []string{`"tddCycle"`, `"refactorRounds"`, `"refactorApplied"`, `"approvedPlans"`, `"planAttempts"`, `"planFeedback"`} {
+	for _, key := range []string{`"tddCycle"`, `"refactorRounds"`, `"refactorApplied"`, `"planApproved"`, `"planAttempts"`, `"planFeedback"`, `"plan"`, `"worktree"`} {
 		if strings.Contains(raw, key) {
 			t.Errorf("expected key %s to be omitted when zero, got: %s", key, raw)
 		}
@@ -253,13 +247,11 @@ func TestTaskPlan_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestExecState_TaskPlans_RoundTrip(t *testing.T) {
+func TestExecState_Plan_RoundTrip(t *testing.T) {
 	original := ExecState{
-		TaskPlans: map[string]TaskPlan{
-			"task-1": {
-				TaskID:       "task-1",
-				TouchedFiles: []string{"a.go"},
-			},
+		Plan: &TaskPlan{
+			TaskID:       "task-1",
+			TouchedFiles: []string{"a.go"},
 		},
 	}
 	data, err := json.Marshal(original)
@@ -267,22 +259,21 @@ func TestExecState_TaskPlans_RoundTrip(t *testing.T) {
 		t.Fatalf("marshal error: %v", err)
 	}
 	raw := string(data)
-	if !strings.Contains(raw, `"taskPlans"`) {
-		t.Errorf("JSON missing taskPlans key in: %s", raw)
+	if !strings.Contains(raw, `"plan"`) {
+		t.Errorf("JSON missing plan key in: %s", raw)
 	}
 	var got ExecState
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal error: %v", err)
 	}
-	plan, ok := got.TaskPlans["task-1"]
-	if !ok {
-		t.Fatalf("task-1 not found in TaskPlans after round-trip")
+	if got.Plan == nil {
+		t.Fatalf("Plan nil after round-trip")
 	}
-	if plan.TaskID != "task-1" {
-		t.Errorf("TaskID = %q, want task-1", plan.TaskID)
+	if got.Plan.TaskID != "task-1" {
+		t.Errorf("TaskID = %q, want task-1", got.Plan.TaskID)
 	}
-	if len(plan.TouchedFiles) != 1 || plan.TouchedFiles[0] != "a.go" {
-		t.Errorf("TouchedFiles = %v, want [a.go]", plan.TouchedFiles)
+	if len(got.Plan.TouchedFiles) != 1 || got.Plan.TouchedFiles[0] != "a.go" {
+		t.Errorf("TouchedFiles = %v, want [a.go]", got.Plan.TouchedFiles)
 	}
 }
 
@@ -316,9 +307,9 @@ func TestExecState_LastFailedACs_LastUncoveredEC(t *testing.T) {
 
 func TestTask_EdgeCases_RoundTrip(t *testing.T) {
 	original := Task{
-		ID:         "t1",
-		Title:      "some task",
-		EdgeCases:  []string{"ec1", "ec2"},
+		ID:        "t1",
+		Title:     "some task",
+		EdgeCases: []string{"ec1", "ec2"},
 	}
 	data, err := json.Marshal(original)
 	if err != nil {
@@ -563,7 +554,6 @@ func TestAssignCriterionIDs_RefineCollision(t *testing.T) {
 	}
 }
 
-
 func TestTraceEntry_JSONTags(t *testing.T) {
 	entry := TraceEntry{
 		FunctionName: "TestFoo_Bar",
@@ -624,8 +614,8 @@ func TestTraceability_IsStruct(t *testing.T) {
 				{FunctionName: "TestAlpha", TaskID: "task-1", CriterionIDs: []string{"ac-1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]float64{
-			"internal/spec/model.go": 80,
+		Coverage: map[string]map[string]float64{
+			"task-1": {"internal/spec/model.go": 80},
 		},
 	}
 
@@ -648,8 +638,8 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 				{FunctionName: "TestGamma", TaskID: "task-2", CriterionIDs: []string{"ac-1"}, EC: []string{"EC-2"}},
 			},
 		},
-		Coverage: map[string]float64{
-			"internal/spec/model.go": 90,
+		Coverage: map[string]map[string]float64{
+			"task-1": {"internal/spec/model.go": 90},
 		},
 	}
 
@@ -702,7 +692,7 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 			t.Errorf("Coverage missing key %q", k)
 			continue
 		}
-		if gotV != v {
+		if !reflect.DeepEqual(gotV, v) {
 			t.Errorf("Coverage[%q]: got %v, want %v", k, gotV, v)
 		}
 	}
@@ -711,7 +701,7 @@ func TestTraceability_JSONRoundTrip(t *testing.T) {
 func TestTraceability_JSONTags(t *testing.T) {
 	tr := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]float64{"src/main.go": 50},
+		Coverage: map[string]map[string]float64{"task-1": {"src/main.go": 50}},
 	}
 
 	data, err := json.Marshal(tr)
@@ -748,7 +738,7 @@ func TestTraceability_CoverageOmittedWhenEmpty(t *testing.T) {
 func TestTraceability_EmptyEntries(t *testing.T) {
 	tr := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]float64{},
+		Coverage: map[string]map[string]float64{},
 	}
 
 	data, err := json.Marshal(tr)
@@ -818,7 +808,6 @@ func TestTraceEntry_CriterionIDs_RoundTrip(t *testing.T) {
 		t.Errorf("EC: got %v, want %v", got.EC, original.EC)
 	}
 }
-
 
 func TestDefaultSettings_MinTestCoverage(t *testing.T) {
 	got := DefaultSettings()
@@ -912,7 +901,6 @@ func TestSettings_ClampCoverage(t *testing.T) {
 
 func TestExecState_LastModifiedFiles_JSONRoundTrip(t *testing.T) {
 	es := ExecState{
-		Iteration:         1,
 		LastModifiedFiles: []string{"a.go", "b.go"},
 	}
 	data, err := json.Marshal(es)
@@ -933,7 +921,6 @@ func TestExecState_LastModifiedFiles_JSONRoundTrip(t *testing.T) {
 
 func TestExecState_LastCoverage_JSONRoundTrip(t *testing.T) {
 	es := ExecState{
-		Iteration:    1,
 		LastCoverage: map[string]float64{"task-1": 92, "task-2": 85},
 	}
 
@@ -957,7 +944,7 @@ func TestExecState_LastCoverage_JSONRoundTrip(t *testing.T) {
 }
 
 func TestExecState_LastCoverage_OmitEmptyWhenNil(t *testing.T) {
-	es := ExecState{Iteration: 1}
+	es := ExecState{TDDCycle: "red"}
 
 	data, err := json.Marshal(es)
 	if err != nil {

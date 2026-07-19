@@ -265,7 +265,6 @@ func TestRefinementDriver_Next_InstructionContainsTaskTitle(t *testing.T) {
 	}
 }
 
-
 func TestRefinementPrompt_ExampleIsApproveFlag(t *testing.T) {
 	root := t.TempDir()
 	slug := "ref-example-approve"
@@ -451,5 +450,115 @@ func TestRefinementDriver_EmptyTasks_SubmitApproveWorks(t *testing.T) {
 	}
 	if state.Phase == "refinement" {
 		t.Error("phase still 'refinement' after approve on empty-task spec, want phase advanced")
+	}
+}
+
+func TestRenderTaskList_DependsOn_AppendsSuffix(t *testing.T) {
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}}},
+		{ID: "task-3", Title: "Gamma", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac3"}}, DependsOn: []string{"task-1", "task-2"}},
+	}
+	out := RenderTaskList(tasks)
+	if !strings.Contains(out, "- task-3: Gamma (depends on: task-1, task-2)") {
+		t.Errorf("output missing depends-on suffix; got: %s", out)
+	}
+}
+
+func TestRenderTaskList_NoDependsOn_NoSuffix(t *testing.T) {
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}},
+	}
+	out := RenderTaskList(tasks)
+	if strings.Contains(out, "depends on") {
+		t.Errorf("output should not contain depends-on suffix for independent task; got: %s", out)
+	}
+}
+
+func TestRenderTaskList_DependsOn_AfterTags(t *testing.T) {
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}}, TDDEnabled: true, Important: true, DependsOn: []string{"task-1"}},
+	}
+	out := RenderTaskList(tasks)
+	if !strings.Contains(out, "- task-2: Beta (TDD) (important) (depends on: task-1)") {
+		t.Errorf("output missing full tag ordering with depends-on last; got: %s", out)
+	}
+}
+
+func TestRefinementDriver_SubmitApprove_InvalidDAG_ReturnsError(t *testing.T) {
+	root := t.TempDir()
+	slug := "ref-approve-bad-dag"
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, DependsOn: []string{"task-9"}},
+	}
+	seedRefinementSpec(t, root, slug, tasks)
+	ctx := buildRefinementCtx(t, root, slug)
+
+	if _, err := ctx.Next(); err != nil {
+		t.Fatalf("Next(): %v", err)
+	}
+	_, err := ctx.Submit([]byte("approve"))
+	if err == nil {
+		t.Fatal("Submit(approve) = nil error, want DAG validation error for unknown dependency")
+	}
+	if !strings.Contains(err.Error(), "task-9") {
+		t.Errorf("error %q missing invalid dependency id task-9", err.Error())
+	}
+
+	state, loadErr := spec.LoadState(root, slug)
+	if loadErr != nil {
+		t.Fatalf("LoadState: %v", loadErr)
+	}
+	if state.Phase != "refinement" {
+		t.Errorf("phase = %q, want 'refinement' — approve must not advance on invalid DAG", state.Phase)
+	}
+}
+
+func TestRefinementDriver_SubmitApprove_CycleDAG_ReturnsError(t *testing.T) {
+	root := t.TempDir()
+	slug := "ref-approve-cycle"
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}, DependsOn: []string{"task-2"}},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}}, DependsOn: []string{"task-1"}},
+	}
+	seedRefinementSpec(t, root, slug, tasks)
+	ctx := buildRefinementCtx(t, root, slug)
+
+	if _, err := ctx.Next(); err != nil {
+		t.Fatalf("Next(): %v", err)
+	}
+	_, err := ctx.Submit([]byte("approve"))
+	if err == nil {
+		t.Fatal("Submit(approve) = nil error, want DAG validation error for cycle")
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("error %q missing 'cycle'", err.Error())
+	}
+}
+
+func TestRefinementDriver_SubmitApprove_ValidDAG_Advances(t *testing.T) {
+	root := t.TempDir()
+	slug := "ref-approve-good-dag"
+	tasks := []spec.Task{
+		{ID: "task-1", Title: "Alpha", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac1"}}},
+		{ID: "task-2", Title: "Beta", Criteria: []spec.Criterion{{ID: "ac-1", Then: "ac2"}}, DependsOn: []string{"task-1"}},
+	}
+	seedRefinementSpec(t, root, slug, tasks)
+	ctx := buildRefinementCtx(t, root, slug)
+
+	if _, err := ctx.Next(); err != nil {
+		t.Fatalf("Next(): %v", err)
+	}
+	if _, err := ctx.Submit([]byte("approve")); err != nil {
+		t.Fatalf("Submit approve with valid DAG: %v", err)
+	}
+
+	state, loadErr := spec.LoadState(root, slug)
+	if loadErr != nil {
+		t.Fatalf("LoadState: %v", loadErr)
+	}
+	if state.Phase == "refinement" {
+		t.Error("phase still 'refinement' after approve with valid DAG, want phase advanced")
 	}
 }

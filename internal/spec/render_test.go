@@ -83,11 +83,13 @@ func TestRenderSpecMd_GoldenFullSpec(t *testing.T) {
 		"- Empty payload must return 400\n\n" +
 		"## Tasks\n" +
 		"- [ ] task-1: Bootstrap (TDD) (important)\n" +
+		"  - No dependencies\n" +
 		"- **ac-1**\n" +
 		"  - THEN ac line one\n" +
 		"- **ac-2**\n" +
 		"  - THEN ac line two\n" +
-		"- [x] task-2: Other title\n\n" +
+		"- [x] task-2: Other title\n" +
+		"  - No dependencies\n\n" +
 		"## Verification\n" +
 		"Run integration tests.\n"
 
@@ -111,7 +113,6 @@ func TestRenderSpecMd_SlugInHeader(t *testing.T) {
 		t.Errorf("expected header '# Spec: custom-slug', got first line: %q", strings.SplitN(got, "\n", 2)[0])
 	}
 }
-
 
 func TestRenderSpecMd_HiddenKeysOmitted(t *testing.T) {
 	st := State{
@@ -366,9 +367,9 @@ func TestRenderSpecMd_DiscoveryAnswersSortedLexicographic(t *testing.T) {
 		Slug:    "s",
 		Phase:   PhaseInitial,
 		Answers: map[string][]Answer{
-			"zebra":   {{Key: "zebra", Value: "last"}},
-			"apple":   {{Key: "apple", Value: "first"}},
-			"mango":   {{Key: "mango", Value: "middle"}},
+			"zebra": {{Key: "zebra", Value: "last"}},
+			"apple": {{Key: "apple", Value: "first"}},
+			"mango": {{Key: "mango", Value: "middle"}},
 		},
 	}
 	pr := Progress{Spec: "s", Status: StatusDraft, Tasks: []Task{}}
@@ -744,5 +745,115 @@ func TestSaveSpecMd_OverwritesExistingFile(t *testing.T) {
 
 	if string(data) != "updated content" {
 		t.Errorf("expected overwritten content, got: %q", string(data))
+	}
+}
+
+func TestRenderSpecMd_TaskWithDependsOn_ShowsDependsOnLine(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "A"},
+			{ID: "task-2", Title: "B"},
+			{ID: "task-3", Title: "C", DependsOn: []string{"task-1", "task-2"}},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	if !strings.Contains(got, "  - Depends on: task-1, task-2\n") {
+		t.Errorf("expected 'Depends on: task-1, task-2' line, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_TaskWithoutDependsOn_ShowsNoDependenciesLine(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "A"},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	if !strings.Contains(got, "  - No dependencies\n") {
+		t.Errorf("expected 'No dependencies' line, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_DependsOnLine_BeforeCriteria(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "A"},
+			{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}, Criteria: []Criterion{{ID: "ac-1", Then: "outcome"}}},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	depIdx := strings.Index(got, "  - Depends on: task-1")
+	acIdx := strings.Index(got, "- **ac-1**")
+	if depIdx == -1 || acIdx == -1 {
+		t.Fatalf("expected both depends-on line and criterion block, got:\n%s", got)
+	}
+	if depIdx >= acIdx {
+		t.Errorf("depends-on line must come before criterion lines, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_BlockedTaskWithReason_TitleSuffix(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "T", Blocked: true, BlockedReason: "merge-conflict: a.go"},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	if !strings.Contains(got, "- [ ] task-1: T (blocked: merge-conflict: a.go)\n") {
+		t.Errorf("expected '(blocked: <reason>)' suffix on task line, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_BlockedTaskWithoutReason_TitleSuffix(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "T", Blocked: true},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	if !strings.Contains(got, "- [ ] task-1: T (blocked)\n") {
+		t.Errorf("expected '(blocked)' suffix on task line, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_NotBlockedTask_NoBlockedSuffix(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Phase: PhaseInitial, Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks: []Task{
+			{ID: "task-1", Title: "T"},
+		},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+
+	if strings.Contains(got, "(blocked") {
+		t.Errorf("expected no blocked suffix for unblocked task, got:\n%s", got)
 	}
 }

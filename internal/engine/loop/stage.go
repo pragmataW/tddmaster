@@ -43,25 +43,38 @@ type TraceReportEntry struct {
 type RefactorNote = spec.RefactorNote
 
 type StageReport struct {
-	Passed             bool           `json:"passed"`
-	Phase              string         `json:"phase"`
-	FailedACs          []string       `json:"failedACs"`
-	RefactorNotes      []RefactorNote `json:"refactorNotes,omitempty"`
-	UncoveredEdgeCases []string       `json:"uncoveredEdgeCases"`
-	Completed          []string       `json:"completed"`
-	Blocked            []string       `json:"blocked"`
-	FilesModified      []string       `json:"filesModified"`
-	RefactorApplied    bool           `json:"refactorApplied"`
-	Plan               *spec.TaskPlan `json:"plan,omitempty"`
-	Accepted           bool           `json:"accepted"`
-	PlanFeedback       string         `json:"planFeedback"`
-	TestsWritten       []string           `json:"testsWritten"`
-	Traceability       []TraceReportEntry `json:"traceability"`
+	TaskID             string              `json:"taskId,omitempty"`
+	Passed             bool                `json:"passed"`
+	Phase              string              `json:"phase"`
+	FailedACs          []string            `json:"failedACs"`
+	RefactorNotes      []RefactorNote      `json:"refactorNotes,omitempty"`
+	UncoveredEdgeCases []string            `json:"uncoveredEdgeCases"`
+	Completed          []string            `json:"completed"`
+	Blocked            []string            `json:"blocked"`
+	FilesModified      []string            `json:"filesModified"`
+	RefactorApplied    bool                `json:"refactorApplied"`
+	Plan               *spec.TaskPlan      `json:"plan,omitempty"`
+	Accepted           bool                `json:"accepted"`
+	PlanFeedback       string              `json:"planFeedback"`
+	TestsWritten       []string            `json:"testsWritten"`
+	Traceability       []TraceReportEntry  `json:"traceability"`
 	FileCoverage       []FileCoverageEntry `json:"fileCoverage,omitempty"`
 }
 
 func (r StageReport) RefactorNotesPresent() bool {
 	return len(r.RefactorNotes) > 0
+}
+
+func (r StageReport) HasStageResult() bool {
+	return r.Passed || r.Phase != "" || r.RefactorApplied || r.Accepted ||
+		r.Plan != nil || r.PlanFeedback != "" ||
+		len(r.Completed) > 0 || len(r.FailedACs) > 0 || len(r.UncoveredEdgeCases) > 0 ||
+		len(r.TestsWritten) > 0 || len(r.Traceability) > 0 || len(r.FileCoverage) > 0 ||
+		len(r.FilesModified) > 0 || len(r.RefactorNotes) > 0
+}
+
+func (r StageReport) HasGateAnswer() bool {
+	return r.Accepted || r.Plan != nil || r.PlanFeedback != ""
 }
 
 func (r StageReport) EffectivePassed() bool {

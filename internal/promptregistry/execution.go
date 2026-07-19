@@ -56,7 +56,7 @@ const ReportExampleRefactorApplySkip = `{"passed":true,"completed":["task-1"],"r
 
 const ReportExampleVerifier = `{"passed":true,"phase":"green","failedACs":[],"uncoveredEdgeCases":[],"refactorNotes":[{"file":"internal/foo/bar.go","suggestion":"extract validation","rationale":"reused in two places"}],"fileCoverage":[{"file":"internal/foo/bar.go","coverage":85}]}`
 
-const ReportExamplePlanner = `{"plan":{"taskId":"","touchedFiles":["internal/foo/bar.go","internal/foo/bar_test.go"],"approach":"Implement X by extending Y with Z pattern","assumptions":["existing tests cover happy path"],"designPatterns":["strategy"],"bestPractices":["single responsibility"]}}`
+const ReportExamplePlanner = `{"accepted":true,"plan":{"taskId":"","touchedFiles":["internal/foo/bar.go","internal/foo/bar_test.go"],"approach":"Implement X by extending Y with Z pattern","assumptions":["existing tests cover happy path"],"designPatterns":["strategy"],"bestPractices":["single responsibility"]}}`
 
 const ReportExampleTestWriter = `{"testsWritten":["TestFoo_HappyPath","TestFoo_EdgeCase"],"filesModified":["internal/foo/bar_test.go"],"traceability":[{"testFilePath":"internal/foo/bar_test.go","functionName":"TestFoo_HappyPath","taskId":"task-1","ac":["AC-1"],"ec":["EC-1"]}]}`
 

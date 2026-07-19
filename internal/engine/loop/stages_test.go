@@ -36,18 +36,13 @@ func makeExecCtx(settings spec.Settings, task spec.Task, st spec.ExecState, task
 	}
 }
 
-func isPlanApproved(st spec.ExecState, taskID string) bool {
-	for _, id := range st.ApprovedPlans {
-		if id == taskID {
-			return true
-		}
-	}
-	return false
+func isPlanApproved(st spec.ExecState) bool {
+	return st.PlanApproved
 }
 
-func stateWithApprovedPlan(taskID string) spec.ExecState {
+func stateWithApprovedPlan() spec.ExecState {
 	return spec.ExecState{
-		ApprovedPlans: []string{taskID},
+		PlanApproved: true,
 	}
 }
 
@@ -121,7 +116,7 @@ func TestGateStage_NotApplies_WhenTaskNotImportant(t *testing.T) {
 func TestGateStage_NotApplies_WhenPlanAlreadyApproved(t *testing.T) {
 	settings := makeSettings(false, false, true)
 	task := makeImportantTask("t-1", false)
-	st := stateWithApprovedPlan("t-1")
+	st := stateWithApprovedPlan()
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
 	if gateStage().Applies(ctx) {
@@ -814,11 +809,9 @@ func TestGreenStage_Prompt_WithApprovedPlan(t *testing.T) {
 	settings := makeSettings(true, false, false)
 	task := makeTaskWithACAndEC("task-1", true)
 	st := makeExecState("green")
-	st.TaskPlans = map[string]spec.TaskPlan{
-		"task-1": {
-			Approach:     "yaklasim X",
-			TouchedFiles: []string{"a.go", "b.go"},
-		},
+	st.Plan = &spec.TaskPlan{
+		Approach:     "yaklasim X",
+		TouchedFiles: []string{"a.go", "b.go"},
 	}
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
@@ -953,11 +946,9 @@ func TestExecutorStage_Prompt_WithApprovedPlan(t *testing.T) {
 	settings := makeSettings(false, false, false)
 	task := makeTaskWithACAndEC("task-1", false)
 	st := makeExecState("")
-	st.TaskPlans = map[string]spec.TaskPlan{
-		"task-1": {
-			Approach:     "yaklasim X",
-			TouchedFiles: []string{"a.go", "b.go"},
-		},
+	st.Plan = &spec.TaskPlan{
+		Approach:     "yaklasim X",
+		TouchedFiles: []string{"a.go", "b.go"},
 	}
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
@@ -1028,12 +1019,8 @@ func TestGateStage_Prompt_WithPriorFeedback(t *testing.T) {
 	settings := makeSettings(false, false, true)
 	task := makeImportantTask("task-1", false)
 	st := makeExecState("")
-	st.PlanFeedback = map[string]string{
-		"task-1": "dosya disina cikma",
-	}
-	st.PlanAttempts = map[string]int{
-		"task-1": 2,
-	}
+	st.PlanFeedback = "dosya disina cikma"
+	st.PlanAttempts = 2
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
 	action := gateStage().Prompt(ctx)
@@ -1062,9 +1049,9 @@ func TestGateOnReport_Accept_PersistsPlanAndApproves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	stored, ok := newCtx.State.TaskPlans["task-1"]
-	if !ok {
-		t.Fatal("TaskPlans missing 'task-1'")
+	stored := newCtx.State.Plan
+	if stored == nil {
+		t.Fatal("Plan is nil after accept")
 	}
 	if stored.Approach != "x" {
 		t.Errorf("TaskPlan.Approach: got %q, want %q", stored.Approach, "x")
@@ -1078,8 +1065,8 @@ func TestGateOnReport_Accept_PersistsPlanAndApproves(t *testing.T) {
 	if !found {
 		t.Error("TaskPlan.TouchedFiles missing 'a.go'")
 	}
-	if !isPlanApproved(newCtx.State, "task-1") {
-		t.Error("ApprovedPlans missing 'task-1'")
+	if !isPlanApproved(newCtx.State) {
+		t.Error("PlanApproved must be true after accept")
 	}
 }
 
@@ -1094,14 +1081,14 @@ func TestGateOnReport_Revise_WritesFeedbackAndIncrementsAttempts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if newCtx.State.PlanFeedback["task-1"] != "dosya disina cikma" {
-		t.Errorf("PlanFeedback['task-1']: got %q, want 'dosya disina cikma'", newCtx.State.PlanFeedback["task-1"])
+	if newCtx.State.PlanFeedback != "dosya disina cikma" {
+		t.Errorf("PlanFeedback: got %q, want 'dosya disina cikma'", newCtx.State.PlanFeedback)
 	}
-	if newCtx.State.PlanAttempts["task-1"] != 1 {
-		t.Errorf("PlanAttempts['task-1']: got %d, want 1", newCtx.State.PlanAttempts["task-1"])
+	if newCtx.State.PlanAttempts != 1 {
+		t.Errorf("PlanAttempts: got %d, want 1", newCtx.State.PlanAttempts)
 	}
-	if isPlanApproved(newCtx.State, "task-1") {
-		t.Error("ApprovedPlans must not contain 'task-1' after revise")
+	if isPlanApproved(newCtx.State) {
+		t.Error("PlanApproved must be false after revise")
 	}
 }
 
@@ -1122,18 +1109,18 @@ func TestGateOnReport_ReviseTwice_AttemptsIncrementTo2(t *testing.T) {
 		t.Fatalf("second revise error: %v", err)
 	}
 
-	if ctx.State.PlanAttempts["task-1"] != 2 {
-		t.Errorf("PlanAttempts['task-1']: got %d, want 2", ctx.State.PlanAttempts["task-1"])
+	if ctx.State.PlanAttempts != 2 {
+		t.Errorf("PlanAttempts: got %d, want 2", ctx.State.PlanAttempts)
 	}
-	if ctx.State.PlanFeedback["task-1"] != "ikinci feedback" {
-		t.Errorf("PlanFeedback['task-1']: got %q, want 'ikinci feedback'", ctx.State.PlanFeedback["task-1"])
+	if ctx.State.PlanFeedback != "ikinci feedback" {
+		t.Errorf("PlanFeedback: got %q, want 'ikinci feedback'", ctx.State.PlanFeedback)
 	}
 }
 
-func TestGateOnReport_Accept_Idempotent_NoDuplicateApproved(t *testing.T) {
+func TestGateOnReport_Accept_Idempotent_StaysApproved(t *testing.T) {
 	settings := makeSettings(false, false, true)
 	task := makeImportantTask("task-1", false)
-	st := stateWithApprovedPlan("task-1")
+	st := stateWithApprovedPlan()
 	ctx := makeExecCtx(settings, task, st, 0, 3)
 
 	plan := &spec.TaskPlan{TaskID: "task-1", Approach: "y"}
@@ -1143,48 +1130,45 @@ func TestGateOnReport_Accept_Idempotent_NoDuplicateApproved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	count := 0
-	for _, id := range newCtx.State.ApprovedPlans {
-		if id == "task-1" {
-			count++
-		}
+	if !newCtx.State.PlanApproved {
+		t.Error("PlanApproved must stay true after re-accept")
 	}
-	if count != 1 {
-		t.Errorf("ApprovedPlans contains 'task-1' %d times, want exactly 1", count)
+	if newCtx.State.Plan == nil || newCtx.State.Plan.Approach != "y" {
+		t.Errorf("Plan must be replaced by the latest accepted plan, got %+v", newCtx.State.Plan)
 	}
 }
 
-func TestGateOnReport_NilMaps_InitializedSafely(t *testing.T) {
+func TestGateOnReport_ZeroState_HandledSafely(t *testing.T) {
 	settings := makeSettings(false, false, true)
 	task := makeImportantTask("task-1", false)
 
-	nilSt := spec.ExecState{}
-	ctxAccept := makeExecCtx(settings, task, nilSt, 0, 3)
+	zeroSt := spec.ExecState{}
+	ctxAccept := makeExecCtx(settings, task, zeroSt, 0, 3)
 	plan := &spec.TaskPlan{TaskID: "task-1", Approach: "z"}
 	reportAccept := StageReport{Accepted: true, Plan: plan}
 	newCtx, err := gateStage().OnReport(ctxAccept, reportAccept)
 	if err != nil {
-		t.Fatalf("accept on nil maps: unexpected error: %v", err)
+		t.Fatalf("accept on zero state: unexpected error: %v", err)
 	}
-	if newCtx.State.TaskPlans == nil {
-		t.Error("TaskPlans must be initialized after accept")
+	if newCtx.State.Plan == nil {
+		t.Error("Plan must be set after accept")
 	}
-	if !isPlanApproved(newCtx.State, "task-1") {
-		t.Error("ApprovedPlans must contain 'task-1' after accept with nil maps")
+	if !isPlanApproved(newCtx.State) {
+		t.Error("PlanApproved must be true after accept on zero state")
 	}
 
-	nilSt2 := spec.ExecState{}
-	ctxRevise := makeExecCtx(settings, task, nilSt2, 0, 3)
+	zeroSt2 := spec.ExecState{}
+	ctxRevise := makeExecCtx(settings, task, zeroSt2, 0, 3)
 	reportRevise := StageReport{Accepted: false, PlanFeedback: "feedback"}
 	newCtx2, err := gateStage().OnReport(ctxRevise, reportRevise)
 	if err != nil {
-		t.Fatalf("revise on nil maps: unexpected error: %v", err)
+		t.Fatalf("revise on zero state: unexpected error: %v", err)
 	}
-	if newCtx2.State.PlanFeedback == nil {
-		t.Error("PlanFeedback must be initialized after revise")
+	if newCtx2.State.PlanFeedback != "feedback" {
+		t.Errorf("PlanFeedback: got %q, want 'feedback'", newCtx2.State.PlanFeedback)
 	}
-	if newCtx2.State.PlanAttempts == nil {
-		t.Error("PlanAttempts must be initialized after revise")
+	if newCtx2.State.PlanAttempts != 1 {
+		t.Errorf("PlanAttempts: got %d, want 1", newCtx2.State.PlanAttempts)
 	}
 }
 
@@ -1299,17 +1283,63 @@ func TestGateApplies_AfterRevise_StillFires(t *testing.T) {
 	task := makeImportantTask("task-1", false)
 
 	stRevised := spec.ExecState{
-		PlanFeedback: map[string]string{"task-1": "feedback"},
-		PlanAttempts: map[string]int{"task-1": 1},
+		PlanFeedback: "feedback",
+		PlanAttempts: 1,
 	}
 	ctxRevised := makeExecCtx(settings, task, stRevised, 0, 3)
 	if !gateStage().Applies(ctxRevised) {
-		t.Error("gate Applies: got false after revise, want true (task not in ApprovedPlans)")
+		t.Error("gate Applies: got false after revise, want true (plan not approved)")
 	}
 
-	stApproved := stateWithApprovedPlan("task-1")
+	stApproved := stateWithApprovedPlan()
 	ctxApproved := makeExecCtx(settings, task, stApproved, 0, 3)
 	if gateStage().Applies(ctxApproved) {
-		t.Error("gate Applies: got true after accept, want false (task in ApprovedPlans)")
+		t.Error("gate Applies: got true after accept, want false (plan approved)")
+	}
+}
+
+func TestGateOnReport_AcceptWithoutPlan_ReturnsError(t *testing.T) {
+	settings := makeSettings(false, false, true)
+	task := makeImportantTask("task-1", false)
+	ctx := makeExecCtx(settings, task, spec.ExecState{}, 0, 3)
+
+	_, err := gateStage().OnReport(ctx, StageReport{Accepted: true})
+	if err == nil {
+		t.Fatal("expected error for accepted gate answer without plan")
+	}
+	if !strings.Contains(err.Error(), "plan") {
+		t.Fatalf("expected plan-missing error, got %q", err.Error())
+	}
+}
+
+func TestGateOnReport_RejectWithoutFeedback_ReturnsError(t *testing.T) {
+	settings := makeSettings(false, false, true)
+	task := makeImportantTask("task-1", false)
+	ctx := makeExecCtx(settings, task, spec.ExecState{}, 0, 3)
+
+	_, err := gateStage().OnReport(ctx, StageReport{Accepted: false})
+	if err == nil {
+		t.Fatal("expected error for rejected gate answer without feedback")
+	}
+	if !strings.Contains(err.Error(), "planFeedback") {
+		t.Fatalf("expected empty-feedback error, got %q", err.Error())
+	}
+}
+
+func TestGateOnReport_PlanWithoutAcceptedFlag_Approves(t *testing.T) {
+	settings := makeSettings(false, false, true)
+	task := makeImportantTask("task-1", false)
+	ctx := makeExecCtx(settings, task, spec.ExecState{}, 0, 3)
+
+	plan := &spec.TaskPlan{TaskID: "task-1", Approach: "do X", TouchedFiles: []string{"a.go"}}
+	newCtx, err := gateStage().OnReport(ctx, StageReport{Plan: plan})
+	if err != nil {
+		t.Fatalf("OnReport: %v", err)
+	}
+	if !newCtx.State.PlanApproved {
+		t.Fatal("a gate answer carrying a plan without feedback must approve the plan")
+	}
+	if newCtx.State.Plan == nil || newCtx.State.Plan.Approach != "do X" {
+		t.Fatalf("expected plan stored, got %+v", newCtx.State.Plan)
 	}
 }
