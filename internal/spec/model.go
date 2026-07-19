@@ -22,8 +22,8 @@ type TraceEntry struct {
 }
 
 type Traceability struct {
-	Entries  map[string][]TraceEntry `json:"entries"`
-	Coverage map[string]float64      `json:"coverage,omitempty"`
+	Entries  map[string][]TraceEntry       `json:"entries"`
+	Coverage map[string]map[string]float64 `json:"coverage,omitempty"`
 }
 
 type RefactorNote struct {
@@ -33,10 +33,10 @@ type RefactorNote struct {
 }
 
 const (
-	PhaseInitial     = "spec-settings"
-	StatusDraft      = "draft"
-	StatusExecuting  = "executing"
-	StatusCompleted  = "completed"
+	PhaseInitial    = "spec-settings"
+	StatusDraft     = "draft"
+	StatusExecuting = "executing"
+	StatusCompleted = "completed"
 )
 
 type State struct {
@@ -61,43 +61,52 @@ type Settings struct {
 	RuleLearningEnabled      bool `json:"ruleLearningEnabled"`
 }
 
+type WorktreeRef struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+}
+
 type ExecState struct {
-	Iteration       int               `json:"iteration"`
-	TDDCycle        string            `json:"tddCycle,omitempty"`
-	Implemented     bool              `json:"implemented,omitempty"`
-	RefactorRounds  int               `json:"refactorRounds,omitempty"`
-	RefactorApplied bool              `json:"refactorApplied,omitempty"`
-	ApprovedPlans   []string          `json:"approvedPlans,omitempty"`
-	PlanAttempts    map[string]int    `json:"planAttempts,omitempty"`
-	PlanFeedback    map[string]string `json:"planFeedback,omitempty"`
-	TaskPlans       map[string]TaskPlan `json:"taskPlans,omitempty"`
-	LastFailedACs     []string          `json:"lastFailedACs,omitempty"`
-	LastUncoveredEC   []string          `json:"lastUncoveredEC,omitempty"`
-	LastCoverage      map[string]float64 `json:"lastCoverage,omitempty"`
-	LastModifiedFiles []string          `json:"lastModifiedFiles,omitempty"`
-	CoverageUnreported bool             `json:"coverageUnreported,omitempty"`
-	RefactorNotes     []RefactorNote    `json:"refactorNotes,omitempty"`
+	TDDCycle           string             `json:"tddCycle,omitempty"`
+	Implemented        bool               `json:"implemented,omitempty"`
+	RefactorRounds     int                `json:"refactorRounds,omitempty"`
+	RefactorApplied    bool               `json:"refactorApplied,omitempty"`
+	PlanApproved       bool               `json:"planApproved,omitempty"`
+	PlanAttempts       int                `json:"planAttempts,omitempty"`
+	PlanFeedback       string             `json:"planFeedback,omitempty"`
+	Plan               *TaskPlan          `json:"plan,omitempty"`
+	Worktree           *WorktreeRef       `json:"worktree,omitempty"`
+	LastFailedACs      []string           `json:"lastFailedACs,omitempty"`
+	LastUncoveredEC    []string           `json:"lastUncoveredEC,omitempty"`
+	LastCoverage       map[string]float64 `json:"lastCoverage,omitempty"`
+	LastModifiedFiles  []string           `json:"lastModifiedFiles,omitempty"`
+	CoverageUnreported bool               `json:"coverageUnreported,omitempty"`
+	RefactorNotes      []RefactorNote     `json:"refactorNotes,omitempty"`
 }
 
 type Progress struct {
-	Spec      string     `json:"spec"`
-	Status    string     `json:"status"`
-	Tasks     []Task     `json:"tasks"`
-	TaskSeq   int        `json:"taskSeq,omitempty"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	Execution *ExecState `json:"execution,omitempty"`
+	Spec       string    `json:"spec"`
+	Status     string    `json:"status"`
+	Tasks      []Task    `json:"tasks"`
+	TaskSeq    int       `json:"taskSeq,omitempty"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	Iterations int       `json:"iterations,omitempty"`
 }
 
 type Task struct {
-	ID         string      `json:"id"`
-	Title      string      `json:"title"`
-	Criteria   []Criterion `json:"criteria,omitempty"`
-	Done       bool        `json:"done"`
-	TDDEnabled bool        `json:"tddEnabled"`
-	Important  bool        `json:"important"`
+	ID              string         `json:"id"`
+	Title           string         `json:"title"`
+	Criteria        []Criterion    `json:"criteria,omitempty"`
+	Done            bool           `json:"done"`
+	TDDEnabled      bool           `json:"tddEnabled"`
+	Important       bool           `json:"important"`
 	EdgeCases       []string       `json:"edgeCases,omitempty"`
 	RefactorNotes   []RefactorNote `json:"refactorNotes,omitempty"`
 	FailedACReasons []string       `json:"failedAcReasons,omitempty"`
+	DependsOn       []string       `json:"dependsOn,omitempty"`
+	Blocked         bool           `json:"blocked,omitempty"`
+	BlockedReason   string         `json:"blockedReason,omitempty"`
+	Exec            *ExecState     `json:"exec,omitempty"`
 }
 
 type TaskPlan struct {

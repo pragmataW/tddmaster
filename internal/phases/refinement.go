@@ -22,6 +22,9 @@ func RenderTaskList(tasks []spec.Task) string {
 		if task.Important {
 			line += " (important)"
 		}
+		if len(task.DependsOn) > 0 {
+			line += " (depends on: " + strings.Join(task.DependsOn, ", ") + ")"
+		}
 		lines = append(lines, line)
 		for _, c := range task.Criteria {
 			lines = append(lines, "  - ["+c.ID+"]"+spec.FormatCriterionInline(c))
@@ -54,6 +57,9 @@ func (d *refinementDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.
 func (d *refinementDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byte) (engine.Action, bool, error) {
 	t := strings.TrimSpace(string(answer))
 	if t == "approve" || t == "done" {
+		if err := spec.ValidateDAG(c.Progress().Tasks); err != nil {
+			return engine.Action{}, false, err
+		}
 		if err := c.SetAnswer("refinement_approved", "approve"); err != nil {
 			return engine.Action{}, false, err
 		}

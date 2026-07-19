@@ -236,24 +236,31 @@ func TestLoadState_MissingReturnsError(t *testing.T) {
 	}
 }
 
-func TestSaveLoadProgress_WithExecState_RoundTrip(t *testing.T) {
+func TestSaveLoadProgress_WithTaskExecState_RoundTrip(t *testing.T) {
 	root := t.TempDir()
 	slug := "exec-state-spec"
 	exec := &ExecState{
-		Iteration:       3,
 		TDDCycle:        "green",
 		RefactorRounds:  2,
 		RefactorApplied: true,
-		ApprovedPlans:   []string{"plan-a", "plan-b"},
-		PlanAttempts:    map[string]int{"task-1": 2, "task-2": 1},
-		PlanFeedback:    map[string]string{"task-1": "needs more detail"},
+		PlanApproved:    true,
+		PlanAttempts:    2,
+		PlanFeedback:    "needs more detail",
+		Plan: &TaskPlan{
+			TaskID:       "task-1",
+			TouchedFiles: []string{"a.go", "b.go"},
+		},
+		Worktree: &WorktreeRef{
+			Path:   ".tddmaster/worktrees/exec-state-spec/task-1",
+			Branch: "tddmaster/exec-state-spec/task-1",
+		},
 	}
 	original := Progress{
-		Spec:      slug,
-		Status:    "executing",
-		Tasks:     []Task{},
-		UpdatedAt: time.Now().UTC().Truncate(time.Second),
-		Execution: exec,
+		Spec:       slug,
+		Status:     "executing",
+		Tasks:      []Task{{ID: "task-1", Title: "Alpha", Exec: exec}},
+		UpdatedAt:  time.Now().UTC().Truncate(time.Second),
+		Iterations: 3,
 	}
 
 	err := SaveProgress(root, slug, original)
@@ -266,22 +273,26 @@ func TestSaveLoadProgress_WithExecState_RoundTrip(t *testing.T) {
 		t.Fatalf("LoadProgress returned error: %v", err)
 	}
 
-	if loaded.Execution == nil {
-		t.Fatal("expected Execution to be non-nil after round-trip")
+	if len(loaded.Tasks) != 1 || loaded.Tasks[0].Exec == nil {
+		t.Fatalf("expected task-1 Exec to be non-nil after round-trip, got %+v", loaded.Tasks)
 	}
-	if !reflect.DeepEqual(loaded.Execution, original.Execution) {
-		t.Errorf("Execution mismatch: got %+v, want %+v", loaded.Execution, original.Execution)
+	if !reflect.DeepEqual(loaded.Tasks[0].Exec, exec) {
+		t.Errorf("Exec mismatch: got %+v, want %+v", loaded.Tasks[0].Exec, exec)
+	}
+	if loaded.Iterations != 3 {
+		t.Errorf("Iterations = %d, want 3", loaded.Iterations)
 	}
 }
 
-func TestLoadProgress_OldFormatWithoutExecutionKey_ReturnsNilExecution(t *testing.T) {
+func TestLoadProgress_LegacyExecutionKey_SilentlyIgnored(t *testing.T) {
 	root := t.TempDir()
 	slug := "old-format-spec"
 
 	oldJSON := []byte(`{
   "spec": "old-format-spec",
   "status": "draft",
-  "tasks": [],
+  "tasks": [{"id": "task-1", "title": "Alpha", "done": false, "tddEnabled": false, "important": false}],
+  "execution": {"iteration": 3, "approvedPlans": ["plan-a"], "planAttempts": {"task-1": 2}},
   "updatedAt": "2024-01-01T00:00:00Z"
 }`)
 
@@ -297,11 +308,16 @@ func TestLoadProgress_OldFormatWithoutExecutionKey_ReturnsNilExecution(t *testin
 	if err != nil {
 		t.Fatalf("LoadProgress returned error: %v", err)
 	}
-	if loaded.Execution != nil {
-		t.Errorf("expected Execution to be nil for old-format file, got %+v", loaded.Execution)
+	if len(loaded.Tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(loaded.Tasks))
+	}
+	if loaded.Tasks[0].Exec != nil {
+		t.Errorf("expected task Exec to be nil for legacy-format file, got %+v", loaded.Tasks[0].Exec)
+	}
+	if loaded.Iterations != 0 {
+		t.Errorf("expected Iterations 0 for legacy-format file, got %d", loaded.Iterations)
 	}
 }
-
 
 func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 	root := t.TempDir()
@@ -317,8 +333,8 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 				{FunctionName: "TestBaz", TaskID: "task-2", CriterionIDs: []string{"ac-1"}, EC: []string{"EC-2"}},
 			},
 		},
-		Coverage: map[string]float64{
-			"internal/spec/store.go": 75,
+		Coverage: map[string]map[string]float64{
+			"task-1": {"internal/spec/store.go": 75},
 		},
 	}
 
@@ -361,8 +377,8 @@ func TestSaveLoadTraceability_RoundTrip(t *testing.T) {
 		}
 	}
 
-	if loaded.Coverage["internal/spec/store.go"] != 75 {
-		t.Errorf("Coverage round-trip: got %v, want 75", loaded.Coverage["internal/spec/store.go"])
+	if loaded.Coverage["task-1"]["internal/spec/store.go"] != 75 {
+		t.Errorf("Coverage round-trip: got %v, want 75", loaded.Coverage["task-1"]["internal/spec/store.go"])
 	}
 }
 
@@ -376,7 +392,7 @@ func TestSaveTraceability_WritesToCorrectPath(t *testing.T) {
 				{FunctionName: "TestX", TaskID: "task-1", CriterionIDs: []string{"ac-1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]float64{},
+		Coverage: map[string]map[string]float64{},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -475,7 +491,7 @@ func TestSaveLoadTraceability_CoverageRoundTrip(t *testing.T) {
 
 	original := Traceability{
 		Entries:  map[string][]TraceEntry{},
-		Coverage: map[string]float64{"internal/spec/model.go": 100, "cmd/root.go": 42},
+		Coverage: map[string]map[string]float64{"task-1": {"internal/spec/model.go": 100, "cmd/root.go": 42}},
 	}
 
 	if err := SaveTraceability(root, slug, original); err != nil {
@@ -496,7 +512,7 @@ func TestSaveTraceability_EmptyEntries(t *testing.T) {
 	root := t.TempDir()
 	slug := "empty-trace-spec"
 
-	if err := SaveTraceability(root, slug, Traceability{Entries: map[string][]TraceEntry{}, Coverage: map[string]float64{}}); err != nil {
+	if err := SaveTraceability(root, slug, Traceability{Entries: map[string][]TraceEntry{}, Coverage: map[string]map[string]float64{}}); err != nil {
 		t.Fatalf("SaveTraceability with empty maps returned error: %v", err)
 	}
 
@@ -520,7 +536,7 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 				{FunctionName: "TestIdempotent", TaskID: "task-1", CriterionIDs: []string{"ac-1"}, EC: nil},
 			},
 		},
-		Coverage: map[string]float64{"src/main.go": 60},
+		Coverage: map[string]map[string]float64{"task-1": {"src/main.go": 60}},
 	}
 
 	if err := SaveTraceability(root, slug, tr); err != nil {
@@ -539,8 +555,8 @@ func TestSaveTraceability_Idempotent(t *testing.T) {
 	if len(loaded.Entries["task-1"]) != 1 {
 		t.Errorf("expected 1 entry after idempotent save, got %d", len(loaded.Entries["task-1"]))
 	}
-	if loaded.Coverage["src/main.go"] != 60 {
-		t.Errorf("Coverage after idempotent save: got %v, want 60", loaded.Coverage["src/main.go"])
+	if loaded.Coverage["task-1"]["src/main.go"] != 60 {
+		t.Errorf("Coverage after idempotent save: got %v, want 60", loaded.Coverage["task-1"]["src/main.go"])
 	}
 }
 
@@ -689,7 +705,7 @@ func TestSaveLoadTraceability_CriterionIDs_RoundTrip(t *testing.T) {
 				},
 			},
 		},
-		Coverage: map[string]float64{"internal/spec/model.go": 85},
+		Coverage: map[string]map[string]float64{"task-1": {"internal/spec/model.go": 85}},
 	}
 
 	if err := SaveTraceability(root, slug, original); err != nil {

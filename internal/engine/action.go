@@ -1,5 +1,7 @@
 package engine
 
+import "github.com/pragmataW/tddmaster/internal/spec"
+
 type ActionType string
 
 const (
@@ -29,6 +31,15 @@ type InteractiveOption struct {
 	Description string `json:"description,omitempty"`
 }
 
+type TaskAction struct {
+	TaskID        string            `json:"taskId"`
+	Stage         string            `json:"stage"`
+	Instruction   string            `json:"instruction"`
+	DelegateAgent string            `json:"delegateAgent,omitempty"`
+	ExpectedInput ExpectedInput     `json:"expectedInput"`
+	Worktree      *spec.WorktreeRef `json:"worktree,omitempty"`
+}
+
 type Action struct {
 	Action             ActionType          `json:"action"`
 	Instruction        string              `json:"instruction"`
@@ -37,4 +48,5 @@ type Action struct {
 	DelegateAgent      string              `json:"delegateAgent,omitempty"`
 	ExpectedInput      ExpectedInput       `json:"expectedInput"`
 	InteractiveOptions []InteractiveOption `json:"interactiveOptions,omitempty"`
+	Tasks              []TaskAction        `json:"tasks,omitempty"`
 }

@@ -18,11 +18,9 @@ func makeGreenVerifierCtx(minCoverage int, touchedFiles []string, filesModified 
 		TDDCycle:          cycleGreen,
 		Implemented:       true,
 		LastModifiedFiles: filesModified,
-		TaskPlans: map[string]spec.TaskPlan{
-			taskID: {
-				TaskID:       taskID,
-				TouchedFiles: touchedFiles,
-			},
+		Plan: &spec.TaskPlan{
+			TaskID:       taskID,
+			TouchedFiles: touchedFiles,
 		},
 	}
 	settings := spec.Settings{
@@ -201,11 +199,9 @@ func TestRefactorStagePrompt_VerifierBranch_NoCoverageText(t *testing.T) {
 		TDDCycle:        cycleRefactor,
 		Implemented:     true,
 		RefactorApplied: true,
-		TaskPlans: map[string]spec.TaskPlan{
-			taskID: {
-				TaskID:       taskID,
-				TouchedFiles: []string{"internal/foo/bar.go"},
-			},
+		Plan: &spec.TaskPlan{
+			TaskID:       taskID,
+			TouchedFiles: []string{"internal/foo/bar.go"},
 		},
 	}
 	settings := spec.Settings{

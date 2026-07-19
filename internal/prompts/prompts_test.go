@@ -167,3 +167,16 @@ func TestVerifierTmpl_GenericBlock_AuditsEdgeCases(t *testing.T) {
 		t.Error("verifier generic block missing 'uncoveredEdgeCases' field for non-TDD flow")
 	}
 }
+
+func TestRender_ClaudeMd_GateSubmitsIncludeTaskID(t *testing.T) {
+	out, err := Render("claude_md", RenderData{Command: "tddmaster", ParallelSubagents: true})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !strings.Contains(out, `--answer='{"taskId":"<taskId>","plan":{...},"accepted":true}'`) {
+		t.Fatal("gate accept example must include taskId")
+	}
+	if !strings.Contains(out, `--answer='{"taskId":"<taskId>","planFeedback":"<reason>"}'`) {
+		t.Fatal("gate revise/reject example must include taskId")
+	}
+}

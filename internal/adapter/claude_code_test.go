@@ -69,6 +69,43 @@ func TestClaudeCodeAdapter_Sync_CreatesCLAUDEMd_WithMarkers(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeAdapter_Sync_ParallelWorktreeProtocol(t *testing.T) {
+	tmp := t.TempDir()
+	a := ClaudeCodeAdapter{}
+
+	if err := a.Sync(newSyncCtx(tmp)); err != nil {
+		t.Fatalf("Sync returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(paths.ClaudeMd(tmp))
+	if err != nil {
+		t.Fatalf("CLAUDE.md unreadable: %v", err)
+	}
+	content := string(data)
+
+	checks := []struct {
+		name    string
+		snippet string
+	}{
+		{"parallel spawn instruction", "in the SAME message so they run in parallel"},
+		{"worktree protocol section", "### Parallel execution (worktree protocol)"},
+		{"worktree add command", "git worktree add <worktree.path> -b <worktree.branch>"},
+		{"merge-then-submit rule", "MERGE-THEN-SUBMIT (binding)"},
+		{"no-git fallback", "git rev-parse --is-inside-work-tree"},
+		{"git worktree exception", "NARROW EXCEPTION — worktree lifecycle only"},
+		{"tasks array contract", "\"taskId\": \"task-1\""},
+	}
+	for _, c := range checks {
+		if !strings.Contains(content, c.snippet) {
+			t.Errorf("CLAUDE.md missing %s: %q", c.name, c.snippet)
+		}
+	}
+
+	if strings.Contains(content, "does not support parallel sub-agent spawning") {
+		t.Error("CLAUDE.md must not contain the sequential fallback sentence")
+	}
+}
+
 func TestClaudeCodeAdapter_Sync_WritesAllAgentFiles(t *testing.T) {
 	tmp := t.TempDir()
 	a := ClaudeCodeAdapter{}

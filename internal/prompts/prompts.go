@@ -12,7 +12,8 @@ import (
 var templatesFS embed.FS
 
 type RenderData struct {
-	Command string
+	Command           string
+	ParallelSubagents bool
 }
 
 const (

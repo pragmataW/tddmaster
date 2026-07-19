@@ -337,3 +337,190 @@ func Test_RefineCmd_RegisteredOnRoot(t *testing.T) {
 		t.Error("expected 'refine' subcommand registered on root, but not found")
 	}
 }
+
+func Test_RefineCmd_DependsOn_AddPersists(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{{ID: "task-1", Title: "Existing"}}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	answer := `{"add":[{"title":"Dependent","criteria":[{"then":"a1"}],"dependsOn":["task-1"]}]}`
+	_, err := executeRefine(t, root, slug, "--answer", answer)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress: %v", loadErr)
+	}
+	if len(loaded.Tasks) != 2 {
+		t.Fatalf("expected 2 tasks after add, got %d", len(loaded.Tasks))
+	}
+	if len(loaded.Tasks[1].DependsOn) != 1 || loaded.Tasks[1].DependsOn[0] != "task-1" {
+		t.Errorf("expected task-2 dependsOn [task-1], got %v", loaded.Tasks[1].DependsOn)
+	}
+}
+
+func Test_RefineCmd_DependsOn_UpdateAndClear(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B"},
+	}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	if _, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-2":{"dependsOn":["task-1"]}}}`); err != nil {
+		t.Fatalf("unexpected error on update: %v", err)
+	}
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress: %v", loadErr)
+	}
+	if len(loaded.Tasks[1].DependsOn) != 1 || loaded.Tasks[1].DependsOn[0] != "task-1" {
+		t.Fatalf("expected task-2 dependsOn [task-1], got %v", loaded.Tasks[1].DependsOn)
+	}
+
+	if _, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-2":{"dependsOn":[]}}}`); err != nil {
+		t.Fatalf("unexpected error on clear: %v", err)
+	}
+	loaded, loadErr = spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress after clear: %v", loadErr)
+	}
+	if len(loaded.Tasks[1].DependsOn) != 0 {
+		t.Errorf("expected task-2 dependsOn cleared, got %v", loaded.Tasks[1].DependsOn)
+	}
+}
+
+func Test_RefineCmd_DependsOn_Cycle_ReturnsError_TasksUnchanged(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{
+		{ID: "task-1", Title: "A", DependsOn: []string{"task-2"}},
+		{ID: "task-2", Title: "B"},
+	}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	_, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-2":{"dependsOn":["task-1"]}}}`)
+	if err == nil {
+		t.Fatal("expected error for dependency cycle, got nil")
+	}
+	if !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("expected error to mention 'cycle', got: %q", err.Error())
+	}
+
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress after error: %v", loadErr)
+	}
+	if len(loaded.Tasks[1].DependsOn) != 0 {
+		t.Errorf("expected task-2 unchanged after cycle error, got dependsOn %v", loaded.Tasks[1].DependsOn)
+	}
+}
+
+func Test_RefineCmd_DependsOn_SelfDependency_ReturnsError(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{{ID: "task-1", Title: "A"}}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	_, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-1":{"dependsOn":["task-1"]}}}`)
+	if err == nil {
+		t.Fatal("expected error for self-dependency, got nil")
+	}
+}
+
+func Test_RefineCmd_DependsOn_UnknownID_ReturnsError(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{{ID: "task-1", Title: "A"}}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	_, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-1":{"dependsOn":["task-77"]}}}`)
+	if err == nil {
+		t.Fatal("expected error for unknown dependency id, got nil")
+	}
+	if !strings.Contains(err.Error(), "task-77") {
+		t.Errorf("expected error to name invalid id task-77, got: %q", err.Error())
+	}
+}
+
+func Test_RefineCmd_RemoveWithDependents_ReturnsError(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+	}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	_, err := executeRefine(t, root, slug, "--answer", `{"remove":["task-1"]}`)
+	if err == nil {
+		t.Fatal("expected error when removing a task with dependents, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot remove task-1") {
+		t.Errorf("expected error to contain 'cannot remove task-1', got: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "task-2") {
+		t.Errorf("expected error to list dependent task-2, got: %q", err.Error())
+	}
+
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress after error: %v", loadErr)
+	}
+	if len(loaded.Tasks) != 2 {
+		t.Errorf("expected tasks unchanged after remove error, got: %+v", loaded.Tasks)
+	}
+}
+
+func Test_RefineCmd_RemoveAndUpdateSamePayload_Succeeds(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B", DependsOn: []string{"task-1"}},
+	}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	answer := `{"remove":["task-1"],"update":{"task-2":{"dependsOn":[]}}}`
+	_, err := executeRefine(t, root, slug, "--answer", answer)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	loaded, loadErr := spec.LoadProgress(root, slug)
+	if loadErr != nil {
+		t.Fatalf("reload progress: %v", loadErr)
+	}
+	if len(loaded.Tasks) != 1 || loaded.Tasks[0].ID != "task-2" {
+		t.Fatalf("expected only task-2 remaining, got: %+v", loaded.Tasks)
+	}
+	if len(loaded.Tasks[0].DependsOn) != 0 {
+		t.Errorf("expected task-2 dependsOn cleared, got %v", loaded.Tasks[0].DependsOn)
+	}
+}
+
+func Test_RefineCmd_SpecMdContainsDependsOn(t *testing.T) {
+	root := t.TempDir()
+	slug := "my-spec"
+	initialTasks := []spec.Task{
+		{ID: "task-1", Title: "A"},
+		{ID: "task-2", Title: "B"},
+	}
+	scaffoldRefinementState(t, root, slug, initialTasks)
+
+	if _, err := executeRefine(t, root, slug, "--answer", `{"update":{"task-2":{"dependsOn":["task-1"]}}}`); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	mdBytes, mdErr := os.ReadFile(paths.SpecMd(root, slug))
+	if mdErr != nil {
+		t.Fatalf("read spec.md: %v", mdErr)
+	}
+	if !strings.Contains(string(mdBytes), "Depends on: task-1") {
+		t.Errorf("expected spec.md to contain 'Depends on: task-1', got: %q", string(mdBytes))
+	}
+}
