@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pragmataW/tddmaster/internal/scaffold"
+	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
 type outroLine struct {
@@ -37,10 +38,10 @@ func buildOutroLines(res scaffold.Result) []outroLine {
 	for _, f := range res.FilesWritten {
 		name := filepath.Base(f)
 		dir := filepath.Base(filepath.Dir(f))
-		lines = append(lines, outroLine{icon: "✓", text: dir + "/" + name, color: lipgloss.Color("#2dd4bf")})
+		lines = append(lines, outroLine{icon: "✓", text: dir + "/" + name, color: theme.ColorTeal})
 	}
 	for _, id := range res.Adapters {
-		lines = append(lines, outroLine{icon: "✓", text: fmt.Sprintf(".claude/agents/tddmaster-*.md (%s)", id), color: lipgloss.Color("#2dd4bf")})
+		lines = append(lines, outroLine{icon: "✓", text: fmt.Sprintf(".claude/agents/tddmaster-*.md (%s)", id), color: theme.ColorTeal})
 	}
 	for _, w := range res.Warnings {
 		lines = append(lines, outroLine{icon: "!", text: w, color: lipgloss.Color("#fbbf24")})
@@ -91,16 +92,12 @@ func (m outroModel) View() string {
 	}
 
 	if m.shown >= len(m.lines) && m.command != "" {
-		next := lipgloss.NewStyle().Foreground(lipgloss.Color("#2dd4bf")).Bold(true).
+		next := lipgloss.NewStyle().Foreground(theme.ColorTeal).Bold(true).
 			Render(fmt.Sprintf("→ next: %s start <slug>", m.command))
 		body += "\n  " + next + "\n"
 	}
 
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6366f1")).
-		Padding(1, 2).
-		Render(body)
+	box := theme.BorderStyle.Render(body)
 
 	return "\n" + box + "\n"
 }
