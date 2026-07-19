@@ -20,6 +20,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRefineCmd())
 	root.AddCommand(newVisualizeCmd())
 	root.AddCommand(newRuleCmd())
+	root.AddCommand(newCancelCmd())
 	return root
 }
 
