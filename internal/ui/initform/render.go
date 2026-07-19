@@ -7,14 +7,10 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pragmataW/tddmaster/internal/scaffold"
+	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
 var (
-	borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			Padding(1, 2).
-			BorderForeground(lipgloss.Color("63"))
-
 	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
 	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
 	boldStyle   = lipgloss.NewStyle().Bold(true)
@@ -51,5 +47,5 @@ func RenderSummary(res scaffold.Result, command string) string {
 		sb.WriteString(greenStyle.Render(fmt.Sprintf("Next step: %s start <slug>", command)))
 	}
 
-	return borderStyle.Render(sb.String())
+	return theme.BorderStyle.Render(sb.String())
 }

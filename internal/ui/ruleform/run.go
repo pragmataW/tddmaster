@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
 type tickMsg struct{}
@@ -69,7 +70,7 @@ func buildForm(s *formState) *huh.Form {
 				CharLimit(65536).
 				Value(&s.body),
 		),
-	).WithTheme(brandTheme())
+	).WithTheme(theme.Theme())
 }
 
 func newModel(root string) model {
@@ -161,7 +162,7 @@ func (m model) viewIntro() string {
 	banner := gradientLine(title, m.frame*2, 18)
 
 	tagline := "  add a rule to guide your AI agents"
-	subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Italic(true)
+	subStyle := lipgloss.NewStyle().Foreground(theme.ColorSlate).Italic(true)
 
 	revealed := m.frame - 5
 	if revealed < 0 {
@@ -175,7 +176,7 @@ func (m model) viewIntro() string {
 
 	return "\n" + lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6366f1")).
+		BorderForeground(theme.ColorIndigo).
 		Padding(1, 3).
 		Render(body) + "\n"
 }
@@ -190,51 +191,20 @@ func (m model) viewSuccess() string {
 		rel = r
 	}
 
-	checkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2dd4bf")).Bold(true)
+	checkStyle := theme.SuccessStyle.Bold(true)
 	pathStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0"))
 	header := gradientLine("  rule written", m.frame, 18)
 
 	body := header + "\n\n"
 	body += "  " + checkStyle.Render("✓") + " " + pathStyle.Render(rel) + "\n"
 
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6366f1")).
-		Padding(1, 2).
-		Render(body)
+	box := theme.BorderStyle.Render(body)
 
 	return "\n" + box + "\n"
 }
 
 func brandTheme() *huh.Theme {
-	t := huh.ThemeCharm()
-
-	indigo := lipgloss.Color("#6366f1")
-	violet := lipgloss.Color("#a78bfa")
-	cyan := lipgloss.Color("#38bdf8")
-	teal := lipgloss.Color("#2dd4bf")
-	slate := lipgloss.Color("#94a3b8")
-	red := lipgloss.Color("#f87171")
-
-	t.Focused.Base = t.Focused.Base.BorderForeground(indigo)
-	t.Focused.Title = t.Focused.Title.Foreground(cyan).Bold(true)
-	t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(teal).Bold(true)
-	t.Focused.Description = t.Focused.Description.Foreground(slate)
-	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(teal)
-	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(teal)
-	t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(teal)
-	t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(teal)
-	t.Focused.FocusedButton = t.Focused.FocusedButton.Background(indigo).Foreground(lipgloss.Color("#ffffff")).Bold(true)
-	t.Focused.BlurredButton = t.Focused.BlurredButton.Foreground(slate)
-	t.Focused.ErrorIndicator = t.Focused.ErrorIndicator.Foreground(red)
-	t.Focused.ErrorMessage = t.Focused.ErrorMessage.Foreground(red)
-	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(cyan)
-	t.Focused.TextInput.Prompt = t.Focused.TextInput.Prompt.Foreground(violet)
-
-	t.Blurred.Title = t.Blurred.Title.Foreground(slate)
-	t.Blurred.NoteTitle = t.Blurred.NoteTitle.Foreground(slate)
-
-	return t
+	return theme.Theme()
 }
 
 func Run(root string) error {

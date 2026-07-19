@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/pragmataW/tddmaster/internal/manifest"
+	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
 type FormResult struct {
@@ -79,7 +80,7 @@ func Run(existing manifest.Manifest) (FormResult, error) {
 				Title("Proceed with this configuration?").
 				Value(&confirmed),
 		),
-	).WithTheme(brandTheme())
+	).WithTheme(theme.Theme())
 
 	if err := form.Run(); err != nil {
 		return FormResult{}, fmt.Errorf("form: %w", err)
