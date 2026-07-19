@@ -14,8 +14,10 @@ func appendCoverageRequirement(b *strings.Builder, ctx ExecCtx) {
 			"You MUST run the coverage tool now and return a non-empty " + fileCoverageReportShape + ". " +
 			"An empty report blocks the cycle and will be rejected.\n")
 	}
-	plan := ctx.State.TaskPlans[ctx.Task.ID]
-	files := plan.TouchedFiles
+	var files []string
+	if ctx.State.Plan != nil {
+		files = ctx.State.Plan.TouchedFiles
+	}
 	if len(files) == 0 {
 		files = ctx.State.LastModifiedFiles
 	}

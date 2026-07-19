@@ -10,11 +10,6 @@ import (
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
-func seedLoopSpecWithRules(t *testing.T, root, slug string, tasks []spec.Task, execution *spec.ExecState) *engine.Context {
-	t.Helper()
-	return seedLoopSpec(t, root, slug, tasks, execution)
-}
-
 func writeLoopRuleFile(t *testing.T, dir, name string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -36,11 +31,11 @@ func buildContextWithRules(t *testing.T, root, slug string, tasks []spec.Task, e
 	if err := spec.SaveState(root, slug, st); err != nil {
 		t.Fatalf("SaveState: %v", err)
 	}
+	attachExecToFirstPending(tasks, execution)
 	pr := spec.Progress{
-		Spec:      slug,
-		Status:    spec.StatusDraft,
-		Tasks:     tasks,
-		Execution: execution,
+		Spec:   slug,
+		Status: spec.StatusDraft,
+		Tasks:  tasks,
 	}
 	if err := spec.SaveProgress(root, slug, pr); err != nil {
 		t.Fatalf("SaveProgress: %v", err)

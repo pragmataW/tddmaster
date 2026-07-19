@@ -1,8 +1,8 @@
 package loop
 
 import (
+	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
@@ -63,15 +63,14 @@ func appendRefactorNotes(b *strings.Builder, notes []spec.RefactorNote) {
 	}
 }
 
-func appendApprovedPlan(b *strings.Builder, state spec.ExecState, taskID string) {
-	plan, ok := state.TaskPlans[taskID]
-	if !ok {
+func appendApprovedPlan(b *strings.Builder, state spec.ExecState) {
+	if state.Plan == nil {
 		return
 	}
 	b.WriteString("\nApproved plan approach: ")
-	b.WriteString(plan.Approach)
+	b.WriteString(state.Plan.Approach)
 	b.WriteString("\nTouched files: ")
-	b.WriteString(strings.Join(plan.TouchedFiles, ", "))
+	b.WriteString(strings.Join(state.Plan.TouchedFiles, ", "))
 	b.WriteString("\n")
 }
 
@@ -135,15 +134,14 @@ func (gateStageImpl) Applies(ctx ExecCtx) bool {
 	if !ctx.Task.Important {
 		return false
 	}
-	return !slices.Contains(ctx.State.ApprovedPlans, ctx.Task.ID)
+	return !ctx.State.PlanApproved
 }
 
 func (gateStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	var b strings.Builder
 	b.WriteString(instructionFor(promptregistry.KeyExecGate))
-	if feedback, ok := ctx.State.PlanFeedback[ctx.Task.ID]; ok && feedback != "" {
-		attempts := ctx.State.PlanAttempts[ctx.Task.ID]
-		fmt.Fprintf(&b, "\nPrior feedback: %s\nattemptCount: %d\n", feedback, attempts)
+	if ctx.State.PlanFeedback != "" {
+		fmt.Fprintf(&b, "\nPrior feedback: %s\nattemptCount: %d\n", ctx.State.PlanFeedback, ctx.State.PlanAttempts)
 	}
 	appendRules(&b, ctx, "planner")
 	return engine.Action{
@@ -158,27 +156,17 @@ func (gateStageImpl) Prompt(ctx ExecCtx) engine.Action {
 }
 
 func (gateStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
-	if report.Accepted && report.Plan != nil {
-		if ctx.State.TaskPlans == nil {
-			ctx.State.TaskPlans = map[string]spec.TaskPlan{}
-		}
-		ctx.State.TaskPlans[ctx.Task.ID] = *report.Plan
-		if !slices.Contains(ctx.State.ApprovedPlans, ctx.Task.ID) {
-			ctx.State.ApprovedPlans = append(ctx.State.ApprovedPlans, ctx.Task.ID)
-		}
+	if report.PlanFeedback != "" {
+		ctx.State.PlanFeedback = report.PlanFeedback
+		ctx.State.PlanAttempts++
 		return ctx, nil
 	}
-	if !report.Accepted && report.PlanFeedback != "" {
-		if ctx.State.PlanFeedback == nil {
-			ctx.State.PlanFeedback = map[string]string{}
-		}
-		if ctx.State.PlanAttempts == nil {
-			ctx.State.PlanAttempts = map[string]int{}
-		}
-		ctx.State.PlanFeedback[ctx.Task.ID] = report.PlanFeedback
-		ctx.State.PlanAttempts[ctx.Task.ID]++
-		return ctx, nil
+	if report.Plan == nil {
+		return ctx, errors.New("gate answer must carry either a plan (accept) or planFeedback (revise/reject)")
 	}
+	plan := *report.Plan
+	ctx.State.Plan = &plan
+	ctx.State.PlanApproved = true
 	return ctx, nil
 }
 
@@ -234,7 +222,7 @@ func (greenStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	b.WriteString(instructionFor(promptregistry.KeyExecGreen))
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
-	appendApprovedPlan(&b, ctx.State, ctx.Task.ID)
+	appendApprovedPlan(&b, ctx.State)
 	appendRules(&b, ctx, "executor")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
@@ -248,9 +236,6 @@ func (greenStageImpl) Prompt(ctx ExecCtx) engine.Action {
 }
 
 func (greenStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
-	if len(report.Blocked) > 0 {
-		return ctx, nil
-	}
 	ctx.State.Implemented = true
 	if len(report.FilesModified) > 0 {
 		ctx.State.LastModifiedFiles = report.FilesModified
@@ -357,7 +342,7 @@ func (executorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 	}
 	appendACsAndECs(&b, ctx.Task)
 	appendUserContext(&b, ctx.UserContext)
-	appendApprovedPlan(&b, ctx.State, ctx.Task.ID)
+	appendApprovedPlan(&b, ctx.State)
 	appendRules(&b, ctx, "executor")
 	return engine.Action{
 		Action:        engine.ActionInstruct,
@@ -371,9 +356,6 @@ func (executorStageImpl) Prompt(ctx ExecCtx) engine.Action {
 }
 
 func (executorStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) {
-	if len(report.Blocked) > 0 {
-		return ctx, nil
-	}
 	ctx.State.Implemented = true
 	return ctx, nil
 }

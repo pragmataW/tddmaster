@@ -59,6 +59,36 @@ func TestCursorAdapter_Sync_WritesAgentsMd_WithMarkers(t *testing.T) {
 	}
 }
 
+func TestCursorAdapter_Sync_SequentialFallbackProtocol(t *testing.T) {
+	tmp := t.TempDir()
+	if err := (CursorAdapter{}).Sync(newCursorCtx(tmp)); err != nil {
+		t.Fatalf("Sync returned error: %v", err)
+	}
+	data, err := os.ReadFile(paths.AgentsMd(tmp))
+	if err != nil {
+		t.Fatalf("AGENTS.md unreadable: %v", err)
+	}
+	content := string(data)
+
+	checks := []struct {
+		name    string
+		snippet string
+	}{
+		{"sequential fallback sentence", "does not support parallel sub-agent spawning"},
+		{"worktree protocol section", "### Parallel execution (worktree protocol)"},
+		{"git worktree exception", "NARROW EXCEPTION — worktree lifecycle only"},
+	}
+	for _, c := range checks {
+		if !strings.Contains(content, c.snippet) {
+			t.Errorf("AGENTS.md missing %s: %q", c.name, c.snippet)
+		}
+	}
+
+	if strings.Contains(content, "in the SAME message so they run in parallel") {
+		t.Error("AGENTS.md must not contain the parallel spawn instruction")
+	}
+}
+
 func TestCursorAdapter_Sync_WritesAllAgentFiles_MinimalFrontmatter(t *testing.T) {
 	tmp := t.TempDir()
 	if err := (CursorAdapter{}).Sync(newCursorCtx(tmp)); err != nil {

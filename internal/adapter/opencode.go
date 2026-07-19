@@ -20,7 +20,7 @@ func (OpenCodeAdapter) Sync(ctx SyncContext) error {
 		return fmt.Errorf("create opencode agents dir: %w", err)
 	}
 
-	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix})
+	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix, ParallelSubagents: true})
 	if err != nil {
 		return fmt.Errorf("render agents doc: %w", err)
 	}

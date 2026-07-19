@@ -244,7 +244,23 @@ func RenderSpecMd(slug string, st State, pr Progress) string {
 			if task.Important {
 				b.WriteString(" (important)")
 			}
+			if task.Blocked {
+				if reason := strings.TrimSpace(task.BlockedReason); reason != "" {
+					b.WriteString(" (blocked: ")
+					b.WriteString(reason)
+					b.WriteString(")")
+				} else {
+					b.WriteString(" (blocked)")
+				}
+			}
 			b.WriteString("\n")
+			if len(task.DependsOn) > 0 {
+				b.WriteString("  - Depends on: ")
+				b.WriteString(strings.Join(task.DependsOn, ", "))
+				b.WriteString("\n")
+			} else {
+				b.WriteString("  - No dependencies\n")
+			}
 			for _, c := range task.Criteria {
 				b.WriteString("- **")
 				b.WriteString(c.ID)
