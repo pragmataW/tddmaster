@@ -385,3 +385,22 @@ func TestStart_TraceabilityPathInFilesWritten(t *testing.T) {
 		t.Errorf("FilesWritten must contain %q, got: %v", want, result.FilesWritten)
 	}
 }
+
+func TestStart_ArchivedSlugErrors(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root)
+	if err := os.MkdirAll(paths.ArchiveSpecDir(root, "old-spec"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Start(root, "old-spec", fixedNow)
+	if err == nil {
+		t.Fatal("expected error starting a spec whose slug exists in the archive, got nil")
+	}
+	if !strings.Contains(err.Error(), "restore") {
+		t.Errorf("expected error to point at the restore command, got: %q", err.Error())
+	}
+	if Exists(root, "old-spec") {
+		t.Errorf("expected no active spec to be created for an archived slug")
+	}
+}

@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
-	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
@@ -30,16 +30,35 @@ func newListCmd() *cobra.Command {
 			}
 
 			headerStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.ColorIndigo)
-			out := cmd.OutOrStdout()
-			w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-			fmt.Fprintf(w, "%s\t%s\t%s\n", headerStyle.Render("SLUG"), headerStyle.Render("PHASE"), headerStyle.Render("STATUS"))
+			out := bufio.NewWriter(cmd.OutOrStdout())
+
+			type row struct{ slug, phase, status string }
+			var rows []row
 			for _, info := range infos {
 				if info.Archived != archived {
 					continue
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\n", info.Slug, info.Phase, info.Status)
+				rows = append(rows, row{info.Slug, info.Phase, info.Status})
 			}
-			return w.Flush()
+
+			wSlug, wPhase := len("SLUG"), len("PHASE")
+			for _, r := range rows {
+				if len(r.slug) > wSlug {
+					wSlug = len(r.slug)
+				}
+				if len(r.phase) > wPhase {
+					wPhase = len(r.phase)
+				}
+			}
+
+			fmt.Fprintf(out, "%s  %s  %s\n",
+				headerStyle.Render(fmt.Sprintf("%-*s", wSlug, "SLUG")),
+				headerStyle.Render(fmt.Sprintf("%-*s", wPhase, "PHASE")),
+				headerStyle.Render("STATUS"))
+			for _, r := range rows {
+				fmt.Fprintf(out, "%-*s  %-*s  %s\n", wSlug, r.slug, wPhase, r.phase, r.status)
+			}
+			return out.Flush()
 		},
 	}
 	addRootFlag(cmd)

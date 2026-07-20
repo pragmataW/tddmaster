@@ -145,6 +145,59 @@ Each criterion is a Given/When/Then triple: `then` is required, `given` and `whe
 
 `refine` upserts tasks and re-renders `spec.md` in place. When the list looks right, advance with `tddmaster next <slug> --answer="approve"`. `refine` is only valid in the refinement phase.
 
+## Spec lifecycle
+
+Beyond the forward-only phase machine, five commands manage a spec's lifecycle directly. They act on `.tddmaster/specs/<slug>/` artifacts only — your source code and tests are never touched.
+
+### `list`
+
+Show every spec with its current phase and status. `--archived` lists archived specs instead of active ones.
+
+```bash
+tddmaster list
+# SLUG  PHASE      STATUS
+# demo  discovery  draft
+
+tddmaster list --archived
+```
+
+### `rollback`
+
+Pull a spec back to any earlier phase. The target phase and every phase after it are reset (their generated artifacts cleared), while earlier phases are preserved — a clean restart without data loss.
+
+```bash
+tddmaster rollback <slug> <target-phase>
+# ✓ rolled back spec demo to phase spec-settings
+```
+
+- Valid targets are the canonical phase IDs: `spec-settings`, `discovery`, `spec-proposal`, `refinement`, `cross-artifact-analysis`, `execution`, `rule-learning`. An invalid target errors and lists the valid phases.
+- Resetting to/through `spec-proposal` deletes `spec.md` and empties the task list; to/through `cross-artifact-analysis` clears the analysis verdict; to/through `execution` clears per-task execution state and traceability.
+- **Global rule files are never deleted** (they are shared) — a warning is printed instead.
+- Forward rollback is rejected; advancing is `next`'s job. A `completed` spec can be rolled back to any phase.
+- After rollback, `next` resumes the phase machine normally from the target phase.
+
+### `archive` / `restore`
+
+Move a spec out of the active set into `.tddmaster/archive/<slug>` and back. Archived specs are ignored by `next`/`refine`.
+
+```bash
+tddmaster archive <slug>     # active -> .tddmaster/archive/<slug>
+tddmaster restore <slug>     # archive -> active
+```
+
+`restore` errors if an active spec with the same slug already exists. `start` refuses a slug that exists in the archive — run `tddmaster restore <slug>` first or pick another slug, so an active and an archived spec can never share a slug.
+
+### `cancel`
+
+Permanently delete a spec's directory. This is irreversible.
+
+```bash
+tddmaster cancel <slug>            # asks you to type the slug to confirm (TTY)
+tddmaster cancel <slug> --force    # skip confirmation (CI / non-interactive)
+```
+
+Without `--force` in a non-interactive shell the command refuses rather than deleting unconfirmed. Aborting the confirmation cancels the operation and deletes nothing.
+
 ## Execution ruleset
 
 Execution is driven by an ordered set of stages. On every `next`, the engine walks the stages and runs the first one that applies to the current task and settings:

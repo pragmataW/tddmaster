@@ -111,7 +111,7 @@ func TestListCmd_ac1_ArchivedFlagShowsOnlyArchivedSpecs(t *testing.T) {
 	root := t.TempDir()
 	seedListSpec(t, root, "active-only-spec", string(phasecatalog.PhaseExecution), spec.StatusExecuting)
 	seedListSpec(t, root, "archived-spec", string(phasecatalog.PhaseAnalysis), spec.StatusDraft)
-	if err := lifecycle.Archive(root, "archived-spec", time.Now().UTC()); err != nil {
+	if err := lifecycle.Archive(root, "archived-spec"); err != nil {
 		t.Fatalf("lifecycle.Archive: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestListCmd_ac1_PlainListShowsActiveSpecsNotArchived(t *testing.T) {
 	root := t.TempDir()
 	seedListSpec(t, root, "still-active-spec", string(phasecatalog.PhaseExecution), spec.StatusExecuting)
 	seedListSpec(t, root, "now-archived-spec", string(phasecatalog.PhaseAnalysis), spec.StatusDraft)
-	if err := lifecycle.Archive(root, "now-archived-spec", time.Now().UTC()); err != nil {
+	if err := lifecycle.Archive(root, "now-archived-spec"); err != nil {
 		t.Fatalf("lifecycle.Archive: %v", err)
 	}
 

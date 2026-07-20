@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
@@ -24,7 +23,7 @@ func newArchiveCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve root: %w", err)
 			}
-			if err := lifecycle.Archive(root, slug, time.Now()); err != nil {
+			if err := lifecycle.Archive(root, slug); err != nil {
 				return fmt.Errorf("archive spec: %w", err)
 			}
 			out := cmd.OutOrStdout()

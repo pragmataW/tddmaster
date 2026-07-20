@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+	"slices"
 
+	"github.com/pragmataW/tddmaster/internal/engine"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
-
-const statusUnknown = "unknown"
 
 type SpecInfo struct {
 	Slug     string
@@ -21,7 +20,7 @@ type SpecInfo struct {
 	Archived bool
 }
 
-func Rollback(root, slug, targetPhase string, now time.Time) ([]string, error) {
+func Rollback(root, slug, targetPhase string) ([]string, error) {
 	if !spec.ValidSlug(slug) {
 		return nil, fmt.Errorf("invalid slug %q", slug)
 	}
@@ -60,13 +59,22 @@ func Rollback(root, slug, targetPhase string, now time.Time) ([]string, error) {
 	if resetDescriptors[targetIndex].ID == phasecatalog.PhaseRuleLearning && !settings.RuleLearningEnabled {
 		return nil, fmt.Errorf("cannot roll back to phase %q: rule learning is disabled for this spec", targetPhase)
 	}
-	if currentIndex != -1 && targetIndex >= currentIndex {
+	if currentIndex == -1 {
+		if state.Phase != string(engine.PhaseComplete) {
+			return nil, fmt.Errorf("cannot roll back: current phase %q is not a recognized phase (valid phases are %v)", state.Phase, validTargets)
+		}
+		currentIndex = len(resetDescriptors)
+	}
+	if targetIndex >= currentIndex {
 		return nil, fmt.Errorf("cannot roll back to %q: not earlier than current phase %q", targetPhase, state.Phase)
 	}
 
-	warnings, err := ResetFrom(targetPhase, &state, &prog, root, slug)
+	warnings, err := ResetMemory(targetPhase, &state, &prog)
 	if err != nil {
 		return warnings, err
+	}
+	if !settings.RuleLearningEnabled {
+		warnings = slices.DeleteFunc(warnings, func(w string) bool { return w == ruleLearningWarning })
 	}
 
 	state.Phase = targetPhase
@@ -76,11 +84,14 @@ func Rollback(root, slug, targetPhase string, now time.Time) ([]string, error) {
 	if err := spec.SaveProgress(root, slug, prog); err != nil {
 		return warnings, err
 	}
+	if err := ResetArtifacts(targetPhase, root, slug); err != nil {
+		return warnings, err
+	}
 
 	return warnings, nil
 }
 
-func Archive(root, slug string, now time.Time) error {
+func Archive(root, slug string) error {
 	if !spec.Exists(root, slug) {
 		return fmt.Errorf("spec %q is not active", slug)
 	}
@@ -94,7 +105,7 @@ func Archive(root, slug string, now time.Time) error {
 	return os.Rename(paths.SpecDir(root, slug), archiveDir)
 }
 
-func Restore(root, slug string, now time.Time) error {
+func Restore(root, slug string) error {
 	archiveDir := paths.ArchiveSpecDir(root, slug)
 	if _, err := os.Stat(archiveDir); err != nil {
 		return fmt.Errorf("archived spec %q not found", slug)
@@ -110,6 +121,12 @@ func Restore(root, slug string, now time.Time) error {
 }
 
 func Cancel(root, slug string) error {
+	if !spec.ValidSlug(slug) {
+		return fmt.Errorf("invalid slug %q", slug)
+	}
+	if !spec.Exists(root, slug) {
+		return fmt.Errorf("spec %q does not exist", slug)
+	}
 	return os.RemoveAll(paths.SpecDir(root, slug))
 }
 
@@ -146,7 +163,7 @@ func listSpecDir(dir string, archived bool) ([]SpecInfo, error) {
 			continue
 		}
 		slug := entry.Name()
-		info := SpecInfo{Slug: slug, Status: statusUnknown, Archived: archived}
+		info := SpecInfo{Slug: slug, Status: spec.StatusUnknown, Archived: archived}
 
 		statePath := filepath.Join(dir, slug, paths.FileState)
 		if data, err := os.ReadFile(statePath); err == nil {

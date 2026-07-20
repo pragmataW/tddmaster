@@ -160,6 +160,19 @@ When satisfied with the task list, advance with:
 
 Note: `refine` is only valid in the refinement phase.
 
+### Spec lifecycle commands (out of band)
+
+Manage a spec outside the phase machine. These act on `.tddmaster/specs/<slug>/` artifacts only — never user code or tests.
+
+    {{.Command}} list [--archived]        # show specs with phase + status (or archived ones)
+    {{.Command}} rollback <slug> <phase>  # pull a spec back to an earlier phase (resets that phase + all after it)
+    {{.Command}} archive <slug>           # move spec to .tddmaster/archive/<slug>
+    {{.Command}} restore <slug>           # move an archived spec back to active
+    {{.Command}} cancel <slug> [--force]  # permanently delete a spec (typed-slug confirm in a TTY; --force to skip)
+
+- `rollback` targets a canonical phase ID (`spec-settings`, `discovery`, `spec-proposal`, `refinement`, `cross-artifact-analysis`, `execution`, `rule-learning`); forward rollback is rejected and global rule files are preserved (a warning is printed). After it, `next` resumes normally from the target phase.
+- `restore` errors on an active-slug collision. `start` refuses a slug that exists in the archive — run `restore` first or pick another slug. `cancel` without `--force` in a non-interactive shell refuses rather than deleting unconfirmed.
+
 ### Spec settings (runs before discovery)
 
 The FIRST `next` action for a new spec is the spec-settings step — an `action: "ask"` with `multiSelect: true` and five settings in `interactiveOptions` (TDD, skip verifier, important task gate, min test coverage, rule learning). Ask the user via AskUserQuestion (multiSelect); never decide settings yourself. Aggregate the selections and submit ALL five as a JSON object, e.g. `{{.Command}} next <slug> --answer='{"tddEnabled":true,"skipVerifierEnabled":false,"importantTaskGateEnabled":false,"minTestCoverage":80,"ruleLearningEnabled":false}'`. A selected toggle means `true`; unselected means `false`. `minTestCoverage` is a number (default 80; set to 0 to disable). `ruleLearningEnabled` defaults to `false`. After submit, discovery begins automatically.

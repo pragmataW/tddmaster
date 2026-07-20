@@ -59,7 +59,7 @@ func TestRollback_ac1_ResetsDownstreamArtifactsAndPreservesEarlierFieldsAndUserF
 	setupRollbackFixture(t, root, fixtureSlug, string(phasecatalog.PhaseExecution))
 	userFile := writeUserSourceFile(t, root)
 
-	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseSpecProposal), rollbackFixedNow); err != nil {
+	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseSpecProposal)); err != nil {
 		t.Fatalf("Rollback returned error: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestRollback_ac1_ForwardRollbackRejected(t *testing.T) {
 	root := t.TempDir()
 	setupRollbackFixture(t, root, fixtureSlug, string(phasecatalog.PhaseSpecProposal))
 
-	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseExecution), rollbackFixedNow); err == nil {
+	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseExecution)); err == nil {
 		t.Fatalf("expected error for forward rollback, got nil")
 	}
 
@@ -126,7 +126,7 @@ func TestRollback_ac1_EqualRollbackRejected(t *testing.T) {
 	root := t.TempDir()
 	setupRollbackFixture(t, root, fixtureSlug, string(phasecatalog.PhaseAnalysis))
 
-	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseAnalysis), rollbackFixedNow); err == nil {
+	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseAnalysis)); err == nil {
 		t.Fatalf("expected error for rollback to the same phase, got nil")
 	}
 
@@ -143,7 +143,7 @@ func TestRollback_ec1_UnknownTargetPhaseReturnsError(t *testing.T) {
 	root := t.TempDir()
 	setupRollbackFixture(t, root, fixtureSlug, string(phasecatalog.PhaseExecution))
 
-	if _, err := Rollback(root, fixtureSlug, "not-a-real-phase", rollbackFixedNow); err == nil {
+	if _, err := Rollback(root, fixtureSlug, "not-a-real-phase"); err == nil {
 		t.Fatalf("expected error for unknown target phase, got nil")
 	}
 }
@@ -152,7 +152,7 @@ func TestRollback_ec1_NonexistentSlugReturnsError(t *testing.T) {
 	root := t.TempDir()
 	writeManifestForLifecycle(t, root)
 
-	if _, err := Rollback(root, "does-not-exist", string(phasecatalog.PhaseSpecProposal), rollbackFixedNow); err == nil {
+	if _, err := Rollback(root, "does-not-exist", string(phasecatalog.PhaseSpecProposal)); err == nil {
 		t.Fatalf("expected error for nonexistent slug, got nil")
 	}
 }
@@ -161,7 +161,7 @@ func TestRollback_ec1_InvalidSlugFormatReturnsError(t *testing.T) {
 	root := t.TempDir()
 	writeManifestForLifecycle(t, root)
 
-	if _, err := Rollback(root, "Invalid_Slug!", string(phasecatalog.PhaseSpecProposal), rollbackFixedNow); err == nil {
+	if _, err := Rollback(root, "Invalid_Slug!", string(phasecatalog.PhaseSpecProposal)); err == nil {
 		t.Fatalf("expected error for invalid slug format, got nil")
 	}
 }
@@ -179,7 +179,7 @@ func TestRollback_ec2_CompletedSpecPhaseNotInOrder_RollbackAllowed(t *testing.T)
 		t.Fatalf("SaveProgress: %v", err)
 	}
 
-	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseAnalysis), rollbackFixedNow); err != nil {
+	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseAnalysis)); err != nil {
 		t.Fatalf("expected rollback allowed on a completed spec whose Phase is outside the enabled order, got error: %v", err)
 	}
 
@@ -202,4 +202,22 @@ func TestRollback_ec2_CompletedSpecPhaseNotInOrder_RollbackAllowed(t *testing.T)
 	if state.Phase != string(phasecatalog.PhaseAnalysis) {
 		t.Errorf("expected Phase updated to target %q, got %q", phasecatalog.PhaseAnalysis, state.Phase)
 	}
+}
+
+func TestRollback_ec2_UnrecognizedCurrentPhase_Rejected(t *testing.T) {
+	root := t.TempDir()
+	setupRollbackFixture(t, root, fixtureSlug, "listen-first")
+
+	if _, err := Rollback(root, fixtureSlug, string(phasecatalog.PhaseExecution)); err == nil {
+		t.Fatalf("expected error when current phase is unrecognized, got nil")
+	}
+
+	state, err := spec.LoadState(root, fixtureSlug)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Phase != "listen-first" {
+		t.Errorf("expected Phase unchanged after rejected rollback, got %q", state.Phase)
+	}
+	assertSpecMdPreserved(t, root, fixtureSlug)
 }

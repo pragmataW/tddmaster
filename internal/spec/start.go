@@ -34,6 +34,10 @@ func Start(root, slug string, now time.Time) (Result, error) {
 		return Result{Slug: slug, AlreadyExists: true}, nil
 	}
 
+	if _, err := os.Stat(paths.ArchiveSpecDir(root, slug)); err == nil {
+		return Result{}, fmt.Errorf("spec %q exists in the archive: run 'tddmaster restore %s' first or pick another slug", slug, slug)
+	}
+
 	dir := paths.SpecDir(root, slug)
 	_, statErr := os.Stat(dir)
 	dirExisted := statErr == nil

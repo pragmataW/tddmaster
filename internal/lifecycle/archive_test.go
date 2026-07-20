@@ -14,7 +14,7 @@ func TestArchiveRestore_ac2_RoundTripToActive(t *testing.T) {
 	slug := "roundtrip-spec"
 	setupRollbackFixture(t, root, slug, string(phasecatalog.PhaseExecution))
 
-	if err := Archive(root, slug, rollbackFixedNow); err != nil {
+	if err := Archive(root, slug); err != nil {
 		t.Fatalf("Archive returned error: %v", err)
 	}
 	if spec.Exists(root, slug) {
@@ -24,7 +24,7 @@ func TestArchiveRestore_ac2_RoundTripToActive(t *testing.T) {
 		t.Errorf("expected archived spec dir to exist: %v", err)
 	}
 
-	if err := Restore(root, slug, rollbackFixedNow); err != nil {
+	if err := Restore(root, slug); err != nil {
 		t.Fatalf("Restore returned error: %v", err)
 	}
 	if !spec.Exists(root, slug) {
@@ -40,15 +40,17 @@ func TestRestore_ac2_ActiveSlugCollisionReturnsError(t *testing.T) {
 	slug := "collide-spec"
 	setupRollbackFixture(t, root, slug, string(phasecatalog.PhaseExecution))
 
-	if err := Archive(root, slug, rollbackFixedNow); err != nil {
+	if err := Archive(root, slug); err != nil {
 		t.Fatalf("Archive returned error: %v", err)
 	}
 
-	if _, err := spec.Start(root, slug, rollbackFixedNow); err != nil {
-		t.Fatalf("spec.Start (new active spec with colliding slug): %v", err)
+	collided := buildFullFixtureState()
+	collided.Slug = slug
+	if err := spec.SaveState(root, slug, collided); err != nil {
+		t.Fatalf("SaveState (colliding active spec): %v", err)
 	}
 
-	if err := Restore(root, slug, rollbackFixedNow); err == nil {
+	if err := Restore(root, slug); err == nil {
 		t.Fatalf("expected error restoring into an existing active slug, got nil")
 	}
 	if _, err := os.Stat(paths.ArchiveSpecDir(root, slug)); err != nil {
@@ -79,7 +81,7 @@ func TestList_ac2_ReturnsActiveAndArchivedSpecsWithArchivedFlag(t *testing.T) {
 	archivedSlug := "archived-spec"
 	setupRollbackFixture(t, root, activeSlug, string(phasecatalog.PhaseExecution))
 	setupRollbackFixture(t, root, archivedSlug, string(phasecatalog.PhaseAnalysis))
-	if err := Archive(root, archivedSlug, rollbackFixedNow); err != nil {
+	if err := Archive(root, archivedSlug); err != nil {
 		t.Fatalf("Archive returned error: %v", err)
 	}
 
@@ -124,11 +126,11 @@ func TestArchive_ec2_ArchivingAlreadyArchivedReturnsError(t *testing.T) {
 	slug := "double-archive-spec"
 	setupRollbackFixture(t, root, slug, string(phasecatalog.PhaseExecution))
 
-	if err := Archive(root, slug, rollbackFixedNow); err != nil {
+	if err := Archive(root, slug); err != nil {
 		t.Fatalf("first Archive returned error: %v", err)
 	}
 
-	if err := Archive(root, slug, rollbackFixedNow); err == nil {
+	if err := Archive(root, slug); err == nil {
 		t.Fatalf("expected error archiving an already-archived spec, got nil")
 	}
 	if _, err := os.Stat(paths.ArchiveSpecDir(root, slug)); err != nil {

@@ -10,17 +10,20 @@ import (
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
+const ruleLearningWarning = "global rule files under .tddmaster/rules are preserved; review shared rule files manually"
+
 type resetDescriptor struct {
 	ID         engine.PhaseID
 	AnswerKeys []string
-	ApplyFn    func(state *spec.State, prog *spec.Progress, root, slug string) error
+	MemFn      func(state *spec.State, prog *spec.Progress)
+	ArtifactFn func(root, slug string) error
 }
 
 var resetDescriptors = []resetDescriptor{
 	{
 		ID:         phasecatalog.PhaseSettings,
 		AnswerKeys: []string{"spec_settings"},
-		ApplyFn: func(state *spec.State, prog *spec.Progress, root, slug string) error {
+		ArtifactFn: func(root, slug string) error {
 			return spec.SaveSettings(root, slug, spec.DefaultSettings())
 		},
 	},
@@ -35,13 +38,15 @@ var resetDescriptors = []resetDescriptor{
 	{
 		ID:         phasecatalog.PhaseSpecProposal,
 		AnswerKeys: []string{"tasks_generated", "self_review"},
-		ApplyFn: func(state *spec.State, prog *spec.Progress, root, slug string) error {
-			if err := os.Remove(paths.SpecMd(root, slug)); err != nil && !os.IsNotExist(err) {
-				return err
-			}
+		MemFn: func(state *spec.State, prog *spec.Progress) {
 			prog.Tasks = []spec.Task{}
 			prog.TaskSeq = 0
 			prog.Status = spec.StatusDraft
+		},
+		ArtifactFn: func(root, slug string) error {
+			if err := os.Remove(paths.SpecMd(root, slug)); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 			return nil
 		},
 	},
@@ -52,17 +57,14 @@ var resetDescriptors = []resetDescriptor{
 	{
 		ID:         phasecatalog.PhaseAnalysis,
 		AnswerKeys: []string{"analysis_complete", "analysis_audited", "analysis_findings", "analysis_attempts"},
-		ApplyFn: func(state *spec.State, prog *spec.Progress, root, slug string) error {
+		ArtifactFn: func(root, slug string) error {
 			return spec.SaveAnalysis(root, slug, spec.Analysis{Verdict: "", Findings: []spec.Finding{}})
 		},
 	},
 	{
 		ID:         phasecatalog.PhaseExecution,
 		AnswerKeys: []string{},
-		ApplyFn: func(state *spec.State, prog *spec.Progress, root, slug string) error {
-			if err := spec.SaveTraceability(root, slug, spec.Traceability{}); err != nil {
-				return err
-			}
+		MemFn: func(state *spec.State, prog *spec.Progress) {
 			for i := range prog.Tasks {
 				prog.Tasks[i].Done = false
 				prog.Tasks[i].Exec = nil
@@ -73,7 +75,9 @@ var resetDescriptors = []resetDescriptor{
 			}
 			prog.Status = spec.StatusDraft
 			prog.Iterations = 0
-			return nil
+		},
+		ArtifactFn: func(root, slug string) error {
+			return spec.SaveTraceability(root, slug, spec.Traceability{})
 		},
 	},
 	{
@@ -82,16 +86,19 @@ var resetDescriptors = []resetDescriptor{
 	},
 }
 
-func ResetFrom(target string, state *spec.State, prog *spec.Progress, root, slug string) ([]string, error) {
-	targetIndex := -1
+func resetDescriptorIndex(target string) (int, error) {
 	for i, d := range resetDescriptors {
 		if string(d.ID) == target {
-			targetIndex = i
-			break
+			return i, nil
 		}
 	}
-	if targetIndex == -1 {
-		return nil, fmt.Errorf("unknown reset target phase %q", target)
+	return -1, fmt.Errorf("unknown reset target phase %q", target)
+}
+
+func ResetMemory(target string, state *spec.State, prog *spec.Progress) ([]string, error) {
+	targetIndex, err := resetDescriptorIndex(target)
+	if err != nil {
+		return nil, err
 	}
 
 	var warnings []string
@@ -101,15 +108,35 @@ func ResetFrom(target string, state *spec.State, prog *spec.Progress, root, slug
 			delete(state.Answers, key)
 		}
 		if desc.ID == phasecatalog.PhaseRuleLearning {
-			warnings = append(warnings, "reset does not touch global rule-learning files; review shared rule files under .tddmaster/rules manually")
-			continue
+			warnings = append(warnings, ruleLearningWarning)
 		}
-		if desc.ApplyFn == nil {
-			continue
-		}
-		if err := desc.ApplyFn(state, prog, root, slug); err != nil {
-			return warnings, err
+		if desc.MemFn != nil {
+			desc.MemFn(state, prog)
 		}
 	}
 	return warnings, nil
+}
+
+func ResetArtifacts(target, root, slug string) error {
+	targetIndex, err := resetDescriptorIndex(target)
+	if err != nil {
+		return err
+	}
+
+	for j := targetIndex; j < len(resetDescriptors); j++ {
+		if fn := resetDescriptors[j].ArtifactFn; fn != nil {
+			if err := fn(root, slug); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func ResetFrom(target string, state *spec.State, prog *spec.Progress, root, slug string) ([]string, error) {
+	warnings, err := ResetMemory(target, state, prog)
+	if err != nil {
+		return warnings, err
+	}
+	return warnings, ResetArtifacts(target, root, slug)
 }

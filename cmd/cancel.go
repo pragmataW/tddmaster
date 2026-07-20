@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/x/term"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
@@ -18,11 +19,7 @@ func readerIsTTY(in io.Reader) bool {
 	if !ok {
 		return false
 	}
-	info, err := file.Stat()
-	if err != nil {
-		return false
-	}
-	return info.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(file.Fd())
 }
 
 var cancelConfirm = func(slug string, in io.Reader, out io.Writer) (bool, error) {

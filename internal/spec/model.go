@@ -37,6 +37,7 @@ const (
 	StatusDraft     = "draft"
 	StatusExecuting = "executing"
 	StatusCompleted = "completed"
+	StatusUnknown   = "unknown"
 )
 
 type State struct {

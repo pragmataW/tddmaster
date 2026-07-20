@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
@@ -27,7 +26,7 @@ func newRestoreCmd() *cobra.Command {
 			if spec.Exists(root, slug) {
 				return fmt.Errorf("restore conflict: spec %q is already active", slug)
 			}
-			if err := lifecycle.Restore(root, slug, time.Now()); err != nil {
+			if err := lifecycle.Restore(root, slug); err != nil {
 				return fmt.Errorf("restore spec: %w", err)
 			}
 			out := cmd.OutOrStdout()

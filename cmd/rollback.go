@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
@@ -25,14 +24,14 @@ func newRollbackCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve root: %w", err)
 			}
-			warnings, err := lifecycle.Rollback(root, slug, targetPhase, time.Now())
+			warnings, err := lifecycle.Rollback(root, slug, targetPhase)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintln(out, theme.SuccessStyle.Render(fmt.Sprintf("✓ rolled back spec %s to phase %s", slug, targetPhase)))
 			for _, w := range warnings {
-				fmt.Fprintln(out, theme.MutedStyle.Render(fmt.Sprintf("global rule files preserved: %s", w)))
+				fmt.Fprintln(out, theme.MutedStyle.Render(w))
 			}
 			return nil
 		},
