@@ -21,6 +21,9 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVisualizeCmd())
 	root.AddCommand(newRuleCmd())
 	root.AddCommand(newCancelCmd())
+	root.AddCommand(newRollbackCmd())
+	root.AddCommand(newArchiveCmd())
+	root.AddCommand(newRestoreCmd())
 	return root
 }
 

@@ -16,6 +16,7 @@ func executeCancel(t *testing.T, root string, extraArgs ...string) (string, erro
 	var buf bytes.Buffer
 	root_cmd.SetOut(&buf)
 	root_cmd.SetErr(&buf)
+	root_cmd.SetIn(strings.NewReader(""))
 	args := append([]string{"cancel"}, extraArgs...)
 	if root != "" {
 		args = append(args, "--root", root)

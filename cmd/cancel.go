@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
@@ -12,8 +13,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func readerIsTTY(in io.Reader) bool {
+	file, ok := in.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
 var cancelConfirm = func(slug string, in io.Reader, out io.Writer) (bool, error) {
-	if !isTTY() {
+	if !readerIsTTY(in) {
 		return false, fmt.Errorf("no TTY detected: pass --force to skip confirmation")
 	}
 
