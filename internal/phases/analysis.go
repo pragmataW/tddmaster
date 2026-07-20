@@ -89,6 +89,9 @@ func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.F
 				parts = append(parts, "    - "+ec)
 			}
 		}
+		if len(t.DependsOn) > 0 {
+			parts = append(parts, "  depends on: "+strings.Join(t.DependsOn, ", "))
+		}
 		if t.Exec != nil && t.Exec.Plan != nil && len(t.Exec.Plan.TouchedFiles) > 0 {
 			parts = append(parts, "  approved touched files:")
 			for _, f := range t.Exec.Plan.TouchedFiles {
