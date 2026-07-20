@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
 var logoLines = []string{
@@ -74,19 +75,15 @@ func (m introModel) View() string {
 		if typed > len(tagline) {
 			typed = len(tagline)
 		}
-		subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Italic(true)
+		subStyle := lipgloss.NewStyle().Foreground(theme.ColorSlate).Italic(true)
 		caret := ""
 		if typed < len(tagline) && m.frame%2 == 0 {
-			caret = lipgloss.NewStyle().Foreground(lipgloss.Color("#38bdf8")).Render("▌")
+			caret = lipgloss.NewStyle().Foreground(theme.ColorCyan).Render("▌")
 		}
 		body += "\n  " + subStyle.Render(tagline[:typed]) + caret
 	}
 
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6366f1")).
-		Padding(1, 3).
-		Render(body)
+	box := theme.BorderStyle.Padding(1, 3).Render(body)
 
 	return "\n" + box + "\n"
 }

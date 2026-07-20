@@ -5,6 +5,7 @@ import "path/filepath"
 const (
 	DirSpecs         = "specs"
 	DirRules         = "rules"
+	DirArchive       = "archive"
 	FileState        = "state.json"
 	FileSettings     = "settings.json"
 	FileProgress     = "progress.json"
@@ -75,6 +76,14 @@ func SpecTraceability(root, slug string) string {
 
 func SpecAnalysis(root, slug string) string {
 	return filepath.Join(SpecDir(root, slug), FileAnalysis)
+}
+
+func Archive(root string) string {
+	return filepath.Join(Tddmaster(root), DirArchive)
+}
+
+func ArchiveSpecDir(root, slug string) string {
+	return filepath.Join(Archive(root), slug)
 }
 
 func Rules(root string) string {
