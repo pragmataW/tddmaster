@@ -1,10 +1,10 @@
 package lifecycle
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/spec"
@@ -92,7 +92,7 @@ func resetDescriptorIndex(target string) (int, error) {
 			return i, nil
 		}
 	}
-	return -1, fmt.Errorf("unknown reset target phase %q", target)
+	return -1, errs.Newf(errs.KeyUnknownResetTarget, target)
 }
 
 func ResetMemory(target string, state *spec.State, prog *spec.Progress) ([]string, error) {

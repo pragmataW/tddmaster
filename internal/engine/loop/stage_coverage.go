@@ -2,9 +2,6 @@ package loop
 
 import "github.com/pragmataW/tddmaster/internal/spec"
 
-const fileCoverageJSONKey = "fileCoverage"
-const fileCoverageReportShape = fileCoverageJSONKey + ":[{file,coverage}]"
-
 type FileCoverageEntry struct {
 	File     string  `json:"file"`
 	Coverage float64 `json:"coverage"`

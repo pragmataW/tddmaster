@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
@@ -17,14 +18,14 @@ func newArchiveCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			if !spec.ValidSlug(slug) {
-				return fmt.Errorf("invalid slug %q", slug)
+				return errs.Newf(errs.KeyInvalidSlug, slug)
 			}
 			root, err := resolveRoot(cmd)
 			if err != nil {
-				return fmt.Errorf("resolve root: %w", err)
+				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
 			if err := lifecycle.Archive(root, slug); err != nil {
-				return fmt.Errorf("archive spec: %w", err)
+				return errs.Wrap(errs.KeyArchiveSpec, err)
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintln(out, theme.SuccessStyle.Render(fmt.Sprintf("archived spec %s", slug)))

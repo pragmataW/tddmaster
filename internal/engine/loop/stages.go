@@ -1,11 +1,11 @@
 package loop
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -104,13 +104,13 @@ func appendRules(b *strings.Builder, ctx ExecCtx, agent string) {
 	if len(paths) == 0 {
 		return
 	}
-	b.WriteString("\nYou MUST read and follow these project rule files before doing anything. They are mandatory project constraints, not suggestions:\n")
+	b.WriteString(promptregistry.RulesInjectionHeader)
 	for _, p := range paths {
 		b.WriteString("- ")
 		b.WriteString(p)
 		b.WriteString("\n")
 	}
-	b.WriteString("Do not proceed until you have read every file listed above.")
+	b.WriteString(promptregistry.RulesInjectionFooter)
 }
 
 func tddActive(ctx ExecCtx) bool {
@@ -162,7 +162,7 @@ func (gateStageImpl) OnReport(ctx ExecCtx, report StageReport) (ExecCtx, error) 
 		return ctx, nil
 	}
 	if report.Plan == nil {
-		return ctx, errors.New("gate answer must carry either a plan (accept) or planFeedback (revise/reject)")
+		return ctx, errs.New(errs.KeyGateAnswerInvalid)
 	}
 	plan := *report.Plan
 	ctx.State.Plan = &plan

@@ -11,8 +11,9 @@ import (
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
-const mandatorySentence = "You MUST read and follow these project rule files before doing anything. They are mandatory project constraints, not suggestions:"
-const closingLine = "Do not proceed until you have read every file listed above."
+var mandatorySentence = strings.TrimSpace(promptregistry.RulesInjectionHeader)
+
+const closingLine = promptregistry.RulesInjectionFooter
 
 func writeRuleFile(t *testing.T, path, content string) {
 	t.Helper()

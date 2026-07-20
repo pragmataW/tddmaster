@@ -1,10 +1,10 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/prompts"
@@ -16,12 +16,12 @@ func (ClaudeCodeAdapter) ID() manifest.ToolID { return manifest.ToolClaudeCode }
 
 func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 	if err := os.MkdirAll(paths.ClaudeAgents(ctx.Root), 0o755); err != nil {
-		return fmt.Errorf("create agents dir: %w", err)
+		return errs.Wrap(errs.KeyAdapterCreateDirDefault, err)
 	}
 
 	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix, ParallelSubagents: true})
 	if err != nil {
-		return fmt.Errorf("render claude_md: %w", err)
+		return errs.Wrap(errs.KeyRenderClaudeMD, err)
 	}
 	if err := injectMarkedDoc(paths.ClaudeMd(ctx.Root), rendered); err != nil {
 		return err
@@ -34,7 +34,7 @@ func (ClaudeCodeAdapter) Sync(ctx SyncContext) error {
 		}
 		filePath := filepath.Join(paths.ClaudeAgents(ctx.Root), spec.File+".md")
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write agent file %s: %w", spec.File, err)
+			return errs.Wrap(errs.KeyAdapterWriteAgentFile, err, spec.File)
 		}
 	}
 

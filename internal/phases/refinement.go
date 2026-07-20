@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -65,5 +66,5 @@ func (d *refinementDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer
 		}
 		return engine.Action{}, true, nil
 	}
-	return engine.Action{}, false, fmt.Errorf("refinement expects 'approve' or 'done', got %q", t)
+	return engine.Action{}, false, errs.Newf(errs.KeyRefinementExpects, t)
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
+	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -74,8 +76,8 @@ func anyActionable(findings []spec.Finding) bool {
 
 func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.Finding) string {
 	var parts []string
-	parts = append(parts, "Perform a cross-artifact analysis of the task list below. Return JSON {\"verdict\":\"clean|issues|block\",\"findings\":[{severity,category,taskId,acId,detail,suggestion,source}]}.")
-	parts = append(parts, "Severity must be one of: block, warn, info. STRICT POLICY: any finding with severity other than info pauses the phase for an explicit user decision. Use info ONLY for purely advisory notes that need no action; if a finding implies any change to the tasks or criteria, use warn or block.")
+	parts = append(parts, promptregistry.AuditorAnalysisHeader)
+	parts = append(parts, promptregistry.AuditorSeverityPolicy)
 	parts = append(parts, "")
 	parts = append(parts, "Tasks:")
 	for _, t := range tasks {
@@ -140,7 +142,7 @@ func (d *analysisDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Ac
 		}
 
 		var detail []string
-		detail = append(detail, "The analysis flagged findings that need your decision (every finding except info severity). Choose how to proceed:")
+		detail = append(detail, promptregistry.AnalysisDecisionHeader)
 		for _, f := range findings {
 			if !f.IsInfo() {
 				detail = append(detail, fmt.Sprintf("- [%s] %s %s: %s", f.Severity, f.Category, f.TaskID, f.Detail))
@@ -168,7 +170,7 @@ func (d *analysisDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Ac
 		Instruction:   buildAuditorInstruction(c, tasks, lint),
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
-			Example: `{"verdict":"clean","findings":[]}`,
+			Example: promptregistry.ExampleAnalysisVerdict,
 		},
 	}, false
 }
@@ -176,7 +178,7 @@ func (d *analysisDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Ac
 func (d *analysisDriver) applyEdit(c *engine.Context, payload []byte) error {
 	var rp spec.RefinePayload
 	if err := json.Unmarshal(payload, &rp); err != nil {
-		return fmt.Errorf("invalid refine payload: %w", err)
+		return errs.Wrap(errs.KeyInvalidRefinePayload, err)
 	}
 	pr := c.Progress()
 	seq := pr.TaskSeq

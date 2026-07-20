@@ -1,26 +1,25 @@
 package loop
 
 import (
-	"errors"
-
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
 func validateAndPersistTraceability(c *engine.Context, task spec.Task, report StageReport) error {
 	if len(report.Traceability) == 0 {
-		return errors.New("RED phase: traceability is required but report.Traceability is empty")
+		return errs.New(errs.KeyTraceabilityEmpty)
 	}
 
 	for _, entry := range report.Traceability {
 		if entry.TestFilePath == "" {
-			return errors.New("RED phase: traceability entry missing TestFilePath")
+			return errs.New(errs.KeyTraceabilityMissingTestPath)
 		}
 		if entry.FunctionName == "" {
-			return errors.New("RED phase: traceability entry missing FunctionName")
+			return errs.New(errs.KeyTraceabilityMissingFunc)
 		}
 		if len(entry.AC) == 0 && len(entry.EC) == 0 {
-			return errors.New("RED phase: traceability entry must have at least one AC or EC")
+			return errs.New(errs.KeyTraceabilityMissingACEC)
 		}
 	}
 

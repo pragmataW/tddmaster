@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/pragmataW/tddmaster/internal/errs"
 )
 
 type RefineOp struct {
@@ -52,9 +54,9 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 		}
 		if idx == -1 {
 			if removed[id] {
-				return nil, seq, fmt.Errorf("duplicate task id in remove: %s", id)
+				return nil, seq, errs.Newf(errs.KeyDupTaskIDRemove, id)
 			}
-			return nil, seq, fmt.Errorf("unknown task id: %s", id)
+			return nil, seq, errs.Newf(errs.KeyUnknownTaskID, id)
 		}
 		result = append(result[:idx], result[idx+1:]...)
 		removed[id] = true
@@ -69,7 +71,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 			}
 		}
 		if idx == -1 {
-			return nil, seq, fmt.Errorf("unknown task id: %s", id)
+			return nil, seq, errs.Newf(errs.KeyUnknownTaskID, id)
 		}
 		if op.Title != nil {
 			result[idx].Title = *op.Title
@@ -94,7 +96,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 
 	for _, op := range p.Add {
 		if op.Title == nil || *op.Title == "" {
-			return nil, seq, fmt.Errorf("add op requires a non-empty title")
+			return nil, seq, errs.New(errs.KeyAddRequiresTitle)
 		}
 		maxN++
 		newTask := Task{
@@ -132,7 +134,7 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 			var msg string
 			if issue.Kind == DAGErrorUnknown && removed[issue.DepID] {
 				dependents := DependentsOf(result, issue.DepID)
-				msg = fmt.Sprintf("cannot remove %s: %s depend on it; update their dependsOn in the same payload", issue.DepID, strings.Join(dependents, ", "))
+				msg = errs.Msgf(errs.KeyCannotRemoveDeps, issue.DepID, strings.Join(dependents, ", "))
 			} else {
 				msg = issue.Error()
 			}

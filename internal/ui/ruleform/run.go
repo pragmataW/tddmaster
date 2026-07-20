@@ -2,13 +2,13 @@ package ruleform
 
 import (
 	"errors"
-	"fmt"
 	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
 
@@ -215,7 +215,7 @@ func Run(root string) error {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return nil
 		}
-		return fmt.Errorf("ui: %w", err)
+		return errs.Wrap(errs.KeyUI, err)
 	}
 	if fm, ok := result.(model); ok {
 		if fm.err != nil {

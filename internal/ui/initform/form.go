@@ -1,10 +1,10 @@
 package initform
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/charmbracelet/huh"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
 )
@@ -54,7 +54,7 @@ func Run(existing manifest.Manifest) (FormResult, error) {
 				Value(&selectedTools).
 				Validate(func(v []manifest.ToolID) error {
 					if len(v) == 0 {
-						return fmt.Errorf("at least one tool must be selected")
+						return errs.New(errs.KeyToolMustSelect)
 					}
 					return nil
 				}),
@@ -67,10 +67,10 @@ func Run(existing manifest.Manifest) (FormResult, error) {
 				Validate(func(s string) error {
 					n, err := strconv.Atoi(s)
 					if err != nil {
-						return fmt.Errorf("enter a valid integer")
+						return errs.New(errs.KeyEnterValidInteger)
 					}
 					if n <= 0 {
-						return fmt.Errorf("value must be greater than zero")
+						return errs.New(errs.KeyValueGreaterThanZero)
 					}
 					return nil
 				}),
@@ -83,7 +83,7 @@ func Run(existing manifest.Manifest) (FormResult, error) {
 	).WithTheme(theme.Theme())
 
 	if err := form.Run(); err != nil {
-		return FormResult{}, fmt.Errorf("form: %w", err)
+		return FormResult{}, errs.Wrap(errs.KeyForm, err)
 	}
 
 	maxIter, _ := strconv.Atoi(maxIterStr)

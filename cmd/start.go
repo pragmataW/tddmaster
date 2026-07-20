@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/spf13/cobra"
 )
@@ -26,11 +27,11 @@ func newStartCmd() *cobra.Command {
 			slug := args[0]
 			root, err := resolveRoot(cmd)
 			if err != nil {
-				return fmt.Errorf("resolve root: %w", err)
+				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
 			res, err := spec.Start(root, slug, time.Now().UTC())
 			if err != nil {
-				return fmt.Errorf("start spec: %w", err)
+				return errs.Wrap(errs.KeyStartSpec, err)
 			}
 			out := cmd.OutOrStdout()
 			if res.AlreadyExists {

@@ -2,10 +2,10 @@ package spec
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 )
 
@@ -56,10 +56,10 @@ func loadJSON[T any](path string) (T, error) {
 	var v T
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return v, fmt.Errorf("read %s: %w", path, err)
+		return v, errs.Wrap(errs.KeyReadFile, err, path)
 	}
 	if err := json.Unmarshal(data, &v); err != nil {
-		return v, fmt.Errorf("parse %s: %w", path, err)
+		return v, errs.Wrap(errs.KeyParseFile, err, path)
 	}
 	return v, nil
 }

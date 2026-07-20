@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -17,20 +18,22 @@ func SettingsDriver() engine.Driver {
 	return &settingsDriver{}
 }
 
+func settingsInteractiveOptions() []engine.InteractiveOption {
+	opts := make([]engine.InteractiveOption, len(promptregistry.SettingsOptions))
+	for i, o := range promptregistry.SettingsOptions {
+		opts[i] = engine.InteractiveOption{Label: o.Label, Description: o.Description}
+	}
+	return opts
+}
+
 func settingsPrompt() engine.Action {
 	instr := promptregistry.MustInstruction(promptregistry.KeySettings)
 	d := spec.DefaultSettings()
 	return engine.Action{
 		Action:      engine.ActionAsk,
 		Instruction: instr,
-		MultiSelect: true,
-		InteractiveOptions: []engine.InteractiveOption{
-			{Label: "TDD (Red-Green-Refactor)", Description: "Enforce failing-test-first cycles per task. Default: ON."},
-			{Label: "Skip verifier", Description: "Skip the independent verifier sub-agent after the green stage. Default: OFF."},
-			{Label: "Important task gate", Description: "Pause tasks flagged important for a plan-first review before execution. Default: OFF."},
-			{Label: "Min test coverage", Description: "Coverage gate for the TDD green-phase verifier. Ask the user for a percentage (0-100) and submit it as the number minTestCoverage; 0 disables. Default: 80."},
-			{Label: "Rule learning", Description: "Derive tddmaster rules from refactor notes and failed ACs after execution. Default: OFF."},
-		},
+		MultiSelect:        true,
+		InteractiveOptions: settingsInteractiveOptions(),
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
 			Example: fmt.Sprintf(`{"tddEnabled":%t,"skipVerifierEnabled":%t,"importantTaskGateEnabled":%t,"minTestCoverage":%d,"ruleLearningEnabled":%t}`, d.TDDEnabled, d.SkipVerifierEnabled, d.ImportantTaskGateEnabled, d.MinTestCoverage, d.RuleLearningEnabled),
@@ -50,11 +53,11 @@ func (d *settingsDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer [
 		return engine.Action{}, true, nil
 	}
 	if !json.Valid(answer) {
-		return engine.Action{}, false, fmt.Errorf("invalid JSON answer")
+		return engine.Action{}, false, errs.New(errs.KeyInvalidJSONAnswer)
 	}
 	settings := spec.DefaultSettings()
 	if err := json.Unmarshal(answer, &settings); err != nil {
-		return engine.Action{}, false, fmt.Errorf("parse settings: %w", err)
+		return engine.Action{}, false, errs.Wrap(errs.KeyParseSettings, err)
 	}
 	settings.ClampCoverage()
 	if err := c.SaveSettings(settings); err != nil {

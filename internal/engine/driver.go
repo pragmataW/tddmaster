@@ -2,7 +2,8 @@ package engine
 
 import (
 	"encoding/json"
-	"errors"
+
+	"github.com/pragmataW/tddmaster/internal/errs"
 )
 
 type Driver interface {
@@ -51,7 +52,7 @@ func (d *StepTableDriver) Submit(c *Context, ph *PhaseDef, answer []byte) (Actio
 	promptAction := stepDef.Prompt(c)
 	if promptAction.ExpectedInput.Format == FormatJSON {
 		if !json.Valid(answer) {
-			return Action{}, false, errors.New("invalid JSON answer")
+			return Action{}, false, errs.New(errs.KeyInvalidJSONAnswer)
 		}
 	}
 

@@ -1,10 +1,10 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/prompts"
@@ -16,12 +16,12 @@ func (CursorAdapter) ID() manifest.ToolID { return manifest.ToolCursor }
 
 func (CursorAdapter) Sync(ctx SyncContext) error {
 	if err := os.MkdirAll(paths.CursorAgents(ctx.Root), 0o755); err != nil {
-		return fmt.Errorf("create cursor agents dir: %w", err)
+		return errs.Wrap(errs.KeyAdapterCreateDir, err, "cursor")
 	}
 
 	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix, ParallelSubagents: false})
 	if err != nil {
-		return fmt.Errorf("render agents doc: %w", err)
+		return errs.Wrap(errs.KeyAdapterRenderDoc, err)
 	}
 	if err := injectMarkedDoc(paths.AgentsMd(ctx.Root), rendered); err != nil {
 		return err
@@ -38,7 +38,7 @@ func (CursorAdapter) Sync(ctx SyncContext) error {
 			"---\n" + body
 		filePath := filepath.Join(paths.CursorAgents(ctx.Root), spec.File+".md")
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write cursor agent %s: %w", spec.File, err)
+			return errs.Wrap(errs.KeyAdapterWriteAgent, err, "cursor", spec.File)
 		}
 	}
 

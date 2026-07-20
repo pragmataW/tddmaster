@@ -1,10 +1,10 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/prompts"
@@ -16,12 +16,12 @@ func (CodexCLIAdapter) ID() manifest.ToolID { return manifest.ToolCodexCLI }
 
 func (CodexCLIAdapter) Sync(ctx SyncContext) error {
 	if err := os.MkdirAll(paths.CodexAgents(ctx.Root), 0o755); err != nil {
-		return fmt.Errorf("create codex agents dir: %w", err)
+		return errs.Wrap(errs.KeyAdapterCreateDir, err, "codex")
 	}
 
 	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix, ParallelSubagents: false})
 	if err != nil {
-		return fmt.Errorf("render agents doc: %w", err)
+		return errs.Wrap(errs.KeyAdapterRenderDoc, err)
 	}
 	if err := injectMarkedDoc(paths.AgentsMd(ctx.Root), rendered); err != nil {
 		return err
@@ -37,7 +37,7 @@ func (CodexCLIAdapter) Sync(ctx SyncContext) error {
 			"developer_instructions = \"\"\"" + body + "\"\"\"\n"
 		filePath := filepath.Join(paths.CodexAgents(ctx.Root), spec.File+".toml")
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write codex agent %s: %w", spec.File, err)
+			return errs.Wrap(errs.KeyAdapterWriteAgent, err, "codex", spec.File)
 		}
 	}
 

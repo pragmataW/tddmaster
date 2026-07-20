@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 )
 
@@ -193,15 +194,15 @@ func (d *ruleLearningDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answ
 			}
 		}
 
-		return engine.Action{}, false, fmt.Errorf("unrecognized approval answer: %q", trimmed)
+		return engine.Action{}, false, errs.Newf(errs.KeyUnrecognizedApproval, trimmed)
 	}
 
 	var proposal ruleProposal
 	if err := json.Unmarshal(answer, &proposal); err != nil {
-		return engine.Action{}, false, fmt.Errorf("invalid proposal JSON: %w", err)
+		return engine.Action{}, false, errs.Wrap(errs.KeyInvalidProposalJSON, err)
 	}
 	if len(proposal.Rules) == 0 {
-		return engine.Action{}, false, fmt.Errorf("proposal must contain at least one rule")
+		return engine.Action{}, false, errs.New(errs.KeyProposalNeedsRule)
 	}
 	if err := c.SetAnswer("rule_proposal", string(answer)); err != nil {
 		return engine.Action{}, false, err

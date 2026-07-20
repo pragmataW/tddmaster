@@ -1,10 +1,10 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/prompts"
 )
 
@@ -76,7 +76,7 @@ var AgentSpecs = []AgentSpec{
 func renderBody(spec AgentSpec, cmd string) (string, error) {
 	body, err := prompts.Render(spec.BodyTemplate, prompts.RenderData{Command: cmd})
 	if err != nil {
-		return "", fmt.Errorf("render %s body: %w", spec.BodyTemplate, err)
+		return "", errs.Wrap(errs.KeyAdapterRenderBody, err, spec.BodyTemplate)
 	}
 	return body, nil
 }
@@ -86,7 +86,7 @@ func injectMarkedDoc(docPath, rendered string) error {
 
 	existing, readErr := os.ReadFile(docPath)
 	if readErr != nil && !os.IsNotExist(readErr) {
-		return fmt.Errorf("read %s: %w", docPath, readErr)
+		return errs.Wrap(errs.KeyReadFile, readErr, docPath)
 	}
 
 	var newContent string
@@ -116,7 +116,7 @@ func injectMarkedDoc(docPath, rendered string) error {
 	}
 
 	if err := os.WriteFile(docPath, []byte(newContent), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", docPath, err)
+		return errs.Wrap(errs.KeyAdapterWriteDoc, err, docPath)
 	}
 	return nil
 }

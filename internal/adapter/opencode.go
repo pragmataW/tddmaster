@@ -1,11 +1,11 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/prompts"
@@ -17,12 +17,12 @@ func (OpenCodeAdapter) ID() manifest.ToolID { return manifest.ToolOpenCode }
 
 func (OpenCodeAdapter) Sync(ctx SyncContext) error {
 	if err := os.MkdirAll(paths.OpenCodeAgents(ctx.Root), 0o755); err != nil {
-		return fmt.Errorf("create opencode agents dir: %w", err)
+		return errs.Wrap(errs.KeyAdapterCreateDir, err, "opencode")
 	}
 
 	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: ctx.CommandPrefix, ParallelSubagents: true})
 	if err != nil {
-		return fmt.Errorf("render agents doc: %w", err)
+		return errs.Wrap(errs.KeyAdapterRenderDoc, err)
 	}
 	if err := injectMarkedDoc(paths.AgentsMd(ctx.Root), rendered); err != nil {
 		return err
@@ -43,7 +43,7 @@ func (OpenCodeAdapter) Sync(ctx SyncContext) error {
 			"---\n" + body
 		filePath := filepath.Join(paths.OpenCodeAgents(ctx.Root), spec.File+".md")
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write opencode agent %s: %w", spec.File, err)
+			return errs.Wrap(errs.KeyAdapterWriteAgent, err, "opencode", spec.File)
 		}
 	}
 

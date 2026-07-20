@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -32,7 +33,7 @@ func GetHandler(root, slug string) (http.Handler, error) {
 
 	dashboardDir := filepath.Join(specDir, "dashboard")
 	if err := os.MkdirAll(dashboardDir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create dashboard directory: %w", err)
+		return nil, errs.Wrap(errs.KeyCreateDashboardDir, err)
 	}
 
 	htmlPath := filepath.Join(dashboardDir, "index.html")
@@ -41,7 +42,7 @@ func GetHandler(root, slug string) (http.Handler, error) {
 	// enjekte edilen GWT bölümü footer'dan önce (tab container'larının dışında)
 	// yer aldığı için her sekmede görünüyordu; o enjeksiyon kaldırıldı.
 	if err := os.WriteFile(htmlPath, []byte(DashboardHTML), 0o644); err != nil {
-		return nil, fmt.Errorf("failed to write dashboard html: %w", err)
+		return nil, errs.Wrap(errs.KeyWriteDashboardHTML, err)
 	}
 
 	mux := http.NewServeMux()

@@ -2,13 +2,13 @@ package loop
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"slices"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -76,10 +76,7 @@ func worktreeInstructionBlock(w *spec.WorktreeRef) string {
 	if w == nil {
 		return ""
 	}
-	return "=== WORKTREE (binding) ===\ncwd: " + w.Path + "\nbranch: " + w.Branch +
-		"\nAll file reads, edits, tests and coverage runs MUST happen inside this cwd. " +
-		"Writing outside it is a protocol violation. Do not run git; the orchestrator owns worktree lifecycle. " +
-		"NO-GIT FALLBACK: if the project is not a git repository, ignore this block entirely and work in the project root.\n===\n\n"
+	return fmt.Sprintf(promptregistry.WorktreeBlockFmt, w.Path, w.Branch)
 }
 
 func injectTaskIDIntoExample(in engine.ExpectedInput, taskID string) engine.ExpectedInput {
@@ -222,9 +219,9 @@ func (d *LoopDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action
 		action.Tasks = append([]engine.TaskAction{gateTask}, taskActions...)
 		action.ExpectedInput = gateTask.ExpectedInput
 		if len(taskActions) > 0 {
-			action.Instruction += "\n\nWhile the plan gate is pending, dispatch the non-gate entries in `tasks` as parallel sub-agents; the entry with stage \"gate\" is the question itself, not a task to spawn."
+			action.Instruction += promptregistry.ParallelDispatchDirective
 		}
-		action.Instruction += "\n\nThis gate re-appears after every sibling report submit until its answer is submitted. If the planner was already spawned and the plan already presented, do NOT spawn the planner or re-ask the user again — just submit the pending gate answer when it is ready."
+		action.Instruction += promptregistry.GateReappearDirective
 		return action, false
 	}
 
@@ -266,7 +263,7 @@ func routeReportTask(pr spec.Progress, taskID string, ready []int) (int, error) 
 	readyList := strings.Join(readyIDs, ", ")
 
 	if taskID == "" {
-		return -1, fmt.Errorf("report missing taskId; ready tasks: %s", readyList)
+		return -1, errs.Newf(errs.KeyReportMissingTaskID, readyList)
 	}
 	for _, i := range ready {
 		if pr.Tasks[i].ID == taskID {
@@ -278,14 +275,14 @@ func routeReportTask(pr spec.Progress, taskID string, ready []int) (int, error) 
 			continue
 		}
 		if t.Done {
-			return -1, fmt.Errorf("task %q is already done; ready tasks: %s", taskID, readyList)
+			return -1, errs.Newf(errs.KeyTaskAlreadyDone, taskID, readyList)
 		}
 		if t.Blocked {
 			return i, nil
 		}
-		return -1, fmt.Errorf("task %q is not ready (waiting on dependencies); ready tasks: %s", taskID, readyList)
+		return -1, errs.Newf(errs.KeyTaskNotReady, taskID, readyList)
 	}
-	return -1, fmt.Errorf("unknown taskId %q; ready tasks: %s", taskID, readyList)
+	return -1, errs.Newf(errs.KeyUnknownTaskIDReady, taskID, readyList)
 }
 
 func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byte) (engine.Action, bool, error) {
@@ -299,7 +296,7 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 	}
 
 	if len(answer) == 0 || !json.Valid(answer) {
-		return engine.Action{}, false, errors.New("invalid JSON answer")
+		return engine.Action{}, false, errs.New(errs.KeyInvalidJSONAnswer)
 	}
 
 	var report StageReport
@@ -340,7 +337,7 @@ func (d *LoopDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byt
 
 	stage, ok := d.ruleset.Next(ctx)
 	if !ok {
-		return engine.Action{}, false, fmt.Errorf("no applicable stage for task %s (exec: %+v)", task.ID, ctx.State)
+		return engine.Action{}, false, errs.Newf(errs.KeyNoApplicableStage, task.ID, ctx.State)
 	}
 
 	if report.HasGateAnswer() && stage.ID() != StageIDGate {

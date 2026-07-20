@@ -2,12 +2,12 @@ package lifecycle
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/spec"
@@ -22,10 +22,10 @@ type SpecInfo struct {
 
 func Rollback(root, slug, targetPhase string) ([]string, error) {
 	if !spec.ValidSlug(slug) {
-		return nil, fmt.Errorf("invalid slug %q", slug)
+		return nil, errs.Newf(errs.KeyInvalidSlug, slug)
 	}
 	if !spec.Exists(root, slug) {
-		return nil, fmt.Errorf("spec %q does not exist", slug)
+		return nil, errs.Newf(errs.KeySpecDoesNotExist, slug)
 	}
 
 	state, err := spec.LoadState(root, slug)
@@ -54,19 +54,19 @@ func Rollback(root, slug, targetPhase string) ([]string, error) {
 		}
 	}
 	if targetIndex == -1 {
-		return nil, fmt.Errorf("unknown target phase %q: valid phases are %v", targetPhase, validTargets)
+		return nil, errs.Newf(errs.KeyUnknownTargetPhase, targetPhase, validTargets)
 	}
 	if resetDescriptors[targetIndex].ID == phasecatalog.PhaseRuleLearning && !settings.RuleLearningEnabled {
-		return nil, fmt.Errorf("cannot roll back to phase %q: rule learning is disabled for this spec", targetPhase)
+		return nil, errs.Newf(errs.KeyRollbackRuleLearningDisabled, targetPhase)
 	}
 	if currentIndex == -1 {
 		if state.Phase != string(engine.PhaseComplete) {
-			return nil, fmt.Errorf("cannot roll back: current phase %q is not a recognized phase (valid phases are %v)", state.Phase, validTargets)
+			return nil, errs.Newf(errs.KeyRollbackUnrecognizedPhase, state.Phase, validTargets)
 		}
 		currentIndex = len(resetDescriptors)
 	}
 	if targetIndex >= currentIndex {
-		return nil, fmt.Errorf("cannot roll back to %q: not earlier than current phase %q", targetPhase, state.Phase)
+		return nil, errs.Newf(errs.KeyRollbackNotEarlier, targetPhase, state.Phase)
 	}
 
 	warnings, err := ResetMemory(targetPhase, &state, &prog)
@@ -93,11 +93,11 @@ func Rollback(root, slug, targetPhase string) ([]string, error) {
 
 func Archive(root, slug string) error {
 	if !spec.Exists(root, slug) {
-		return fmt.Errorf("spec %q is not active", slug)
+		return errs.Newf(errs.KeySpecNotActive, slug)
 	}
 	archiveDir := paths.ArchiveSpecDir(root, slug)
 	if _, err := os.Stat(archiveDir); err == nil {
-		return fmt.Errorf("spec %q is already archived", slug)
+		return errs.Newf(errs.KeySpecAlreadyArchived, slug)
 	}
 	if err := os.MkdirAll(filepath.Dir(archiveDir), 0o755); err != nil {
 		return err
@@ -108,10 +108,10 @@ func Archive(root, slug string) error {
 func Restore(root, slug string) error {
 	archiveDir := paths.ArchiveSpecDir(root, slug)
 	if _, err := os.Stat(archiveDir); err != nil {
-		return fmt.Errorf("archived spec %q not found", slug)
+		return errs.Newf(errs.KeyArchivedSpecNotFound, slug)
 	}
 	if spec.Exists(root, slug) {
-		return fmt.Errorf("an active spec %q already exists", slug)
+		return errs.Newf(errs.KeyActiveSpecExists, slug)
 	}
 	specDir := paths.SpecDir(root, slug)
 	if err := os.MkdirAll(filepath.Dir(specDir), 0o755); err != nil {
@@ -122,10 +122,10 @@ func Restore(root, slug string) error {
 
 func Cancel(root, slug string) error {
 	if !spec.ValidSlug(slug) {
-		return fmt.Errorf("invalid slug %q", slug)
+		return errs.Newf(errs.KeyInvalidSlug, slug)
 	}
 	if !spec.Exists(root, slug) {
-		return fmt.Errorf("spec %q does not exist", slug)
+		return errs.Newf(errs.KeySpecDoesNotExist, slug)
 	}
 	return os.RemoveAll(paths.SpecDir(root, slug))
 }

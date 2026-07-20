@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/term"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
@@ -24,7 +25,7 @@ func readerIsTTY(in io.Reader) bool {
 
 var cancelConfirm = func(slug string, in io.Reader, out io.Writer) (bool, error) {
 	if !readerIsTTY(in) {
-		return false, fmt.Errorf("no TTY detected: pass --force to skip confirmation")
+		return false, errs.New(errs.KeyNoTTYForce)
 	}
 
 	var typed string
@@ -55,14 +56,14 @@ func newCancelCmd() *cobra.Command {
 
 			root, err := resolveRoot(cmd)
 			if err != nil {
-				return fmt.Errorf("resolve root: %w", err)
+				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
 
 			if !spec.ValidSlug(slug) {
-				return fmt.Errorf("invalid slug %q", slug)
+				return errs.Newf(errs.KeyInvalidSlug, slug)
 			}
 			if !spec.Exists(root, slug) {
-				return fmt.Errorf("spec %q does not exist", slug)
+				return errs.Newf(errs.KeySpecDoesNotExist, slug)
 			}
 
 			out := cmd.OutOrStdout()
@@ -84,7 +85,7 @@ func newCancelCmd() *cobra.Command {
 			}
 
 			if err := lifecycle.Cancel(root, slug); err != nil {
-				return fmt.Errorf("cancel spec: %w", err)
+				return errs.Wrap(errs.KeyCancelSpec, err)
 			}
 
 			fmt.Fprintf(out, "cancelled spec %s\n", slug)

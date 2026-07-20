@@ -2,9 +2,9 @@ package engine
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/rules"
@@ -24,22 +24,22 @@ type Context struct {
 
 func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 	if !spec.Exists(root, slug) {
-		return nil, fmt.Errorf("spec %q not found in %q: run start first", slug, root)
+		return nil, errs.Newf(errs.KeySpecNotFoundInRoot, slug, root)
 	}
 
 	state, err := spec.LoadState(root, slug)
 	if err != nil {
-		return nil, fmt.Errorf("load state: %w", err)
+		return nil, errs.Wrap(errs.KeyLoadState, err)
 	}
 
 	progress, err := spec.LoadProgress(root, slug)
 	if err != nil {
-		return nil, fmt.Errorf("load progress: %w", err)
+		return nil, errs.Wrap(errs.KeyLoadProgress, err)
 	}
 
 	settings, err := spec.LoadSettings(root, slug)
 	if err != nil {
-		return nil, fmt.Errorf("load settings: %w", err)
+		return nil, errs.Wrap(errs.KeyLoadSettings, err)
 	}
 
 	maxIter := manifest.Defaults().MaxIterationBeforeStart
@@ -53,7 +53,7 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 
 	ruleSet, err := rules.Load(root)
 	if err != nil {
-		return nil, fmt.Errorf("load rules: %w", err)
+		return nil, errs.Wrap(errs.KeyLoadRules, err)
 	}
 
 	return &Context{
@@ -105,7 +105,7 @@ func (c *Context) advancePhase() error {
 	next := NextPhase(c.defs, PhaseID(c.state.Phase))
 	c.state.Phase = string(next)
 	if err := spec.SaveState(c.root, c.slug, c.state); err != nil {
-		return fmt.Errorf("save state: %w", err)
+		return errs.Wrap(errs.KeySaveState, err)
 	}
 	return nil
 }

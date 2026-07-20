@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/scaffold"
 	"github.com/pragmataW/tddmaster/internal/ui/initform"
@@ -42,13 +43,13 @@ func newInitCmd() *cobra.Command {
 
 			root, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("get cwd: %w", err)
+				return errs.Wrap(errs.KeyGetCwd, err)
 			}
 
 			cmdName := commandName()
 
 			if !nonInteractive && !isTTY() {
-				return fmt.Errorf("no TTY detected: pass --non-interactive to skip prompts")
+				return errs.New(errs.KeyNoTTYNonInteractive)
 			}
 
 			if nonInteractive {
@@ -63,7 +64,7 @@ func newInitCmd() *cobra.Command {
 				}
 
 				if len(tools) == 0 {
-					return fmt.Errorf("at least one tool is required: use --tools=claude-code")
+					return errs.New(errs.KeyToolRequiredInit)
 				}
 
 				if maxIter <= 0 {
@@ -82,7 +83,7 @@ func newInitCmd() *cobra.Command {
 					Manifest:       &m,
 				})
 				if err != nil {
-					return fmt.Errorf("scaffold: %w", err)
+					return errs.Wrap(errs.KeyScaffold, err)
 				}
 
 				fmt.Fprintln(cmd.OutOrStdout(), initform.RenderSummary(res, cmdName))
@@ -93,7 +94,7 @@ func newInitCmd() *cobra.Command {
 			initform.PlayIntro()
 			formRes, err := initform.Run(existing)
 			if err != nil {
-				return fmt.Errorf("form: %w", err)
+				return errs.Wrap(errs.KeyForm, err)
 			}
 
 			if !formRes.Confirmed {
@@ -112,7 +113,7 @@ func newInitCmd() *cobra.Command {
 				Manifest: &m,
 			})
 			if err != nil {
-				return fmt.Errorf("scaffold: %w", err)
+				return errs.Wrap(errs.KeyScaffold, err)
 			}
 
 			initform.PlayOutro(res, cmdName)

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/pragmataW/tddmaster/internal/promptregistry"
 )
 
 func appendCoverageFeedback(b *strings.Builder, ctx ExecCtx) {
@@ -24,10 +26,10 @@ func appendCoverageFeedback(b *strings.Builder, ctx ExecCtx) {
 		return
 	}
 	sort.Strings(lowFiles)
-	b.WriteString("\nThe following files have low test coverage and need additional tests:\n")
+	b.WriteString(promptregistry.CoverageLowFeedbackHeader)
 	for _, file := range lowFiles {
 		pct := ctx.State.LastCoverage[file]
 		b.WriteString(fmt.Sprintf("- %s: %.1f%% < %.0f%%\n", file, pct, threshold))
 	}
-	b.WriteString("Add tests to bring these files above the coverage threshold.\n")
+	b.WriteString(promptregistry.CoverageLowFeedbackFooter)
 }

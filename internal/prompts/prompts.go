@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+
+	"github.com/pragmataW/tddmaster/internal/errs"
 )
 
 //go:embed templates/*.tmpl
@@ -24,16 +26,16 @@ func Render(name string, data RenderData) (string, error) {
 	path := templateDir + "/" + name + ".tmpl"
 	content, err := templatesFS.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("unknown template %q: %w", name, err)
+		return "", errs.Wrap(errs.KeyUnknownTemplate, err, name)
 	}
 	src := string(content)
 	tmpl, err := template.New(name).Parse(src)
 	if err != nil {
-		return "", fmt.Errorf("parse template %q: %w", name, err)
+		return "", errs.Wrap(errs.KeyParseTemplate, err, name)
 	}
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, data); err != nil {
-		return "", fmt.Errorf("execute template %q: %w", name, err)
+		return "", errs.Wrap(errs.KeyExecuteTemplate, err, name)
 	}
 	return sb.String(), nil
 }

@@ -1,8 +1,7 @@
 package loop
 
 import (
-	"errors"
-
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -61,7 +60,7 @@ func advanceCycle(st spec.ExecState, passed bool, refactorNotesPresent bool, max
 
 func advanceCycleStrict(st spec.ExecState, passed bool, refactorNotesPresent bool, maxRefactorRounds int) (spec.ExecState, bool, error) {
 	if isRefactorBypass(st, passed, refactorNotesPresent) {
-		return st, false, errors.New("refactor bypass: cannot complete refactor phase with pending notes before applying refactor")
+		return st, false, errs.New(errs.KeyRefactorBypass)
 	}
 	newSt, taskComplete := advanceCycle(st, passed, refactorNotesPresent, maxRefactorRounds)
 	return newSt, taskComplete, nil

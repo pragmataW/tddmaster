@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/spf13/cobra"
@@ -18,40 +19,40 @@ func newRefineCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			if !spec.ValidSlug(slug) {
-				return fmt.Errorf("invalid slug %q", slug)
+				return errs.Newf(errs.KeyInvalidSlug, slug)
 			}
 			root, err := resolveRoot(cmd)
 			if err != nil {
-				return fmt.Errorf("resolve root: %w", err)
+				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
 			if !spec.Exists(root, slug) {
-				return fmt.Errorf("spec %q not found: run tddmaster start %s first", slug, slug)
+				return errs.Newf(errs.KeySpecNotFoundRunStart, slug, slug)
 			}
 			state, err := spec.LoadState(root, slug)
 			if err != nil {
-				return fmt.Errorf("load state: %w", err)
+				return errs.Wrap(errs.KeyLoadState, err)
 			}
 			if state.Phase != string(phasecatalog.PhaseRefinement) {
-				return fmt.Errorf("refine only valid in refinement phase, current phase: %s", state.Phase)
+				return errs.Newf(errs.KeyRefineWrongPhase, state.Phase)
 			}
 			answer, _ := cmd.Flags().GetString("answer")
 			if strings.TrimSpace(answer) == "" {
-				return fmt.Errorf("--answer is required")
+				return errs.New(errs.KeyAnswerRequired)
 			}
 			if !json.Valid([]byte(answer)) {
-				return fmt.Errorf("invalid JSON in --answer")
+				return errs.New(errs.KeyInvalidJSONInAnswer)
 			}
 			var payload spec.RefinePayload
 			if err := json.Unmarshal([]byte(answer), &payload); err != nil {
-				return fmt.Errorf("unmarshal answer: %w", err)
+				return errs.Wrap(errs.KeyUnmarshalAnswer, err)
 			}
 			progress, err := spec.LoadProgress(root, slug)
 			if err != nil {
-				return fmt.Errorf("load progress: %w", err)
+				return errs.Wrap(errs.KeyLoadProgress, err)
 			}
 			settings, err := spec.LoadSettings(root, slug)
 			if err != nil {
-				return fmt.Errorf("load settings: %w", err)
+				return errs.Wrap(errs.KeyLoadSettings, err)
 			}
 			newTasks, newSeq, err := spec.ApplyRefinement(progress.Tasks, payload, settings.TDDEnabled, progress.TaskSeq)
 			if err != nil {
@@ -62,20 +63,20 @@ func newRefineCmd() *cobra.Command {
 			progress.Tasks = newTasks
 			progress.TaskSeq = newSeq
 			if err := spec.SaveProgress(root, slug, progress); err != nil {
-				return fmt.Errorf("save progress: %w", err)
+				return errs.Wrap(errs.KeySaveProgress, err)
 			}
 			content := spec.RenderSpecMd(slug, state, progress)
 			if err := spec.SaveSpecMd(root, slug, content); err != nil {
 				progress.Tasks = oldTasks
 				progress.TaskSeq = oldSeq
 				if rbErr := spec.SaveProgress(root, slug, progress); rbErr != nil {
-					return fmt.Errorf("save spec md: %v (progress rollback also failed: %w)", err, rbErr)
+					return errs.Newf(errs.KeySaveSpecMDRollback, err, rbErr)
 				}
-				return fmt.Errorf("save spec md (progress rolled back): %w", err)
+				return errs.Wrap(errs.KeySaveSpecMDRolledBack, err)
 			}
 			if len(payload.Remove) > 0 {
 				if err := pruneTraceability(root, slug, payload.Remove); err != nil {
-					return fmt.Errorf("prune traceability: %w", err)
+					return errs.Wrap(errs.KeyPruneTraceability, err)
 				}
 			}
 			out := struct {
@@ -87,7 +88,7 @@ func newRefineCmd() *cobra.Command {
 			}
 			data, err := json.MarshalIndent(out, "", "  ")
 			if err != nil {
-				return fmt.Errorf("marshal output: %w", err)
+				return errs.Wrap(errs.KeyMarshalOutput, err)
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), string(data))
 			return nil

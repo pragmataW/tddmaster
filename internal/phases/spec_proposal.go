@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -22,15 +23,15 @@ type TaskGenPayload struct {
 
 func BuildTasksFromGen(p TaskGenPayload, tddDefault bool, fallbackEdgeCases []string) ([]spec.Task, error) {
 	if len(p.Tasks) == 0 {
-		return nil, fmt.Errorf("at least one task required")
+		return nil, errs.New(errs.KeyAtLeastOneTask)
 	}
 	tasks := make([]spec.Task, len(p.Tasks))
 	for i, item := range p.Tasks {
 		if item.Title == "" {
-			return nil, fmt.Errorf("task %d: title is required", i+1)
+			return nil, errs.Newf(errs.KeyTaskTitleRequired, i+1)
 		}
 		if len(item.Criteria) == 0 {
-			return nil, fmt.Errorf("task %d: at least one acceptance criterion required", i+1)
+			return nil, errs.Newf(errs.KeyTaskACRequired, i+1)
 		}
 		ec := item.LinkedEdgeCases
 		if len(ec) == 0 {
@@ -63,7 +64,7 @@ func taskGenPrompt() engine.Action {
 		Instruction: instr,
 		ExpectedInput: engine.ExpectedInput{
 			Format:  engine.FormatJSON,
-			Example: `{"tasks":[{"title":"...","criteria":[{"then":"..."}],"linkedEdgeCases":["..."]}]}`,
+			Example: promptregistry.ExampleTaskGen,
 		},
 	}
 }
@@ -93,7 +94,7 @@ func (d *specProposalDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engin
 func (d *specProposalDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer []byte) (engine.Action, bool, error) {
 	if !c.HasAnswer("tasks_generated") {
 		if !json.Valid(answer) {
-			return engine.Action{}, false, fmt.Errorf("invalid JSON answer")
+			return engine.Action{}, false, errs.New(errs.KeyInvalidJSONAnswer)
 		}
 		var payload TaskGenPayload
 		if err := json.Unmarshal(answer, &payload); err != nil {
@@ -122,7 +123,7 @@ func (d *specProposalDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answ
 
 	if !c.HasAnswer("self_review") {
 		if strings.TrimSpace(string(answer)) != "approve" {
-			return engine.Action{}, false, fmt.Errorf("self-review requires approve")
+			return engine.Action{}, false, errs.New(errs.KeySelfReviewNeedApprove)
 		}
 		if err := c.SetAnswer("self_review", "approve"); err != nil {
 			return engine.Action{}, false, err

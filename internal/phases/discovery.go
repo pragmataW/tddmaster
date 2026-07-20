@@ -2,10 +2,10 @@ package phases
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 )
 
@@ -64,7 +64,7 @@ func DiscoverySteps() []DiscoveryStep {
 					Instruction: instr,
 					ExpectedInput: engine.ExpectedInput{
 						Format:  engine.FormatJSON,
-						Example: `{"premises":[{"text":"...","agreed":true,"revision":"..."}]}`,
+						Example: promptregistry.ExamplePremises,
 					},
 				}
 			},
@@ -109,7 +109,7 @@ func DiscoverySteps() []DiscoveryStep {
 		Prompt: func(mode string) engine.Action {
 			return engine.Action{
 				Action:      engine.ActionAsk,
-				Instruction: "Review the discovery synthesis above. When ready, submit \"approve\" to continue.",
+				Instruction: promptregistry.DiscoverySynthesisText,
 				ExpectedInput: engine.ExpectedInput{
 					Format: engine.FormatFlag,
 				},
@@ -119,7 +119,7 @@ func DiscoverySteps() []DiscoveryStep {
 			if strings.TrimSpace(string(answer)) == "approve" {
 				return nil
 			}
-			return fmt.Errorf("expected \"approve\", got %q", strings.TrimSpace(string(answer)))
+			return errs.Newf(errs.KeyExpectedApprove, strings.TrimSpace(string(answer)))
 		},
 	})
 
@@ -159,7 +159,7 @@ func (d *discoveryDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer 
 
 	promptAction := current.Prompt(mode)
 	if promptAction.ExpectedInput.Format == engine.FormatJSON && !json.Valid(answer) {
-		return engine.Action{}, false, fmt.Errorf("invalid JSON answer")
+		return engine.Action{}, false, errs.New(errs.KeyInvalidJSONAnswer)
 	}
 
 	if current.Validate != nil {

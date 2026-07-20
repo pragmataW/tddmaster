@@ -2,11 +2,11 @@ package scaffold
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/pragmataW/tddmaster/internal/adapter"
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/manifest"
 	"github.com/pragmataW/tddmaster/internal/paths"
 )
@@ -40,11 +40,11 @@ func writeManifest(root string, m manifest.Manifest) (string, error) {
 	p := paths.Manifest(root)
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal manifest: %w", err)
+		return "", errs.Wrap(errs.KeyMarshalManifest, err)
 	}
 	data = append(data, '\n')
 	if err := os.WriteFile(p, data, 0o644); err != nil {
-		return "", fmt.Errorf("failed to write manifest: %w", err)
+		return "", errs.Wrap(errs.KeyWriteManifest, err)
 	}
 	return p, nil
 }
@@ -59,13 +59,13 @@ func Scaffold(opts Options) (Result, error) {
 	}
 
 	if len(m.SelectedTools) == 0 {
-		return Result{}, errors.New("at least one tool is required")
+		return Result{}, errs.New(errs.KeyToolRequired)
 	}
 
 	manifest.Normalize(&m)
 
 	if err := os.MkdirAll(paths.Tddmaster(opts.Root), 0o755); err != nil {
-		return Result{}, fmt.Errorf("failed to create .tddmaster dir: %w", err)
+		return Result{}, errs.Wrap(errs.KeyCreateTddmasterDir, err)
 	}
 
 	manifestPath, err := writeManifest(opts.Root, m)
@@ -83,7 +83,7 @@ func Scaffold(opts Options) (Result, error) {
 			continue
 		}
 		if err := a.Sync(adapter.SyncContext{Root: opts.Root, Manifest: &m, CommandPrefix: m.Command}); err != nil {
-			return Result{}, fmt.Errorf("adapter %s: %w", id, err)
+			return Result{}, errs.Wrap(errs.KeyAdapter, err, id)
 		}
 		result.Adapters = append(result.Adapters, id)
 	}

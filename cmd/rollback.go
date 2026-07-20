@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/lifecycle"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/ui/theme"
@@ -18,11 +19,11 @@ func newRollbackCmd() *cobra.Command {
 			slug := args[0]
 			targetPhase := args[1]
 			if !spec.ValidSlug(slug) {
-				return fmt.Errorf("invalid slug %q", slug)
+				return errs.Newf(errs.KeyInvalidSlug, slug)
 			}
 			root, err := resolveRoot(cmd)
 			if err != nil {
-				return fmt.Errorf("resolve root: %w", err)
+				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
 			warnings, err := lifecycle.Rollback(root, slug, targetPhase)
 			if err != nil {

@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/ui/ruleform"
 	"github.com/spf13/cobra"
 )
@@ -26,20 +26,20 @@ func newRuleAddCmd() *cobra.Command {
 			if root == "" {
 				cwd, err := os.Getwd()
 				if err != nil {
-					return fmt.Errorf("get cwd: %w", err)
+					return errs.Wrap(errs.KeyGetCwd, err)
 				}
 				root = cwd
 			}
 			scope, _ := cmd.Flags().GetString("scope")
 			name, _ := cmd.Flags().GetString("name")
 			if (scope != "") != (name != "") {
-				return fmt.Errorf("non-interactive mode requires both --scope and --name")
+				return errs.New(errs.KeyRuleNonInteractive)
 			}
 			if scope != "" && name != "" {
 				content, _ := cmd.Flags().GetString("content")
 				contentFile, _ := cmd.Flags().GetString("content-file")
 				if content != "" && contentFile != "" {
-					return fmt.Errorf("--content and --content-file are mutually exclusive")
+					return errs.New(errs.KeyContentExclusive)
 				}
 				_, err := runRuleAddNonInteractive(root, scope, name, content, contentFile)
 				return err
@@ -60,7 +60,7 @@ func runRuleAddNonInteractive(root, scope, name, content, contentFile string) (s
 	if contentFile != "" {
 		raw, err := os.ReadFile(contentFile)
 		if err != nil {
-			return "", fmt.Errorf("read content-file %q: %w", contentFile, err)
+			return "", errs.Wrap(errs.KeyReadContentFile, err, contentFile)
 		}
 		body = string(raw)
 	}

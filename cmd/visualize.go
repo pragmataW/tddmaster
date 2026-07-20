@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 	"github.com/pragmataW/tddmaster/internal/spec"
 	"github.com/pragmataW/tddmaster/internal/visualize"
@@ -37,20 +38,20 @@ func newVisualizeCmd() *cobra.Command {
 func runVisualize(cmd *cobra.Command, args []string) error {
 	slug := args[0]
 	if !spec.ValidSlug(slug) {
-		return fmt.Errorf("invalid slug %q", slug)
+		return errs.Newf(errs.KeyInvalidSlug, slug)
 	}
 	root, err := resolveRoot(cmd)
 	if err != nil {
-		return fmt.Errorf("resolve root: %w", err)
+		return errs.Wrap(errs.KeyResolveRoot, err)
 	}
 
 	if !spec.Exists(root, slug) {
-		return fmt.Errorf("spec directory not found for slug %q: make sure the slug is correct and exists in .tddmaster/specs/", slug)
+		return errs.Newf(errs.KeySpecDirNotFound, slug)
 	}
 
 	listener, url, err := listenOnFreePort()
 	if err != nil {
-		return fmt.Errorf("failed to listen on an available port: %w", err)
+		return errs.Wrap(errs.KeyListenPort, err)
 	}
 
 	handler, err := getVisualizeHandler(root, slug)
@@ -74,7 +75,7 @@ func runVisualize(cmd *cobra.Command, args []string) error {
 	}()
 
 	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("web server failed: %w", err)
+		return errs.Wrap(errs.KeyWebServer, err)
 	}
 
 	return nil

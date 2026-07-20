@@ -1,11 +1,11 @@
 package spec
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"time"
 
+	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/paths"
 )
 
@@ -23,11 +23,11 @@ type Result struct {
 
 func Start(root, slug string, now time.Time) (Result, error) {
 	if !slugPattern.MatchString(slug) {
-		return Result{}, fmt.Errorf("invalid slug %q: must match %s", slug, slugPattern.String())
+		return Result{}, errs.Newf(errs.KeyInvalidSlugMustMatch, slug, slugPattern.String())
 	}
 
 	if _, err := os.Stat(paths.Manifest(root)); err != nil {
-		return Result{}, fmt.Errorf("manifest not found: run 'tddmaster init' first")
+		return Result{}, errs.New(errs.KeyManifestNotFound)
 	}
 
 	if Exists(root, slug) {
@@ -35,7 +35,7 @@ func Start(root, slug string, now time.Time) (Result, error) {
 	}
 
 	if _, err := os.Stat(paths.ArchiveSpecDir(root, slug)); err == nil {
-		return Result{}, fmt.Errorf("spec %q exists in the archive: run 'tddmaster restore %s' first or pick another slug", slug, slug)
+		return Result{}, errs.Newf(errs.KeySpecInArchive, slug, slug)
 	}
 
 	dir := paths.SpecDir(root, slug)
