@@ -597,3 +597,27 @@ func TestAnalysisDriver_InstructOmitsTouchedFiles_WhenNoPlan(t *testing.T) {
 		t.Error("instruction must not contain 'approved touched files:' when no task has a plan")
 	}
 }
+
+func TestAnalysisDriver_InstructIncludesTaskDependsOn(t *testing.T) {
+	root := t.TempDir()
+	tasks := cleanTasks()
+	tasks[1].DependsOn = []string{"task-1"}
+	seedAnalysisSpec(t, root, "s", tasks)
+	ctx := buildAnalysisCtx(t, root, "s")
+
+	action, _ := AnalysisDriver().Next(ctx, &engine.PhaseDef{ID: "cross-artifact-analysis"})
+	if !strings.Contains(action.Instruction, "depends on: task-1") {
+		t.Error("instruction must contain 'depends on: task-1' when a task declares a dependency")
+	}
+}
+
+func TestAnalysisDriver_InstructOmitsDependsOn_WhenNone(t *testing.T) {
+	root := t.TempDir()
+	seedAnalysisSpec(t, root, "s", cleanTasks())
+	ctx := buildAnalysisCtx(t, root, "s")
+
+	action, _ := AnalysisDriver().Next(ctx, &engine.PhaseDef{ID: "cross-artifact-analysis"})
+	if strings.Contains(action.Instruction, "depends on:") {
+		t.Error("instruction must not contain 'depends on:' when no task declares a dependency")
+	}
+}

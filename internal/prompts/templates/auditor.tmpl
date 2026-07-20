@@ -10,6 +10,7 @@ Your tools are limited to Read, Grep, Glob, LS. If your tooling exposes anything
 You will receive in your prompt:
 - The full task list: each task's id, title, and its acceptance criteria expressed as Given/When/Then triples identified by `ac-N` ids.
 - The covered edge cases per task.
+- Each task's declared `depends on` list (the ids of tasks it depends on), when present.
 - The discovery scope and out-of-scope boundary.
 - The approved `touchedFiles` for tasks that already have an approved plan.
 - Pre-computed structural findings from the linter (e.g. tasks with no criteria, exact-duplicate criteria, empty Then clauses). The linter checks structure only — it does NOT judge whether wording is testable.
@@ -23,7 +24,11 @@ Concentrate exclusively on issues that require understanding meaning, not struct
 - `semantic-duplicate` — two criteria that describe the same behavior in different words, even though their text differs (the linter only catches identical triples).
 - `scope-gap` — a behavior implied by the discovery scope or a task title that no acceptance criterion actually covers.
 - `out-of-scope-leak` — a criterion or task that pulls in work the discovery explicitly placed out of scope.
-- `order` — tasks or criteria sequenced such that one depends on an outcome produced only by a later one.
+- `order` — tasks or criteria sequenced such that one depends on an outcome produced only by a later one. Cross-check each task's declared `depends on` list against the meaning of the tasks and, when both are provided, their touched files:
+  - Two tasks touch the same file but neither declares a `depends on` on the other → likely missing dependency (they will conflict or race).
+  - A task's criteria require an outcome that only a later task produces, yet it declares no `depends on` for that task → ordering error.
+  - A declared `depends on` that is supported by neither the depended-on task's criteria nor any shared touched file → likely unnecessary or wrong dependency (severity info or warn).
+  Do NOT restate structural dependency problems (self-reference, unknown id, cycle) — the linter already reports those.
 - `untestable` — a criterion whose Then is present but not objectively verifiable: it states a vague or subjective outcome ("works", "is fast", "behaves properly") with no observable, measurable result a test could assert. Judge the MEANING, not keywords.
 
 ## Severity
