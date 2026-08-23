@@ -8,6 +8,7 @@ import (
 
 	"github.com/pragmataW/tddmaster/internal/engine"
 	"github.com/pragmataW/tddmaster/internal/errs"
+	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
@@ -74,6 +75,20 @@ func anyActionable(findings []spec.Finding) bool {
 	return false
 }
 
+// advisoryAction surfaces info-severity findings on the way out. The phase closes
+// itself once nothing is actionable, so without this the notes the auditor
+// produced would never reach the caller driving off the JSON.
+func advisoryAction(findings []spec.Finding) engine.Action {
+	if len(findings) == 0 {
+		return engine.Action{}
+	}
+	notice := []string{promptregistry.AnalysisAdvisoryHeader}
+	for _, f := range findings {
+		notice = append(notice, fmt.Sprintf("- [%s] %s %s: %s", f.Severity, f.Category, f.TaskID, f.Detail))
+	}
+	return engine.Action{Action: engine.ActionNotify, Instruction: strings.Join(notice, "\n")}
+}
+
 func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.Finding) string {
 	var parts []string
 	parts = append(parts, promptregistry.AuditorAnalysisHeader)
@@ -83,7 +98,7 @@ func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.F
 	for _, t := range tasks {
 		parts = append(parts, fmt.Sprintf("- %s: %s", t.ID, t.Title))
 		for _, cr := range t.Criteria {
-			parts = append(parts, fmt.Sprintf("  - %s: %s", cr.ID, strings.TrimSpace(cr.Then)))
+			parts = append(parts, fmt.Sprintf("  - %s:%s", cr.ID, spec.FormatCriterionInline(cr)))
 		}
 		if len(t.EdgeCases) > 0 {
 			parts = append(parts, "  edge cases:")
@@ -102,12 +117,26 @@ func buildAuditorInstruction(c *engine.Context, tasks []spec.Task, lint []spec.F
 		}
 	}
 
+	if lc := strings.TrimSpace(c.AnswerValue("listen_context")); lc != "" {
+		parts = append(parts, "")
+		parts = append(parts, "Spec context, in the user's own words: "+lc)
+	}
 	if ec := c.AnswerValue("edge_cases"); ec != "" {
 		parts = append(parts, "")
 		parts = append(parts, "Discovery edge cases: "+ec)
 	}
 	if sb := c.AnswerValue("scope_boundary"); sb != "" {
 		parts = append(parts, "Scope boundary: "+sb)
+	}
+	if v := strings.TrimSpace(c.AnswerValue("verification")); v != "" {
+		parts = append(parts, "Verification method: "+v)
+	}
+	if premises := spec.ParseChallengedPremises(c.AnswerValue("premises")); len(premises) > 0 {
+		parts = append(parts, "")
+		parts = append(parts, "Premises the user did NOT accept (a task or criterion that relies on one is a finding):")
+		for _, p := range premises {
+			parts = append(parts, "- "+p)
+		}
 	}
 
 	parts = append(parts, "")
@@ -138,7 +167,7 @@ func (d *analysisDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Ac
 			}
 		}
 		if !anyActionable(findings) {
-			return engine.Action{}, true
+			return advisoryAction(findings), true
 		}
 
 		var detail []string
@@ -151,13 +180,17 @@ func (d *analysisDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Ac
 		return engine.Action{
 			Action:      engine.ActionAsk,
 			Instruction: strings.Join(detail, "\n"),
+			ExpectedInput: engine.ExpectedInput{
+				Format:  engine.FormatText,
+				Example: promptregistry.ExampleAnalysisDecision,
+			},
 			InteractiveOptions: []engine.InteractiveOption{
-				{Label: optReturnToRefinement, Description: "Return to refinement to address the blocking findings."},
+				{Label: optReturnToRefinement, Description: "Go back to the refinement phase and rework the task list there with `tddmaster refine`. No payload needed."},
 				{Label: optAcceptAnyway, Description: "Accept the analysis despite the blocking findings and continue."},
-				{Label: optEdit, Description: "Edit the tasks inline, then re-run the audit."},
+				{Label: optEdit, Description: "Stay in this phase: apply a refine payload inline and re-run the audit."},
 			},
 			CommandMap: map[string]string{
-				optReturnToRefinement: fmt.Sprintf("tddmaster next %s --answer='{\"action\":\"return-to-refinement\",\"payload\":{...}}'", c.Slug()),
+				optReturnToRefinement: fmt.Sprintf("tddmaster next %s --answer='return-to-refinement'", c.Slug()),
 				optAcceptAnyway:       fmt.Sprintf("tddmaster next %s --answer='accept-anyway'", c.Slug()),
 				optEdit:               fmt.Sprintf("tddmaster next %s --answer='{\"action\":\"edit\",\"payload\":{...}}'", c.Slug()),
 			},
@@ -191,6 +224,22 @@ func (d *analysisDriver) applyEdit(c *engine.Context, payload []byte) error {
 	return c.SaveProgress(pr)
 }
 
+// returnToRefinement puts the spec back in the refinement phase so the task list
+// can be reworked with `tddmaster refine`. Without the rewind this option was
+// indistinguishable from `edit`: both re-audited in place, contradicting its name.
+func (d *analysisDriver) returnToRefinement(c *engine.Context) error {
+	if err := d.clearAuditState(c); err != nil {
+		return err
+	}
+	if err := c.SetAnswer(answerKeyAttempts, ""); err != nil {
+		return err
+	}
+	if err := c.SetAnswer(refinementApprovedKey, ""); err != nil {
+		return err
+	}
+	return c.RewindPhase(phasecatalog.PhaseRefinement)
+}
+
 func (d *analysisDriver) clearAuditState(c *engine.Context) error {
 	if err := c.SetAnswer(answerKeyAudited, ""); err != nil {
 		return err
@@ -211,6 +260,9 @@ func (d *analysisDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer [
 			}
 			return engine.Action{}, true, nil
 		}
+		if trimmed == optReturnToRefinement {
+			return engine.Action{}, false, d.returnToRefinement(c)
+		}
 
 		var gate analysisGateAnswer
 		if err := json.Unmarshal(answer, &gate); err != nil {
@@ -222,6 +274,9 @@ func (d *analysisDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer [
 				return engine.Action{}, false, err
 			}
 			return engine.Action{}, true, nil
+		}
+		if gate.Action == optReturnToRefinement && len(gate.Payload) == 0 {
+			return engine.Action{}, false, d.returnToRefinement(c)
 		}
 
 		if len(gate.Payload) > 0 {
@@ -278,7 +333,7 @@ func (d *analysisDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer [
 		if err := c.SetAnswer(answerKeyComplete, "1"); err != nil {
 			return engine.Action{}, false, err
 		}
-		return engine.Action{}, true, nil
+		return advisoryAction(merged), true, nil
 	}
 
 	return engine.Action{}, false, nil

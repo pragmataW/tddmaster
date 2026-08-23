@@ -156,3 +156,27 @@ func Exists(root, slug string) bool {
 func SaveSpecMd(root, slug, content string) error {
 	return writeFile(paths.SpecDir(root, slug), paths.SpecMd(root, slug), []byte(content))
 }
+
+// RefreshSpecMd re-renders spec.md from whatever is on disk right now, but only
+// when the file still exists: a rollback past the spec-proposal phase deletes it
+// on purpose, and recreating it there would resurrect an artifact that phase has
+// not produced yet. Everywhere else it stops spec.md from describing a spec that
+// no longer exists — the stale document a rollback used to leave behind.
+func RefreshSpecMd(root, slug string) error {
+	if _, err := os.Stat(paths.SpecMd(root, slug)); os.IsNotExist(err) {
+		return nil
+	}
+	state, err := LoadState(root, slug)
+	if err != nil {
+		return err
+	}
+	prog, err := LoadProgress(root, slug)
+	if err != nil {
+		return err
+	}
+	var trace []Traceability
+	if tr, err := LoadTraceability(root, slug); err == nil {
+		trace = append(trace, tr)
+	}
+	return SaveSpecMd(root, slug, RenderSpecMd(slug, state, prog, trace...))
+}

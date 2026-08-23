@@ -84,10 +84,10 @@ func TestRenderSpecMd_GoldenFullSpec(t *testing.T) {
 		"## Tasks\n" +
 		"- [ ] task-1: Bootstrap (TDD) (important)\n" +
 		"  - No dependencies\n" +
-		"- **ac-1**\n" +
-		"  - THEN ac line one\n" +
-		"- **ac-2**\n" +
-		"  - THEN ac line two\n" +
+		"  - **ac-1**\n" +
+		"    - THEN ac line one\n" +
+		"  - **ac-2**\n" +
+		"    - THEN ac line two\n" +
 		"- [x] task-2: Other title\n" +
 		"  - No dependencies\n\n" +
 		"## Verification\n" +
@@ -599,6 +599,36 @@ func TestSaveSpecMd_CreatesSpecDirIfAbsent(t *testing.T) {
 	}
 }
 
+func TestParseChallengedPremises_KeepsOnlyWhatTheUserRejected(t *testing.T) {
+	input := `{"premises":[
+		{"text":"the cache can be cleared on deploy","agreed":true},
+		{"text":"tokens can be rotated offline","agreed":false,"revision":"rotation must happen live"},
+		{"text":"the billing module is safe to touch","agreed":false}
+	]}`
+
+	got := ParseChallengedPremises(input)
+	want := []string{
+		"tokens can be rotated offline -> REVISED: rotation must happen live",
+		"the billing module is safe to touch -> REJECTED",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ParseChallengedPremises len = %d, want %d; got %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ParseChallengedPremises[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestParseChallengedPremises_EmptyAndMalformedInput(t *testing.T) {
+	for _, input := range []string{"", "   ", "not json", `{"premises":[]}`, `{"premises":[{"text":"  ","agreed":false}]}`} {
+		if got := ParseChallengedPremises(input); got != nil {
+			t.Fatalf("ParseChallengedPremises(%q): got %v, want nil", input, got)
+		}
+	}
+}
+
 func TestParseEdgeCases_Exported_NumberedInput(t *testing.T) {
 	input := "Edge cases: (1) bad ID errors. (2) empty title rejected. (3) empty list message."
 	got := ParseEdgeCases(input)
@@ -855,5 +885,77 @@ func TestRenderSpecMd_NotBlockedTask_NoBlockedSuffix(t *testing.T) {
 
 	if strings.Contains(got, "(blocked") {
 		t.Errorf("expected no blocked suffix for unblocked task, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_EdgeCasesCarryIDsAndCoveringTests(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusExecuting,
+		Tasks: []Task{{
+			ID:        "task-1",
+			Title:     "Coupons",
+			Criteria:  []Criterion{{ID: "ac-1", Then: "it works"}},
+			EdgeCases: []string{"unknown code", "empty code"},
+		}},
+	}
+	tr := Traceability{Entries: map[string][]TraceEntry{
+		"internal/cart/coupon_test.go": {
+			{FunctionName: "TestApplyCoupon_ec1", TaskID: "task-1", EC: []string{"ec-1"}},
+			{FunctionName: "TestApplyCoupon_ec2", TaskID: "task-1", EC: []string{"ec-2"}},
+		},
+	}}
+
+	got := RenderSpecMd("s", st, pr, tr)
+	for _, want := range []string{
+		"- **ec-1**: unknown code",
+		"  - TestApplyCoupon_ec1",
+		"- **ec-2**: empty code",
+		"  - TestApplyCoupon_ec2",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("spec.md must contain %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderSpecMd_WithoutTraceability_StillListsEdgeCases(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusDraft,
+		Tasks:  []Task{{ID: "task-1", Title: "Coupons", EdgeCases: []string{"unknown code"}}},
+	}
+
+	got := RenderSpecMd("s", st, pr)
+	if !strings.Contains(got, "- **ec-1**: unknown code") {
+		t.Fatalf("edge cases must render without traceability, got:\n%s", got)
+	}
+}
+
+func TestRenderSpecMd_EdgeCaseTestsScopedToOwningTask(t *testing.T) {
+	st := State{Version: 1, Slug: "s", Answers: map[string][]Answer{}}
+	pr := Progress{
+		Spec:   "s",
+		Status: StatusExecuting,
+		Tasks: []Task{
+			{ID: "task-1", Title: "One", EdgeCases: []string{"first"}},
+			{ID: "task-2", Title: "Two", EdgeCases: []string{"second"}},
+		},
+	}
+	tr := Traceability{Entries: map[string][]TraceEntry{
+		"a_test.go": {{FunctionName: "TestTwoOnly", TaskID: "task-2", EC: []string{"ec-1"}}},
+	}}
+
+	got := RenderSpecMd("s", st, pr, tr)
+	oneIdx := strings.Index(got, "- **ec-1**: first")
+	twoIdx := strings.Index(got, "- **ec-1**: second")
+	testIdx := strings.Index(got, "TestTwoOnly")
+	if oneIdx == -1 || twoIdx == -1 || testIdx == -1 {
+		t.Fatalf("expected both edge cases and the test, got:\n%s", got)
+	}
+	if testIdx < twoIdx {
+		t.Fatalf("task-2's test must not attach to task-1's edge case, got:\n%s", got)
 	}
 }

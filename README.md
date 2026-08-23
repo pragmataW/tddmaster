@@ -57,6 +57,8 @@ Everything the agent needs is in that JSON. It drives off the action type, never
 - `terminal` — spec is complete or cancelled; stop the loop
 - `error` — surface the error; do not advance
 
+Execution task entries also carry `completionCondition`: `never`, `on-success`, or `on-success-without-refactor-notes`. “Success” includes the full stage contract, such as required coverage—not merely `passed: true`. The orchestrator uses that field to merge and remove a task worktree before submitting the report that will complete the task.
+
 ## Engine model
 
 The workflow is a deterministic state machine, not an open-ended chat. It is built from three nested pieces:
@@ -93,7 +95,7 @@ Unlike the original, workflow behavior is chosen **per spec** at the start, not 
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `tddEnabled` | ON | Enforce failing-test-first cycles per task |
-| `skipVerifierEnabled` | OFF | Skip the independent verifier sub-agent after the green stage |
+| `skipVerifierEnabled` | OFF | Skip non-TDD verification and TDD post-refactor re-verification; TDD green verification always runs |
 | `importantTaskGateEnabled` | OFF | Pause tasks flagged `important` for a plan-first review before execution |
 | `minTestCoverage` | 80 | Minimum test coverage percentage required in green stage (0 = disabled) |
 | `ruleLearningEnabled` | OFF | Run the rule learning phase after execution to persist patterns as project rules |
@@ -351,7 +353,7 @@ The orchestrating agent presents the proposed rules and asks the user to `accept
   tddmaster rule add --scope <scope> --name <name> --content-file <path>
   ```
 
-  `--scope` is one of `global`, `test-writer`, `executor`, `verifier`, or `planner`. The synthesizer writes the rule body to a temp file, then calls the command. It never edits `.tddmaster/rules/` directly and never passes `--overwrite`.
+  `--scope` is one of `global`, `test-writer`, `executor`, `verifier`, or `planner`. The synthesizer writes the rule body to a temp file, then calls the command. It never edits `.tddmaster/rules/` directly. Existing rule names are rejected instead of overwritten.
 
 - **revise** — the user provides feedback and the synthesizer re-proposes.
 - **reject** — no rules are written.

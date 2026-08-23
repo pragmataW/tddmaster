@@ -1,10 +1,65 @@
 package loop
 
-import "github.com/pragmataW/tddmaster/internal/spec"
+import (
+	"sort"
+	"strings"
+
+	"github.com/pragmataW/tddmaster/internal/spec"
+)
 
 type FileCoverageEntry struct {
 	File     string  `json:"file"`
 	Coverage float64 `json:"coverage"`
+}
+
+// isTestFile reports whether a path is a test file rather than production code.
+// Coverage is measured on production files only; a test file has no coverage of
+// its own to report.
+func isTestFile(path string) bool {
+	base := strings.ToLower(path)
+	if i := strings.LastIndexAny(base, "/\\"); i >= 0 {
+		base = base[i+1:]
+	}
+	ext := ""
+	if i := strings.LastIndex(base, "."); i > 0 {
+		ext = base[i:]
+		base = base[:i]
+	}
+	switch {
+	case strings.HasSuffix(base, "_test"), strings.HasSuffix(base, ".test"), strings.HasSuffix(base, ".spec"):
+		return true
+	case strings.HasPrefix(base, "test_") && ext == ".py":
+		return true
+	}
+	return false
+}
+
+func measurableFiles(files []string) []string {
+	out := make([]string, 0, len(files))
+	for _, f := range files {
+		if f == "" || isTestFile(f) {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// lowCoverageStateFiles lists the files whose last recorded coverage is below
+// the configured threshold, sorted for stable prompt output.
+func lowCoverageStateFiles(st spec.ExecState, s spec.Settings) []string {
+	if !coverageEnforced(s) || len(st.LastCoverage) == 0 {
+		return nil
+	}
+	threshold := float64(s.MinTestCoverage)
+	var low []string
+	for file, pct := range st.LastCoverage {
+		if pct < threshold {
+			low = append(low, file)
+		}
+	}
+	sort.Strings(low)
+	return low
 }
 
 func coverageEnforced(s spec.Settings) bool {

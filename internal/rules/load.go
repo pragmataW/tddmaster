@@ -14,8 +14,14 @@ import (
 var KnownAgents = []string{"test-writer", "executor", "verifier", "planner", "auditor"}
 
 type Set struct {
+	root   string
 	global []string
 	agents map[string][]string
+}
+
+type Doc struct {
+	Path string
+	Body string
 }
 
 func Load(root string) (Set, error) {
@@ -34,6 +40,7 @@ func Load(root string) (Set, error) {
 	}
 
 	s := Set{
+		root:   root,
 		agents: make(map[string][]string),
 	}
 
@@ -69,6 +76,22 @@ func Load(root string) (Set, error) {
 
 	sort.Strings(s.global)
 	return s, nil
+}
+
+func (s Set) Docs(agent string) []Doc {
+	paths := s.For(agent)
+	if len(paths) == 0 {
+		return nil
+	}
+	docs := make([]Doc, 0, len(paths))
+	for _, rel := range paths {
+		body, err := os.ReadFile(filepath.Join(s.root, rel))
+		if err != nil {
+			return nil
+		}
+		docs = append(docs, Doc{Path: rel, Body: string(body)})
+	}
+	return docs
 }
 
 func (s Set) For(agent string) []string {

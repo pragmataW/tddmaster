@@ -81,6 +81,8 @@ type ExecState struct {
 	LastUncoveredEC    []string           `json:"lastUncoveredEC,omitempty"`
 	LastCoverage       map[string]float64 `json:"lastCoverage,omitempty"`
 	LastModifiedFiles  []string           `json:"lastModifiedFiles,omitempty"`
+	TestFiles          []string           `json:"testFiles,omitempty"`
+	ImplFiles          []string           `json:"implFiles,omitempty"`
 	CoverageUnreported bool               `json:"coverageUnreported,omitempty"`
 	RefactorNotes      []RefactorNote     `json:"refactorNotes,omitempty"`
 }
@@ -121,6 +123,7 @@ type TaskPlan struct {
 
 const (
 	CriterionIDPrefix = "ac-"
+	EdgeCaseIDPrefix  = "ec-"
 	TaskIDPrefix      = "task-"
 )
 

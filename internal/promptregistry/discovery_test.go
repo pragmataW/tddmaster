@@ -107,9 +107,8 @@ func TestQuestions_GoldenOrder(t *testing.T) {
 	}
 }
 
-func TestQuestions_ConcernsFieldExists(t *testing.T) {
+func TestQuestions_EveryEntryHasAnID(t *testing.T) {
 	for i, q := range Questions {
-		_ = q.Concerns
 		if q.ID == "" {
 			t.Fatalf("Questions[%d]: ID must not be empty", i)
 		}
@@ -348,13 +347,36 @@ func TestInstruction_KeyModeSelection_GoldenText(t *testing.T) {
 }
 
 func TestInstruction_KeyPremiseChallenge_GoldenText(t *testing.T) {
-	want := "Read the spec description. Identify 2-4 premises the spec assumes. Present each premise and ask the user to agree or disagree. Submit as JSON: {\"premises\":[{\"text\":\"...\",\"agreed\":true/false,\"revision\":\"...\"}]}"
+	want := "Re-read the listen-first context the user just gave for this spec — that context, together with the spec slug, is the only description that exists. Identify 2-4 premises it assumes. Present each premise and ask the user to agree or disagree. Every premise the user does not accept is carried into execution and outranks any assumption the sub-agents would otherwise make, so capture the user's own wording in `revision`. Submit as JSON: {\"premises\":[{\"text\":\"...\",\"agreed\":true/false,\"revision\":\"...\"}]}"
 	got, ok := Instruction(KeyPremiseChallenge)
 	if !ok {
 		t.Fatalf("Instruction(KeyPremiseChallenge): expected ok=true, got false")
 	}
 	if got != want {
 		t.Fatalf("Instruction(KeyPremiseChallenge): got %q, want %q", got, want)
+	}
+}
+
+func TestDiscoveryPrompts_DoNotReferenceANonExistentSpecDescription(t *testing.T) {
+	texts := map[string]string{
+		"KeyPremiseChallenge":         MustInstruction(KeyPremiseChallenge),
+		"AskWithSuggestionsDirective": AskWithSuggestionsDirective,
+	}
+	for name, text := range texts {
+		if strings.Contains(text, "spec description") {
+			t.Fatalf("%s points the agent at a \"spec description\" that no spec artifact carries: %q", name, text)
+		}
+	}
+}
+
+func TestModeDescription(t *testing.T) {
+	for _, o := range ModeOptions {
+		if got := ModeDescription(o.ID); got != o.Description {
+			t.Fatalf("ModeDescription(%q): got %q, want %q", o.ID, got, o.Description)
+		}
+	}
+	if got := ModeDescription("no-such-mode"); got != "" {
+		t.Fatalf("ModeDescription unknown id: got %q, want empty", got)
 	}
 }
 
@@ -558,15 +580,12 @@ func TestInstruction_UnknownKey_StillReturnsFalse(t *testing.T) {
 }
 
 func TestQuestion_StructFields(t *testing.T) {
-	q := Question{ID: "x", Text: "y", Concerns: []string{"z"}}
+	q := Question{ID: "x", Text: "y"}
 	if q.ID != "x" {
 		t.Fatalf("Question.ID: got %q, want %q", q.ID, "x")
 	}
 	if q.Text != "y" {
 		t.Fatalf("Question.Text: got %q, want %q", q.Text, "y")
-	}
-	if len(q.Concerns) != 1 || q.Concerns[0] != "z" {
-		t.Fatalf("Question.Concerns: got %v, want [z]", q.Concerns)
 	}
 }
 

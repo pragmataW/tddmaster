@@ -25,8 +25,8 @@ func newRefineCmd() *cobra.Command {
 			if err != nil {
 				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
-			if !spec.Exists(root, slug) {
-				return errs.Newf(errs.KeySpecNotFoundRunStart, slug, slug)
+			if err := requireActiveSpec(root, slug); err != nil {
+				return err
 			}
 			state, err := spec.LoadState(root, slug)
 			if err != nil {
@@ -65,7 +65,16 @@ func newRefineCmd() *cobra.Command {
 			if err := spec.SaveProgress(root, slug, progress); err != nil {
 				return errs.Wrap(errs.KeySaveProgress, err)
 			}
-			content := spec.RenderSpecMd(slug, state, progress)
+			if len(payload.Remove) > 0 {
+				if err := pruneTraceability(root, slug, payload.Remove); err != nil {
+					return errs.Wrap(errs.KeyPruneTraceability, err)
+				}
+			}
+			var trace []spec.Traceability
+			if tr, trErr := spec.LoadTraceability(root, slug); trErr == nil {
+				trace = append(trace, tr)
+			}
+			content := spec.RenderSpecMd(slug, state, progress, trace...)
 			if err := spec.SaveSpecMd(root, slug, content); err != nil {
 				progress.Tasks = oldTasks
 				progress.TaskSeq = oldSeq
@@ -73,11 +82,6 @@ func newRefineCmd() *cobra.Command {
 					return errs.Newf(errs.KeySaveSpecMDRollback, err, rbErr)
 				}
 				return errs.Wrap(errs.KeySaveSpecMDRolledBack, err)
-			}
-			if len(payload.Remove) > 0 {
-				if err := pruneTraceability(root, slug, payload.Remove); err != nil {
-					return errs.Wrap(errs.KeyPruneTraceability, err)
-				}
 			}
 			out := struct {
 				Tasks []spec.Task `json:"tasks"`

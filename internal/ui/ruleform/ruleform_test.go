@@ -232,23 +232,22 @@ func TestWriteRule_UnknownTarget_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestWriteRule_OverwriteWins(t *testing.T) {
+func TestWriteRule_ExistingRuleIsRejectedAndPreserved(t *testing.T) {
 	root := t.TempDir()
-	_, err := ruleform.WriteRule(root, "global", "overwrite-me", "first content")
+	written, err := ruleform.WriteRule(root, "global", "overwrite-me", "first content")
 	if err != nil {
 		t.Fatalf("first WriteRule error: %v", err)
 	}
 
-	written, err := ruleform.WriteRule(root, "global", "overwrite-me", "second content")
-	if err != nil {
-		t.Fatalf("second WriteRule error: %v", err)
+	if _, err := ruleform.WriteRule(root, "global", "overwrite-me", "second content"); err == nil {
+		t.Fatal("second WriteRule must reject an existing rule")
 	}
 
 	data, err := os.ReadFile(written)
 	if err != nil {
 		t.Fatalf("ReadFile error: %v", err)
 	}
-	if string(data) != "second content" {
-		t.Errorf("overwrite-wins: content = %q, want \"second content\"", string(data))
+	if string(data) != "first content" {
+		t.Errorf("existing rule content = %q, want preserved first content", string(data))
 	}
 }

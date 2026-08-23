@@ -14,7 +14,7 @@ func TestLoopDriver_Next_MaxIteration_ReturnsNotifyWithRestartText(t *testing.T)
 	root := t.TempDir()
 	slug := "cov-next-maxiter"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 15)
@@ -35,7 +35,7 @@ func TestLoopDriver_Next_MaxIteration_ResetsIterationsToZero(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-next-maxiter-reset"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 15)
@@ -58,7 +58,7 @@ func TestLoopDriver_Submit_Continue_ResetsIterationsToZero(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-submit-continue"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 12)
@@ -95,7 +95,7 @@ func TestLoopDriver_Submit_EmptyAnswer_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-submit-empty"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -110,7 +110,7 @@ func TestLoopDriver_Submit_InvalidJSON_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-submit-invalid-json"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -125,17 +125,18 @@ func TestLoopDriver_Submit_MaxIteration_AfterProcessing_ReturnsRestartNotify(t *
 	root := t.TempDir()
 	slug := "cov-submit-maxiter-after"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 14)
 
 	report, err := json.Marshal(StageReport{
-		TaskID:       "t1",
-		Passed:       true,
-		TestsWritten: []string{"t1_test.go"},
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestT1"},
+		FilesModified: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac-1"}},
 		},
 	})
 	if err != nil {
@@ -158,17 +159,18 @@ func TestLoopDriver_Submit_MaxIteration_ResetsIterationsToZeroAfterProcessing(t 
 	root := t.TempDir()
 	slug := "cov-submit-maxiter-reset"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 14)
 
 	report, err := json.Marshal(StageReport{
-		TaskID:       "t1",
-		Passed:       true,
-		TestsWritten: []string{"t1_test.go"},
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestT1"},
+		FilesModified: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac-1"}},
 		},
 	})
 	if err != nil {

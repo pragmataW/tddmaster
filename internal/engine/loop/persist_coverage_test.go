@@ -330,12 +330,14 @@ func TestValidateAndPersistTraceability_Regression_EmptyStore_PopulatesEntries(t
 	root := t.TempDir()
 	slug := "trace-regression-ac1"
 
-	task := spec.Task{ID: "t1", TDDEnabled: true}
+	task := spec.Task{ID: "t1", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
-		TaskID: "t1",
-		Passed: true,
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestFoo"},
+		FilesModified: []string{"foo_test.go"},
 		Traceability: []TraceReportEntry{
 			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "t1", AC: []string{"AC-1"}},
 		},

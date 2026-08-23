@@ -41,20 +41,7 @@ func resolveFullPath(root, target, rawName string) (dir, full string, err error)
 }
 
 func WriteRule(root, target, rawName, content string) (string, error) {
-	dir, full, err := resolveFullPath(root, target, rawName)
-	if err != nil {
-		return "", err
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", errs.Wrap(errs.KeyMkdir, err, dir)
-	}
-
-	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
-		return "", errs.Wrap(errs.KeyWriteFile, err, full)
-	}
-
-	return full, nil
+	return WriteRuleNoOverwrite(root, target, rawName, content)
 }
 
 func WriteRuleNoOverwrite(root, target, rawName, content string) (string, error) {

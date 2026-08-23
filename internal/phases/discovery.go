@@ -7,6 +7,7 @@ import (
 	"github.com/pragmataW/tddmaster/internal/engine"
 	"github.com/pragmataW/tddmaster/internal/errs"
 	"github.com/pragmataW/tddmaster/internal/promptregistry"
+	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
 type DiscoveryStep struct {
@@ -126,6 +127,52 @@ func DiscoverySteps() []DiscoveryStep {
 	return steps
 }
 
+// RenderDiscoverySynthesis reproduces every answer the discovery phase collected
+// so the approval step has something concrete to review. Without it the step asks
+// the user to confirm a synthesis that was never shown.
+func RenderDiscoverySynthesis(c *engine.Context) string {
+	var b strings.Builder
+	b.WriteString(promptregistry.DiscoverySynthesisHeader)
+
+	if v := strings.TrimSpace(c.AnswerValue("listen_context")); v != "" {
+		b.WriteString("\ncontext (verbatim):\n")
+		b.WriteString(v)
+		b.WriteString("\n")
+	}
+	if mode := strings.TrimSpace(c.AnswerValue("mode")); mode != "" {
+		b.WriteString("\nmode: ")
+		b.WriteString(mode)
+		if desc := promptregistry.ModeDescription(mode); desc != "" {
+			b.WriteString(" — ")
+			b.WriteString(desc)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\nanswers:\n")
+	for _, q := range promptregistry.Questions {
+		answer := strings.TrimSpace(c.AnswerValue(q.ID))
+		if answer == "" {
+			continue
+		}
+		b.WriteString("- ")
+		b.WriteString(q.Text)
+		b.WriteString("\n  ")
+		b.WriteString(answer)
+		b.WriteString("\n")
+	}
+
+	if premises := spec.ParseChallengedPremises(c.AnswerValue("premises")); len(premises) > 0 {
+		b.WriteString("\npremises the user did NOT accept (these outrank any later assumption):\n")
+		for _, p := range premises {
+			b.WriteString("- ")
+			b.WriteString(p)
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
 type discoveryDriver struct{}
 
 func DiscoveryDriver() engine.Driver {
@@ -136,7 +183,11 @@ func (d *discoveryDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.A
 	mode := c.AnswerValue("mode")
 	for _, step := range DiscoverySteps() {
 		if !c.HasAnswer(step.Key) {
-			return step.Prompt(mode), false
+			action := step.Prompt(mode)
+			if step.Key == "synthesis" {
+				action.Instruction += "\n" + RenderDiscoverySynthesis(c)
+			}
+			return action, false
 		}
 	}
 	return engine.Action{}, true

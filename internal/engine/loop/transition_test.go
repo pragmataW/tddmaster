@@ -405,15 +405,15 @@ func TestReseedCycle_MixedTDDEnabled_PerTaskControl(t *testing.T) {
 
 func TestAdvanceCycle_TableDriven_AllCycles(t *testing.T) {
 	type testCase struct {
-		name                string
-		cycle               string
-		passed              bool
-		refactorNotes       bool
-		refactorApplied     bool
-		refactorRounds      int
-		maxRefactorRounds   int
-		wantCycle           string
-		wantTaskComplete    bool
+		name              string
+		cycle             string
+		passed            bool
+		refactorNotes     bool
+		refactorApplied   bool
+		refactorRounds    int
+		maxRefactorRounds int
+		wantCycle         string
+		wantTaskComplete  bool
 	}
 
 	cases := []testCase{
@@ -441,48 +441,48 @@ func TestAdvanceCycle_TableDriven_AllCycles(t *testing.T) {
 			wantTaskComplete: true,
 		},
 		{
-			name:             "refactor applied + notes under cap → stay refactor",
-			cycle:            "refactor",
-			passed:           true,
-			refactorNotes:    true,
-			refactorApplied:  true,
-			refactorRounds:   1,
+			name:              "refactor applied + notes under cap → stay refactor",
+			cycle:             "refactor",
+			passed:            true,
+			refactorNotes:     true,
+			refactorApplied:   true,
+			refactorRounds:    1,
 			maxRefactorRounds: 3,
-			wantCycle:        "refactor",
-			wantTaskComplete: false,
+			wantCycle:         "refactor",
+			wantTaskComplete:  false,
 		},
 		{
-			name:             "refactor applied + notes at cap → task done",
-			cycle:            "refactor",
-			passed:           true,
-			refactorNotes:    true,
-			refactorApplied:  true,
-			refactorRounds:   2,
+			name:              "refactor applied + notes at cap → task done",
+			cycle:             "refactor",
+			passed:            true,
+			refactorNotes:     true,
+			refactorApplied:   true,
+			refactorRounds:    2,
 			maxRefactorRounds: 3,
-			wantCycle:        "",
-			wantTaskComplete: true,
+			wantCycle:         "",
+			wantTaskComplete:  true,
 		},
 		{
-			name:             "refactor applied + no notes → task done",
-			cycle:            "refactor",
-			passed:           true,
-			refactorNotes:    false,
-			refactorApplied:  true,
-			refactorRounds:   0,
+			name:              "refactor applied + no notes → task done",
+			cycle:             "refactor",
+			passed:            true,
+			refactorNotes:     false,
+			refactorApplied:   true,
+			refactorRounds:    0,
 			maxRefactorRounds: 3,
-			wantCycle:        "",
-			wantTaskComplete: true,
+			wantCycle:         "",
+			wantTaskComplete:  true,
 		},
 		{
-			name:             "refactor unlimited + notes present → stay refactor",
-			cycle:            "refactor",
-			passed:           true,
-			refactorNotes:    true,
-			refactorApplied:  true,
-			refactorRounds:   99,
+			name:              "refactor unlimited + notes present → stay refactor",
+			cycle:             "refactor",
+			passed:            true,
+			refactorNotes:     true,
+			refactorApplied:   true,
+			refactorRounds:    99,
 			maxRefactorRounds: 0,
-			wantCycle:        "refactor",
-			wantTaskComplete: false,
+			wantCycle:         "refactor",
+			wantTaskComplete:  false,
 		},
 	}
 

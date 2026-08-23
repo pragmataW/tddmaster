@@ -11,4 +11,7 @@ type SyncContext struct {
 type ToolAdapter interface {
 	ID() manifest.ToolID
 	Sync(SyncContext) error
+	// Files lists the paths Sync writes, relative to the project root, so the
+	// init summary can report what actually landed on disk.
+	Files() []string
 }

@@ -1,6 +1,7 @@
 package phases
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
@@ -25,6 +26,20 @@ func seedSettingsSpec(t *testing.T, root, slug string) {
 	if err := spec.SaveProgress(root, slug, spec.Progress{Spec: slug, Status: spec.StatusDraft}); err != nil {
 		t.Fatalf("SaveProgress: %v", err)
 	}
+}
+
+func TestSettingsDriver_SkipVerifierDescriptionKeepsTDDGreenVerifierMandatory(t *testing.T) {
+	action := settingsPrompt()
+	for _, option := range action.InteractiveOptions {
+		if option.Label != "Skip verifier" {
+			continue
+		}
+		if !strings.Contains(option.Description, "TDD green verification always runs") {
+			t.Fatalf("skip verifier description is ambiguous: %q", option.Description)
+		}
+		return
+	}
+	t.Fatal("Skip verifier option not found")
 }
 
 func buildSettingsCtx(t *testing.T, root, slug string) *engine.Context {

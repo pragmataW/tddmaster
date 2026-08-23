@@ -33,6 +33,9 @@ func BuildTasksFromGen(p TaskGenPayload, tddDefault bool, fallbackEdgeCases []st
 		if len(item.Criteria) == 0 {
 			return nil, errs.Newf(errs.KeyTaskACRequired, i+1)
 		}
+		if err := spec.ValidateCriteria(fmt.Sprintf("task %d", i+1), item.Criteria); err != nil {
+			return nil, err
+		}
 		ec := item.LinkedEdgeCases
 		if len(ec) == 0 {
 			ec = fallbackEdgeCases
@@ -111,7 +114,11 @@ func (d *specProposalDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answ
 		if err := c.SaveProgress(progress); err != nil {
 			return engine.Action{}, false, err
 		}
-		content := spec.RenderSpecMd(c.Slug(), c.State(), progress)
+		var trace []spec.Traceability
+		if tr, trErr := c.LoadTraceability(); trErr == nil {
+			trace = append(trace, tr)
+		}
+		content := spec.RenderSpecMd(c.Slug(), c.State(), progress, trace...)
 		if err := c.WriteSpecMd(content); err != nil {
 			return engine.Action{}, false, err
 		}

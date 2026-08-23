@@ -5,8 +5,9 @@ tddmaster/
 .tddmaster/
 .agents/
 .claude/
+.codex/
+.cursor/
+.opencode/
 AGENTS.md
 CLAUDE.md
 
-plans/.dual-graph/
-.dual-graph/

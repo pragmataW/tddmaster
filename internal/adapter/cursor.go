@@ -44,3 +44,8 @@ func (CursorAdapter) Sync(ctx SyncContext) error {
 
 	return nil
 }
+
+// Files lists what Sync writes, relative to the project root.
+func (CursorAdapter) Files() []string {
+	return agentFiles(paths.AgentsMd(""), paths.CursorAgents(""), ".md")
+}

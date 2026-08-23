@@ -30,7 +30,7 @@ func introTick() tea.Cmd {
 }
 
 type introModel struct {
-	frame   int
+	frame    int
 	quitting bool
 }
 

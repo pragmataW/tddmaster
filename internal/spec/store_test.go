@@ -731,3 +731,57 @@ func TestSaveLoadTraceability_CriterionIDs_RoundTrip(t *testing.T) {
 		t.Errorf("entries[1].CriterionIDs: got %v, want %v", entries[1].CriterionIDs, original.Entries["task-1"][1].CriterionIDs)
 	}
 }
+
+func TestRefreshSpecMd_RerendersFromDisk(t *testing.T) {
+	root := t.TempDir()
+	slug := "refresh"
+
+	st := State{Version: 1, Slug: slug, Phase: "execution", Answers: map[string][]Answer{}}
+	if err := SaveState(root, slug, st); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+	pr := Progress{Status: StatusExecuting, Tasks: []Task{{ID: "task-1", Title: "First", Done: true}}}
+	if err := SaveProgress(root, slug, pr); err != nil {
+		t.Fatalf("SaveProgress: %v", err)
+	}
+	if err := SaveSpecMd(root, slug, "# stale\n\n## Status\ncompleted\n"); err != nil {
+		t.Fatalf("SaveSpecMd: %v", err)
+	}
+
+	if err := RefreshSpecMd(root, slug); err != nil {
+		t.Fatalf("RefreshSpecMd: %v", err)
+	}
+
+	data, err := os.ReadFile(paths.SpecMd(root, slug))
+	if err != nil {
+		t.Fatalf("read spec.md: %v", err)
+	}
+	got := string(data)
+	if strings.Contains(got, "# stale") {
+		t.Fatalf("spec.md was not re-rendered:\n%s", got)
+	}
+	if !strings.Contains(got, "- [x] task-1: First") {
+		t.Fatalf("spec.md does not reflect progress.json:\n%s", got)
+	}
+}
+
+func TestRefreshSpecMd_NoFile_IsNoOp(t *testing.T) {
+	root := t.TempDir()
+	slug := "refresh-absent"
+
+	st := State{Version: 1, Slug: slug, Phase: "discovery", Answers: map[string][]Answer{}}
+	if err := SaveState(root, slug, st); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+	if err := SaveProgress(root, slug, Progress{Status: StatusDraft}); err != nil {
+		t.Fatalf("SaveProgress: %v", err)
+	}
+
+	if err := RefreshSpecMd(root, slug); err != nil {
+		t.Fatalf("RefreshSpecMd: %v", err)
+	}
+
+	if _, err := os.Stat(paths.SpecMd(root, slug)); !os.IsNotExist(err) {
+		t.Fatal("RefreshSpecMd must not create spec.md when the phase deleted it")
+	}
+}

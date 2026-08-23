@@ -67,6 +67,27 @@ func Test_RefineCmd_SpecNotExist_ReturnsError(t *testing.T) {
 	}
 }
 
+func Test_RefineCmd_ArchivedSpec_DirectsUserToRestore(t *testing.T) {
+	root := t.TempDir()
+	slug := "archived-spec"
+	scaffoldSpec(t, root, slug)
+	if _, err := executeArchive(t, root, slug); err != nil {
+		t.Fatalf("archive spec: %v", err)
+	}
+
+	_, err := executeRefine(t, root, slug, "--answer", `{"update":{}}`)
+	if err == nil {
+		t.Fatal("expected refine to reject an archived spec")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "restore") {
+		t.Fatalf("archived-spec error must direct the user to restore, got %q", err)
+	}
+	if strings.Contains(msg, "run tddmaster start") {
+		t.Fatalf("archived-spec error must not recommend the impossible start command, got %q", err)
+	}
+}
+
 func Test_RefineCmd_WrongPhase_ReturnsRefinementError(t *testing.T) {
 	root := t.TempDir()
 	slug := "my-spec"

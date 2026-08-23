@@ -1,9 +1,8 @@
 package promptregistry
 
 type Question struct {
-	ID       string
-	Text     string
-	Concerns []string
+	ID   string
+	Text string
 }
 
 var Questions = []Question{
@@ -51,7 +50,7 @@ var ModeOptions = []ModeOption{
 	{"explore", "Explore scope", "Think bigger. 10x version? Adjacent opportunities? What are we missing?"},
 }
 
-var AskWithSuggestionsDirective = "Ask this question using the AskUserQuestion tool — never as plain prose or a \"write your answer\" prompt. Based on the spec description, the listen-first context, and the selected discovery mode, propose 2-4 concrete candidate answers as options (your best inferences) so the user can pick one or refine it. The user can always write their own answer via the free-form option."
+var AskWithSuggestionsDirective = "Ask this question using the AskUserQuestion tool — never as plain prose or a \"write your answer\" prompt. Base your candidates on the listen-first context the user gave when the spec was created, the discovery answers already collected in this phase, and the selected discovery mode; propose 2-4 concrete candidate answers as options (your best inferences) so the user can pick one or refine it. The user can always write their own answer via the free-form option."
 
 var PremisePrompts = []string{
 	"Is this the right problem to solve? Could a different framing yield a simpler solution?",
@@ -62,6 +61,15 @@ var PremisePrompts = []string{
 var BuiltInExtras = []string{
 	"What tests should be written? (unit, integration, e2e — be specific about what behavior to test)",
 	"What documentation needs updating? (README, API docs, CHANGELOG, inline comments)",
+}
+
+func ModeDescription(mode string) string {
+	for _, o := range ModeOptions {
+		if o.ID == mode {
+			return o.Description
+		}
+	}
+	return ""
 }
 
 func ModeRules(mode string) []string {

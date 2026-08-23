@@ -6,27 +6,23 @@ import (
 	"testing"
 )
 
-const goldenExecRed = "TDD RED phase active. Spawn the `tddmaster-test-writer` sub-agent. " +
-	"It writes FAILING tests only — no implementation, no test execution. " +
-	"Pass `edgeCases` from this `next` output verbatim. " +
-	"The test-writer MUST include a `traceability` field in its report: one entry per test function, each with `testFilePath`, `functionName`, `taskId`, and the `ac`/`ec` arrays it covers. Reference each acceptance criterion and edge case by its canonical id `AC-<n>` / `EC-<n>`, where <n> is the 1-based position of that item in the task's acceptance-criteria / edge-case list. This field is REQUIRED on RED submit — reports missing `traceability` are invalid. " +
-	"After the test-writer reports, run `tddmaster next <slug>` again."
+func requireContains(t *testing.T, name, got string, want []string) {
+	t.Helper()
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Fatalf("%s: missing %q in %q", name, w, got)
+		}
+	}
+}
 
-const goldenExecGreen = "TDD GREEN phase active. Spawn the `tddmaster-executor` sub-agent. " +
-	"It writes a clean, working implementation that makes the existing failing tests pass. " +
-	"It does NOT write new tests and does NOT run tests. " +
-	"Submit the executor's status report to `next`. " +
-	"Do NOT spawn the verifier yourself — the orchestrator dispatches `tddmaster-verifier` as a separate stage on the next `next` call to run the tests and produce `refactorNotes`."
-
-const goldenExecRefactor = "TDD REFACTOR phase active. " +
-	"If `refactorInstructions` is present, spawn `tddmaster-executor` to apply each note verbatim and report `refactorApplied: true`. " +
-	"If absent, spawn `tddmaster-verifier` for a regression re-check; tests must still pass."
-
-const goldenExecRefactorApply = "Apply each refactor note verbatim. Do NOT change test behavior — tests must still pass. When finished, report `refactorApplied: true` in your JSON output; the verifier will re-run tests."
-
-const goldenExecVerifyFailed = "Verification FAILED. Fix the failing tests before continuing."
-
-const goldenExecRefactorSkipVerify = "Apply each refactor note verbatim. Tests must still pass. Submit BOTH `refactorApplied: true` AND `completed: [<task-id>]` in the SAME status report — verifier is disabled in this mode, so this single submit advances the task."
+func requireAbsent(t *testing.T, name, got string, unwanted []string) {
+	t.Helper()
+	for _, u := range unwanted {
+		if strings.Contains(got, u) {
+			t.Fatalf("%s: must not contain %q, got %q", name, u, got)
+		}
+	}
+}
 
 func TestExecutionKeysResolve(t *testing.T) {
 	keys := []InstructionKey{
@@ -108,9 +104,12 @@ func TestExecutionGoldenStrings_KeyExecRed(t *testing.T) {
 	if !ok {
 		t.Fatalf("Instruction(KeyExecRed): expected ok=true, got false")
 	}
-	if got != goldenExecRed {
-		t.Fatalf("Instruction(KeyExecRed): got %q, want %q", got, goldenExecRed)
-	}
+	requireContains(t, "KeyExecRed", got, []string{
+		"RED", "FAILING tests ONLY",
+		"traceability", "testFilePath", "functionName", "taskId",
+		"ac-N", "ec-N", NameCriteria, NameEdgeCases,
+	})
+	requireAbsent(t, "KeyExecRed", got, []string{"AC-<n>", "EC-<n>", "coverage", "Spawn"})
 }
 
 func TestExecutionGoldenStrings_KeyExecGreen(t *testing.T) {
@@ -118,8 +117,21 @@ func TestExecutionGoldenStrings_KeyExecGreen(t *testing.T) {
 	if !ok {
 		t.Fatalf("Instruction(KeyExecGreen): expected ok=true, got false")
 	}
-	if got != goldenExecGreen {
-		t.Fatalf("Instruction(KeyExecGreen): got %q, want %q", got, goldenExecGreen)
+	requireContains(t, "KeyExecGreen", got, []string{
+		"GREEN", "Do NOT write new tests", "filesModified",
+	})
+	requireAbsent(t, "KeyExecGreen", got, []string{"Spawn", "Submit the executor"})
+}
+
+func TestExecutionInstructions_AreAddressedToTheSubAgent(t *testing.T) {
+	subAgentKeys := []InstructionKey{
+		KeyExecRed, KeyExecGreen, KeyExecRefactor, KeyExecRefactorApply,
+		KeyExecRefactorSkipVerify, KeyExecExecutor, KeyExecExecutorSkipVerify, KeyExecVerifier,
+	}
+	orchestratorOnly := []string{"Spawn", "sub-agent", "orchestrator", "next <slug>", "AskUserQuestion"}
+	for _, key := range subAgentKeys {
+		got := MustInstruction(key)
+		requireAbsent(t, string(key), got, orchestratorOnly)
 	}
 }
 
@@ -128,9 +140,10 @@ func TestExecutionGoldenStrings_KeyExecRefactor(t *testing.T) {
 	if !ok {
 		t.Fatalf("Instruction(KeyExecRefactor): expected ok=true, got false")
 	}
-	if got != goldenExecRefactor {
-		t.Fatalf("Instruction(KeyExecRefactor): got %q, want %q", got, goldenExecRefactor)
-	}
+	requireContains(t, "KeyExecRefactor", got, []string{
+		"REFACTOR", "regression", "Re-run the full test suite",
+	})
+	requireAbsent(t, "KeyExecRefactor", got, []string{"refactorInstructions"})
 }
 
 func TestExecutionGoldenStrings_KeyExecRefactorApply(t *testing.T) {
@@ -138,9 +151,9 @@ func TestExecutionGoldenStrings_KeyExecRefactorApply(t *testing.T) {
 	if !ok {
 		t.Fatalf("Instruction(KeyExecRefactorApply): expected ok=true, got false")
 	}
-	if got != goldenExecRefactorApply {
-		t.Fatalf("Instruction(KeyExecRefactorApply): got %q, want %q", got, goldenExecRefactorApply)
-	}
+	requireContains(t, "KeyExecRefactorApply", got, []string{
+		"REFACTOR", NameRefactorNotes, "verbatim", "refactorApplied",
+	})
 }
 
 func TestExecutionGoldenStrings_KeyExecVerifyFailed(t *testing.T) {
@@ -148,9 +161,7 @@ func TestExecutionGoldenStrings_KeyExecVerifyFailed(t *testing.T) {
 	if !ok {
 		t.Fatalf("Instruction(KeyExecVerifyFailed): expected ok=true, got false")
 	}
-	if got != goldenExecVerifyFailed {
-		t.Fatalf("Instruction(KeyExecVerifyFailed): got %q, want %q", got, goldenExecVerifyFailed)
-	}
+	requireContains(t, "KeyExecVerifyFailed", got, []string{"FAILED"})
 }
 
 func TestExecutionGoldenStrings_KeyExecExecutor_NonEmptyAndMeaningful(t *testing.T) {
@@ -295,9 +306,12 @@ func TestReportExampleTestWriter_ContainsRequiredFields(t *testing.T) {
 
 func TestExecutionGoldenStrings_ExecRefactorSkipVerifyText_MatchesConstant(t *testing.T) {
 	got := execRefactorSkipVerifyText
-	if got != goldenExecRefactorSkipVerify {
-		t.Fatalf("execRefactorSkipVerifyText: got %q, want %q", got, goldenExecRefactorSkipVerify)
+	if got != MustInstruction(KeyExecRefactorSkipVerify) {
+		t.Fatalf("execRefactorSkipVerifyText not registered under KeyExecRefactorSkipVerify: got %q", got)
 	}
+	requireContains(t, "execRefactorSkipVerifyText", got, []string{
+		NameRefactorNotes, "verbatim", "refactorApplied", "completed", "SAME status report",
+	})
 }
 
 func TestExecutionKeyValues_ExactStrings(t *testing.T) {

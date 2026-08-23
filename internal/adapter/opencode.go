@@ -65,3 +65,8 @@ func openCodePermission(tools string) string {
 	}
 	return "permission:\n" + strings.Join(denies, "")
 }
+
+// Files lists what Sync writes, relative to the project root.
+func (OpenCodeAdapter) Files() []string {
+	return agentFiles(paths.AgentsMd(""), paths.OpenCodeAgents(""), ".md")
+}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/pragmataW/tddmaster/internal/paths"
@@ -208,5 +209,113 @@ func TestBuild_ToleratesProgressWithNilExecution(t *testing.T) {
 	}
 	if ctx == nil {
 		t.Fatalf("Build with nil Execution progress: returned nil context")
+	}
+}
+
+func TestNext_TerminalAction_CarriesACompletionMessage(t *testing.T) {
+	root := t.TempDir()
+	slug := "done-spec"
+	seedSpec(t, root, slug, "phase-a")
+	if err := spec.SaveProgress(root, slug, spec.Progress{
+		Spec:   slug,
+		Status: spec.StatusCompleted,
+		Tasks:  []spec.Task{{ID: "task-1", Done: true}, {ID: "task-2", Done: true}},
+	}); err != nil {
+		t.Fatalf("SaveProgress: %v", err)
+	}
+
+	// No phase def matches the stored phase, so the context is terminal.
+	ctx, err := Build(root, slug, []PhaseDef{makeOneStepPhase("other-phase", "hi")})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	action, err := ctx.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if action.Action != ActionTerminal {
+		t.Fatalf("expected terminal action, got %q", action.Action)
+	}
+	if action.Instruction == "" {
+		t.Fatal("a terminal action must tell the user the spec is finished")
+	}
+	if !strings.Contains(action.Instruction, slug) || !strings.Contains(action.Instruction, "2/2") {
+		t.Fatalf("terminal message must name the spec and its task count, got %q", action.Instruction)
+	}
+}
+
+func TestNext_FillsSubmitCmdOnAsk(t *testing.T) {
+	root := t.TempDir()
+	seedSpec(t, root, "sc-ask", "p1")
+	defs := []PhaseDef{makeOneStepPhase("p1", "answer me")}
+
+	c, err := Build(root, "sc-ask", defs)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	action, err := c.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	want := "tddmaster next sc-ask --answer='<text>'"
+	if action.ExpectedInput.SubmitCmd != want {
+		t.Fatalf("SubmitCmd = %q, want %q", action.ExpectedInput.SubmitCmd, want)
+	}
+}
+
+func TestWithSubmitCmd_PerActionAndTaskShapes(t *testing.T) {
+	c := &Context{slug: "sl", command: "tddmaster"}
+
+	notify := c.withSubmitCmd(Action{Action: ActionNotify})
+	if notify.ExpectedInput.SubmitCmd != "tddmaster next sl" {
+		t.Fatalf("notify SubmitCmd = %q", notify.ExpectedInput.SubmitCmd)
+	}
+
+	instruct := c.withSubmitCmd(Action{
+		Action:        ActionInstruct,
+		ExpectedInput: ExpectedInput{Format: FormatJSON},
+		Tasks: []TaskAction{
+			{TaskID: "task-1", ExpectedInput: ExpectedInput{Format: FormatJSON}},
+			{TaskID: "task-2", ExpectedInput: ExpectedInput{Format: FormatFlag, SubmitCmd: "keep-me"}},
+		},
+	})
+	if instruct.ExpectedInput.SubmitCmd != "tddmaster next sl --answer='<json>'" {
+		t.Fatalf("instruct SubmitCmd = %q", instruct.ExpectedInput.SubmitCmd)
+	}
+	if instruct.Tasks[0].ExpectedInput.SubmitCmd != "tddmaster next sl --answer='<json>'" {
+		t.Fatalf("task-1 SubmitCmd = %q", instruct.Tasks[0].ExpectedInput.SubmitCmd)
+	}
+	if instruct.Tasks[1].ExpectedInput.SubmitCmd != "keep-me" {
+		t.Fatalf("an explicit task SubmitCmd must be preserved, got %q", instruct.Tasks[1].ExpectedInput.SubmitCmd)
+	}
+
+	terminal := c.withSubmitCmd(Action{Action: ActionTerminal})
+	if terminal.ExpectedInput.SubmitCmd != "" {
+		t.Fatalf("terminal must not carry a SubmitCmd, got %q", terminal.ExpectedInput.SubmitCmd)
+	}
+}
+
+func TestRewindPhase_MovesSpecBackwards(t *testing.T) {
+	root := t.TempDir()
+	seedSpec(t, root, "sc-rewind", "p2")
+	defs := []PhaseDef{makeOneStepPhase("p1", "one"), makeOneStepPhase("p2", "two")}
+
+	c, err := Build(root, "sc-rewind", defs)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if err := c.RewindPhase("p1"); err != nil {
+		t.Fatalf("RewindPhase: %v", err)
+	}
+	if c.Phase() != "p1" {
+		t.Fatalf("in-memory phase = %q, want p1", c.Phase())
+	}
+	persisted, err := spec.LoadState(root, "sc-rewind")
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if persisted.Phase != "p1" {
+		t.Fatalf("persisted phase = %q, want p1", persisted.Phase)
 	}
 }

@@ -724,3 +724,79 @@ func TestDiscoveryDriver_AllAnswered_AllKeysPresent(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderDiscoverySynthesis_ReproducesEveryAnswer(t *testing.T) {
+	root := t.TempDir()
+	slug := "synthesis-render"
+	seedDiscoverySpec(t, root, slug)
+	ctx := buildDiscoveryCtx(t, root, slug)
+
+	answers := map[string]string{
+		"listen_context": "Add percentage coupons to the cart package.",
+		"mode":           "full",
+		"premises":       `{"premises":[{"text":"Coupons may stack","agreed":false,"revision":"only one coupon at a time"}]}`,
+		"status_quo":     "callers multiply by hand",
+		"ambition":       "one function now, a provider seam later",
+		"reversibility":  "reversible, only new methods",
+		"user_impact":    "no change for existing callers",
+		"verification":   "go test ./...",
+		"scope_boundary": "no persistence, no HTTP",
+		"edge_cases":     "empty cart, unknown code",
+	}
+	for key, value := range answers {
+		if err := ctx.SetAnswer(key, value); err != nil {
+			t.Fatalf("SetAnswer %s: %v", key, err)
+		}
+	}
+
+	got := RenderDiscoverySynthesis(ctx)
+	for _, want := range []string{
+		"Add percentage coupons to the cart package.",
+		"callers multiply by hand",
+		"one function now, a provider seam later",
+		"reversible, only new methods",
+		"no change for existing callers",
+		"go test ./...",
+		"no persistence, no HTTP",
+		"empty cart, unknown code",
+		"Coupons may stack -> REVISED: only one coupon at a time",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("synthesis must reproduce %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestDiscoverySynthesisStep_InstructionCarriesTheSynthesis(t *testing.T) {
+	root := t.TempDir()
+	slug := "synthesis-step"
+	seedDiscoverySpec(t, root, slug)
+	ctx := buildDiscoveryCtx(t, root, slug)
+
+	for _, step := range DiscoverySteps() {
+		if step.Key == "synthesis" {
+			continue
+		}
+		value := "answer for " + step.Key
+		switch step.Key {
+		case "premises":
+			value = `{"premises":[{"text":"only one coupon","agreed":true}]}`
+		case "mode":
+			value = "full"
+		}
+		if err := ctx.SetAnswer(step.Key, value); err != nil {
+			t.Fatalf("SetAnswer %s: %v", step.Key, err)
+		}
+	}
+
+	action, done := DiscoveryDriver().Next(ctx, nil)
+	if done {
+		t.Fatal("discovery must still be pending on the synthesis step")
+	}
+	if !strings.Contains(action.Instruction, "=== DISCOVERY SYNTHESIS ===") {
+		t.Fatalf("synthesis step must render the synthesis, got:\n%s", action.Instruction)
+	}
+	if !strings.Contains(action.Instruction, "answer for status_quo") {
+		t.Fatalf("synthesis step must include the collected answers, got:\n%s", action.Instruction)
+	}
+}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/pragmataW/tddmaster/internal/errs"
@@ -14,6 +15,7 @@ import (
 type Context struct {
 	root         string
 	slug         string
+	command      string
 	defs         []PhaseDef
 	state        spec.State
 	progress     spec.Progress
@@ -43,11 +45,13 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 	}
 
 	maxIter := manifest.Defaults().MaxIterationBeforeStart
+	command := manifest.Defaults().Command
 	if data, readErr := os.ReadFile(paths.Manifest(root)); readErr == nil {
 		var m manifest.Manifest
 		if jsonErr := json.Unmarshal(data, &m); jsonErr == nil {
 			manifest.Normalize(&m)
 			maxIter = m.MaxIterationBeforeStart
+			command = m.Command
 		}
 	}
 
@@ -59,6 +63,7 @@ func Build(root, slug string, defs []PhaseDef) (*Context, error) {
 	return &Context{
 		root:         root,
 		slug:         slug,
+		command:      command,
 		defs:         defs,
 		state:        state,
 		progress:     progress,
@@ -78,6 +83,10 @@ func (c *Context) Phase() PhaseID {
 
 func (c *Context) Slug() string {
 	return c.slug
+}
+
+func (c *Context) Root() string {
+	return c.root
 }
 
 func (c *Context) State() spec.State {
@@ -101,6 +110,17 @@ func (c *Context) activePhaseDef() *PhaseDef {
 	return nil
 }
 
+// RewindPhase moves the spec back to an earlier phase. A driver needs it when
+// its own answer says the previous phase was not finished after all; the phase
+// machine otherwise only ever moves forward.
+func (c *Context) RewindPhase(target PhaseID) error {
+	c.state.Phase = string(target)
+	if err := spec.SaveState(c.root, c.slug, c.state); err != nil {
+		return errs.Wrap(errs.KeySaveState, err)
+	}
+	return nil
+}
+
 func (c *Context) advancePhase() error {
 	next := NextPhase(c.defs, PhaseID(c.state.Phase))
 	c.state.Phase = string(next)
@@ -110,10 +130,62 @@ func (c *Context) advancePhase() error {
 	return nil
 }
 
+// terminalMessage gives the caller something to show when a spec ends; a bare
+// terminal action leaves the orchestrator with nothing to report to the user.
+func (c *Context) terminalMessage() string {
+	tasks := c.Progress().Tasks
+	done := 0
+	for _, t := range tasks {
+		if t.Done {
+			done++
+		}
+	}
+	return fmt.Sprintf("Spec %q is complete: %d/%d tasks done. Artifacts are under %s.",
+		c.slug, done, len(tasks), paths.SpecDir(c.root, c.slug))
+}
+
+// answerPlaceholder describes what the caller has to put after --answer= for a
+// given input format, so the emitted submitCmd is copy-pasteable.
+func answerPlaceholder(f InputFormat) string {
+	switch f {
+	case FormatJSON:
+		return "<json>"
+	case FormatFlag:
+		return "<flag>"
+	default:
+		return "<text>"
+	}
+}
+
+// withSubmitCmd fills expectedInput.submitCmd on every action that expects an
+// answer. Drivers used to leave it empty, which forced the caller to rebuild the
+// command from the slug by hand even though the contract advertises the field.
+func (c *Context) withSubmitCmd(a Action) Action {
+	switch a.Action {
+	case ActionAsk, ActionInstruct:
+		if a.ExpectedInput.SubmitCmd == "" {
+			a.ExpectedInput.SubmitCmd = fmt.Sprintf("%s next %s --answer='%s'",
+				c.command, c.slug, answerPlaceholder(a.ExpectedInput.Format))
+		}
+	case ActionNotify:
+		if a.ExpectedInput.SubmitCmd == "" {
+			a.ExpectedInput.SubmitCmd = fmt.Sprintf("%s next %s", c.command, c.slug)
+		}
+	}
+	for i := range a.Tasks {
+		if a.Tasks[i].ExpectedInput.SubmitCmd != "" {
+			continue
+		}
+		a.Tasks[i].ExpectedInput.SubmitCmd = fmt.Sprintf("%s next %s --answer='%s'",
+			c.command, c.slug, answerPlaceholder(a.Tasks[i].ExpectedInput.Format))
+	}
+	return a
+}
+
 func (c *Context) Next() (Action, error) {
 	ph := c.activePhaseDef()
 	if ph == nil {
-		return Action{Action: ActionTerminal}, nil
+		return Action{Action: ActionTerminal, Instruction: c.terminalMessage()}, nil
 	}
 	action, phaseDone := ph.Driver.Next(c, ph)
 	if phaseDone {
@@ -124,7 +196,7 @@ func (c *Context) Next() (Action, error) {
 			return c.Next()
 		}
 	}
-	return action, nil
+	return c.withSubmitCmd(action), nil
 }
 
 func (c *Context) Progress() spec.Progress {
@@ -194,7 +266,7 @@ func (c *Context) SetAnswer(key, value string) error {
 func (c *Context) Submit(answer []byte) (Action, error) {
 	ph := c.activePhaseDef()
 	if ph == nil {
-		return Action{Action: ActionTerminal}, nil
+		return Action{Action: ActionTerminal, Instruction: c.terminalMessage()}, nil
 	}
 
 	action, phaseDone, err := ph.Driver.Submit(c, ph, answer)
@@ -212,5 +284,5 @@ func (c *Context) Submit(answer []byte) (Action, error) {
 		return c.Next()
 	}
 
-	return action, nil
+	return c.withSubmitCmd(action), nil
 }

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
@@ -58,7 +59,7 @@ func marshalStageReport(t *testing.T, r StageReport) []byte {
 func TestContextLoadTraceability_MissingFile_ReturnsEmpty(t *testing.T) {
 	root := t.TempDir()
 	slug := "trace-missing"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	tr, err := ctx.LoadTraceability()
@@ -73,7 +74,7 @@ func TestContextLoadTraceability_MissingFile_ReturnsEmpty(t *testing.T) {
 func TestContextSaveTraceability_RoundTrip(t *testing.T) {
 	root := t.TempDir()
 	slug := "trace-roundtrip"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	tr := spec.Traceability{
@@ -107,7 +108,7 @@ func TestContextSaveTraceability_RoundTrip(t *testing.T) {
 func TestValidateAndPersistTraceability_EmptyTraceability_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-empty"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
@@ -124,13 +125,13 @@ func TestValidateAndPersistTraceability_EmptyTraceability_ReturnsError(t *testin
 func TestValidateAndPersistTraceability_MissingTestFilePath_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-no-filepath"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "", FunctionName: "TestFoo", AC: []string{"ac1"}},
+			{TestFilePath: "", FunctionName: "TestFoo", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -143,13 +144,13 @@ func TestValidateAndPersistTraceability_MissingTestFilePath_ReturnsError(t *test
 func TestValidateAndPersistTraceability_MissingFunctionName_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-no-funcname"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -162,7 +163,7 @@ func TestValidateAndPersistTraceability_MissingFunctionName_ReturnsError(t *test
 func TestValidateAndPersistTraceability_BothACandECEmpty_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-no-ac-ec"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
@@ -181,13 +182,13 @@ func TestValidateAndPersistTraceability_BothACandECEmpty_ReturnsError(t *testing
 func TestValidateAndPersistTraceability_ValidEntry_WithAC_NoError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-valid-ac"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -200,7 +201,7 @@ func TestValidateAndPersistTraceability_ValidEntry_WithAC_NoError(t *testing.T) 
 func TestValidateAndPersistTraceability_ValidEntry_OnlyEC_NoError(t *testing.T) {
 	root := t.TempDir()
 	slug := "val-only-ec"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
@@ -219,13 +220,13 @@ func TestValidateAndPersistTraceability_ValidEntry_OnlyEC_NoError(t *testing.T) 
 func TestValidateAndPersistTraceability_PersistHappyPath_EntriesWritten(t *testing.T) {
 	root := t.TempDir()
 	slug := "persist-happy"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1"}},
 			{TestFilePath: "foo_test.go", FunctionName: "TestBar", TaskID: "task-1", EC: []string{"EC-1"}},
 		},
 	}
@@ -256,13 +257,13 @@ func TestValidateAndPersistTraceability_PersistHappyPath_EntriesWritten(t *testi
 func TestValidateAndPersistTraceability_KeyIsTestFilePath(t *testing.T) {
 	root := t.TempDir()
 	slug := "key-is-filepath"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "internal/foo/foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "internal/foo/foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -282,13 +283,13 @@ func TestValidateAndPersistTraceability_KeyIsTestFilePath(t *testing.T) {
 func TestValidateAndPersistTraceability_EmptyTaskID_FilledFromTask(t *testing.T) {
 	root := t.TempDir()
 	slug := "fill-taskid"
-	task := spec.Task{ID: "task-99", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-99", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -312,13 +313,13 @@ func TestValidateAndPersistTraceability_EmptyTaskID_FilledFromTask(t *testing.T)
 func TestValidateAndPersistTraceability_MissingTraceFile_MergeWorks(t *testing.T) {
 	root := t.TempDir()
 	slug := "no-trace-file"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "bar_test.go", FunctionName: "TestBar", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "bar_test.go", FunctionName: "TestBar", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -338,13 +339,13 @@ func TestValidateAndPersistTraceability_MissingTraceFile_MergeWorks(t *testing.T
 func TestValidateAndPersistTraceability_Dedup_SameFileAndFunc_NoDuplicate(t *testing.T) {
 	root := t.TempDir()
 	slug := "dedup-same"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	report := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -373,19 +374,19 @@ func TestValidateAndPersistTraceability_Dedup_SameFileAndFunc_NoDuplicate(t *tes
 func TestValidateAndPersistTraceability_Dedup_LaterReplacesPrior(t *testing.T) {
 	root := t.TempDir()
 	slug := "dedup-replace"
-	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true}
+	task := spec.Task{ID: "task-1", Title: "a task", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}, {ID: "ac-2", Then: "it still works"}}, EdgeCases: []string{"empty input"}}
 	ctx := seedLoopSpecForTrace(t, root, slug, task)
 
 	first := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 	}
 	second := StageReport{
 		Passed: true,
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1", "ac2"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-1", "ac-2"}},
 		},
 	}
 
@@ -415,7 +416,7 @@ func TestSubmit_RedStage_EmptyTraceability_ReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "submit-red-empty-trace"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -442,7 +443,7 @@ func TestSubmit_RedStage_ValidTraceability_NoError(t *testing.T) {
 	root := t.TempDir()
 	slug := "submit-red-valid-trace"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -453,10 +454,12 @@ func TestSubmit_RedStage_ValidTraceability_NoError(t *testing.T) {
 	ctx = seedLoopSpec(t, root, slug, tasks, execution)
 
 	report := StageReport{
-		TaskID: "t1",
-		Passed: true,
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestFoo"},
+		FilesModified: []string{"foo_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "t1", AC: []string{"ac1"}},
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "t1", AC: []string{"ac-1"}},
 		},
 	}
 
@@ -470,7 +473,7 @@ func TestSubmit_GreenStage_EmptyTraceability_NoError(t *testing.T) {
 	root := t.TempDir()
 	slug := "submit-green-empty-trace"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -484,5 +487,133 @@ func TestSubmit_GreenStage_EmptyTraceability_NoError(t *testing.T) {
 	_, submitErr := ctx.Submit(marshalStageReport(t, report))
 	if submitErr != nil {
 		t.Fatalf("green stage must not enforce traceability; got error: %v", submitErr)
+	}
+}
+
+func tracedTask(id string) spec.Task {
+	return spec.Task{
+		ID:         id,
+		Title:      "traced task",
+		TDDEnabled: true,
+		Criteria: []spec.Criterion{
+			{ID: "ac-1", Then: "it works"},
+			{ID: "ac-2", Then: "it still works"},
+		},
+		EdgeCases: []string{"empty input", "huge input"},
+	}
+}
+
+func TestTraceability_UppercaseIDs_NormalizedToLowercase(t *testing.T) {
+	root := t.TempDir()
+	task := tracedTask("task-1")
+	ctx := seedLoopSpecForTrace(t, root, "trace-upper", task)
+
+	report := StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"AC-1"}, EC: []string{"EC-2"}},
+		},
+	}
+	if err := validateAndPersistTraceability(ctx, task, report); err != nil {
+		t.Fatalf("uppercase ids must be accepted and normalized, got %v", err)
+	}
+
+	tr, err := ctx.LoadTraceability()
+	if err != nil {
+		t.Fatalf("LoadTraceability: %v", err)
+	}
+	entries := tr.Entries["foo_test.go"]
+	if len(entries) != 1 {
+		t.Fatalf("expected one persisted entry, got %d", len(entries))
+	}
+	if got := entries[0].CriterionIDs; len(got) != 1 || got[0] != "ac-1" {
+		t.Fatalf("criterion id must persist lowercase, got %v", got)
+	}
+	if got := entries[0].EC; len(got) != 1 || got[0] != "ec-2" {
+		t.Fatalf("edge case id must persist lowercase, got %v", got)
+	}
+}
+
+func TestTraceability_MalformedID_Rejected(t *testing.T) {
+	root := t.TempDir()
+	task := tracedTask("task-1")
+	ctx := seedLoopSpecForTrace(t, root, "trace-malformed", task)
+
+	report := StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac1"}},
+		},
+	}
+	err := validateAndPersistTraceability(ctx, task, report)
+	if err == nil || !strings.Contains(err.Error(), "malformed id") {
+		t.Fatalf("expected malformed-id error for %q, got %v", "ac1", err)
+	}
+}
+
+func TestTraceability_UnknownID_Rejected(t *testing.T) {
+	root := t.TempDir()
+	task := tracedTask("task-1")
+	ctx := seedLoopSpecForTrace(t, root, "trace-unknown", task)
+
+	report := StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1", AC: []string{"ac-9"}},
+		},
+	}
+	err := validateAndPersistTraceability(ctx, task, report)
+	if err == nil || !strings.Contains(err.Error(), "unknown id") {
+		t.Fatalf("expected unknown-id error for ac-9, got %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "ac-1, ac-2") {
+		t.Fatalf("error must list the ids this task defines, got %q", err.Error())
+	}
+}
+
+func TestTraceability_CoverageRound_AllowsTestWithNoCriterion(t *testing.T) {
+	root := t.TempDir()
+	task := tracedTask("task-1")
+	ctx := seedLoopSpecForTrace(t, root, "trace-coverage-round", task)
+
+	settings := spec.DefaultSettings()
+	settings.MinTestCoverage = 80
+	if err := spec.SaveSettings(root, "trace-coverage-round", settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	ctx = seedLoopSpecForTrace(t, root, "trace-coverage-round", task)
+
+	// The task is back in RED only because coverage fell short; a test that
+	// protects pre-existing code maps to no ac-N or ec-N.
+	task.Exec = &spec.ExecState{
+		TDDCycle:     cycleRed,
+		LastCoverage: map[string]float64{"internal/cart/cart.go": 71},
+	}
+
+	report := StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "foo_test.go", FunctionName: "TestTotal", TaskID: "task-1"},
+		},
+	}
+	if err := validateAndPersistTraceability(ctx, task, report); err != nil {
+		t.Fatalf("coverage round must accept an unmapped test, got %v", err)
+	}
+}
+
+func TestTraceability_NoCoverageGap_StillRequiresAnID(t *testing.T) {
+	root := t.TempDir()
+	task := tracedTask("task-1")
+	ctx := seedLoopSpecForTrace(t, root, "trace-no-gap", task)
+
+	report := StageReport{
+		Passed: true,
+		Traceability: []TraceReportEntry{
+			{TestFilePath: "foo_test.go", FunctionName: "TestFoo", TaskID: "task-1"},
+		},
+	}
+	err := validateAndPersistTraceability(ctx, task, report)
+	if err == nil || !strings.Contains(err.Error(), "at least one") {
+		t.Fatalf("expected at-least-one-id error outside a coverage round, got %v", err)
 	}
 }

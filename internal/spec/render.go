@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -92,6 +94,40 @@ func renderDecisions(val string) []string {
 	return items
 }
 
+func ParseChallengedPremises(val string) []string {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return nil
+	}
+	var parsed struct {
+		Premises []struct {
+			Text     string `json:"text"`
+			Agreed   bool   `json:"agreed"`
+			Revision string `json:"revision"`
+		} `json:"premises"`
+	}
+	if err := json.Unmarshal([]byte(val), &parsed); err != nil {
+		log.Printf("tddmaster: failed to parse premises for spec intent: %v", err)
+		return nil
+	}
+	var items []string
+	for _, p := range parsed.Premises {
+		if p.Agreed {
+			continue
+		}
+		text := strings.TrimSpace(p.Text)
+		if text == "" {
+			continue
+		}
+		if rev := strings.TrimSpace(p.Revision); rev != "" {
+			items = append(items, text+" -> REVISED: "+rev)
+			continue
+		}
+		items = append(items, text+" -> REJECTED")
+	}
+	return items
+}
+
 func ParseEdgeCases(val string) []string {
 	val = strings.TrimSpace(val)
 	if val == "" {
@@ -155,7 +191,7 @@ func writeCriterionSubBlock(b *strings.Builder, c Criterion) {
 	}
 	b.WriteString("\n")
 	for _, seg := range criterionSegments(c) {
-		b.WriteString("  - ")
+		b.WriteString("    - ")
 		b.WriteString(seg[0])
 		b.WriteString(" ")
 		b.WriteString(seg[1])
@@ -183,8 +219,39 @@ func writeBullets(b *strings.Builder, header string, items []string, raw string)
 	b.WriteString("\n")
 }
 
-func RenderSpecMd(slug string, st State, pr Progress) string {
+// testsByEdgeCase maps "<taskId>/<ec-N>" to the test functions that cover it, so
+// spec.md can show the edge case → test mapping. The data already lives in
+// traceability.json; no sub-agent is asked to hand-edit spec.md for it.
+func testsByEdgeCase(trace []Traceability) map[string][]string {
+	if len(trace) == 0 {
+		return nil
+	}
+	out := map[string][]string{}
+	for _, tr := range trace {
+		paths := make([]string, 0, len(tr.Entries))
+		for path := range tr.Entries {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		for _, path := range paths {
+			for _, e := range tr.Entries[path] {
+				for _, ec := range e.EC {
+					key := e.TaskID + "/" + strings.ToLower(strings.TrimSpace(ec))
+					if !slices.Contains(out[key], e.FunctionName) {
+						out[key] = append(out[key], e.FunctionName)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// RenderSpecMd renders the spec document. Pass the spec's traceability to have
+// each edge case list the tests that cover it; omit it before any test exists.
+func RenderSpecMd(slug string, st State, pr Progress, trace ...Traceability) string {
 	var b strings.Builder
+	ecTests := testsByEdgeCase(trace)
 
 	b.WriteString("# Spec: ")
 	b.WriteString(slug)
@@ -262,10 +329,23 @@ func RenderSpecMd(slug string, st State, pr Progress) string {
 				b.WriteString("  - No dependencies\n")
 			}
 			for _, c := range task.Criteria {
-				b.WriteString("- **")
+				b.WriteString("  - **")
 				b.WriteString(c.ID)
 				b.WriteString("**")
 				writeCriterionSubBlock(&b, c)
+			}
+			for i, ec := range task.EdgeCases {
+				id := EdgeCaseIDPrefix + strconv.Itoa(i+1)
+				b.WriteString("  - **")
+				b.WriteString(id)
+				b.WriteString("**: ")
+				b.WriteString(ec)
+				b.WriteString("\n")
+				for _, fn := range ecTests[task.ID+"/"+id] {
+					b.WriteString("    - ")
+					b.WriteString(fn)
+					b.WriteString("\n")
+				}
 			}
 		}
 	}

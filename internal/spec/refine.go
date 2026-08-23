@@ -24,6 +24,22 @@ type RefinePayload struct {
 	Update map[string]RefineOp `json:"update,omitempty"`
 }
 
+// ValidateCriteria enforces the contract the prompts already state: a task
+// needs at least one acceptance criterion, and `then` — the observable outcome
+// every stage checks against — is required. Without this a refine payload can
+// mint a task no stage can ever verify.
+func ValidateCriteria(label string, criteria []Criterion) error {
+	if len(criteria) == 0 {
+		return errs.Newf(errs.KeyTaskNeedsCriteria, label)
+	}
+	for i, c := range criteria {
+		if strings.TrimSpace(c.Then) == "" {
+			return errs.Newf(errs.KeyCriterionNeedsThen, label, i+1)
+		}
+	}
+	return nil
+}
+
 func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([]Task, int, error) {
 	result := make([]Task, len(tasks))
 	copy(result, tasks)
@@ -86,6 +102,9 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 			result[idx].EdgeCases = op.EdgeCases
 		}
 		if op.Criteria != nil {
+			if err := ValidateCriteria("update "+id, op.Criteria); err != nil {
+				return nil, seq, err
+			}
 			result[idx].Criteria = op.Criteria
 			AssignCriterionIDs(&result[idx])
 		}
@@ -97,6 +116,9 @@ func ApplyRefinement(tasks []Task, p RefinePayload, tddDefault bool, seq int) ([
 	for _, op := range p.Add {
 		if op.Title == nil || *op.Title == "" {
 			return nil, seq, errs.New(errs.KeyAddRequiresTitle)
+		}
+		if err := ValidateCriteria("add "+strconv.Quote(*op.Title), op.Criteria); err != nil {
+			return nil, seq, err
 		}
 		maxN++
 		newTask := Task{

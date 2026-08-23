@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -15,6 +16,15 @@ import (
 func seedDagSpec(t *testing.T, root, slug string, tasks []spec.Task, mutate func(*spec.Settings), iterations int) *engine.Context {
 	t.Helper()
 	return seedLoopSpecCore(t, root, slug, tasks, mutate, iterations)
+}
+
+// markGitRepo makes root look like a git working tree so the engine emits
+// worktree blocks; without it worktrees are correctly suppressed.
+func markGitRepo(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatalf("mark git repo: %v", err)
+	}
 }
 
 func diamondTasks() []spec.Task {
@@ -60,7 +70,7 @@ func TestDag_AC5_ReadyTasksBatched_DependentExcluded(t *testing.T) {
 	if action.ExpectedInput.Format != engine.FormatJSON {
 		t.Fatalf("expected top-level ExpectedInput.Format json, got %q", action.ExpectedInput.Format)
 	}
-	if !strings.Contains(action.Instruction, "2 task(s) ready for parallel execution") {
+	if !strings.Contains(action.Instruction, "2 task(s) ready") {
 		t.Fatalf("expected orchestration summary in top-level Instruction, got %q", action.Instruction)
 	}
 	if !strings.Contains(action.Instruction, "taskId") {
@@ -365,6 +375,7 @@ func TestDag_Iterations_MaxAfterSubmit_ReturnsRestartNotifyAndResets(t *testing.
 
 func TestDag_WorktreeHint_PersistedAndDeterministic(t *testing.T) {
 	root := t.TempDir()
+	markGitRepo(t, root)
 	slug := "dag-worktree"
 	ctx := seedDagSpec(t, root, slug, diamondTasks(), nil, 0)
 
@@ -404,8 +415,13 @@ func TestDag_WorktreeHint_PersistedAndDeterministic(t *testing.T) {
 		if !strings.Contains(ta.Instruction, "=== WORKTREE (binding) ===") {
 			t.Fatalf("expected worktree block prefix in instruction for %s", ta.TaskID)
 		}
-		if !strings.Contains(ta.Instruction, "cwd: "+ta.Worktree.Path) {
-			t.Fatalf("expected cwd line in instruction for %s", ta.TaskID)
+		// cwd is absolute so a sub-agent cannot resolve it against its own
+		// working directory; the stored hint stays relative for git.
+		if !strings.Contains(ta.Instruction, "cwd: "+filepath.Join(root, ta.Worktree.Path)) {
+			t.Fatalf("expected absolute cwd line in instruction for %s, got:\n%s", ta.TaskID, ta.Instruction)
+		}
+		if !strings.Contains(ta.Instruction, "projectRoot: "+root) {
+			t.Fatalf("expected projectRoot line in instruction for %s, got:\n%s", ta.TaskID, ta.Instruction)
 		}
 	}
 
@@ -853,7 +869,7 @@ func TestDag_RedStage_BlockedReportWithTests_NoErrorCycleStaysRed(t *testing.T) 
 	root := t.TempDir()
 	slug := "dag-red-blocked-tests"
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "one", TDDEnabled: true, Exec: &spec.ExecState{TDDCycle: cycleRed}},
+		{ID: "task-1", Title: "one", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}, Exec: &spec.ExecState{TDDCycle: cycleRed}},
 	}
 	ctx := seedDagSpec(t, root, slug, tasks, nil, 0)
 
@@ -877,7 +893,7 @@ func TestDag_RedStage_BlockedReportWithTraceability_CycleStaysRed(t *testing.T) 
 	root := t.TempDir()
 	slug := "dag-red-blocked-trace"
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "one", TDDEnabled: true, Exec: &spec.ExecState{TDDCycle: cycleRed}},
+		{ID: "task-1", Title: "one", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}, Exec: &spec.ExecState{TDDCycle: cycleRed}},
 	}
 	ctx := seedDagSpec(t, root, slug, tasks, nil, 0)
 
@@ -885,7 +901,7 @@ func TestDag_RedStage_BlockedReportWithTraceability_CycleStaysRed(t *testing.T) 
 		TaskID:       "task-1",
 		TestsWritten: []string{"a_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "a_test.go", FunctionName: "TestA", TaskID: "task-1", AC: []string{"ac1"}},
+			{TestFilePath: "a_test.go", FunctionName: "TestA", TaskID: "task-1", AC: []string{"ac-1"}},
 		},
 		Blocked: []string{"cannot cover AC-3: missing fixture"},
 	}
@@ -909,7 +925,7 @@ func TestDag_RedStage_EmptyReport_ReturnsTraceabilityError(t *testing.T) {
 	root := t.TempDir()
 	slug := "dag-red-empty"
 	tasks := []spec.Task{
-		{ID: "task-1", Title: "one", TDDEnabled: true, Exec: &spec.ExecState{TDDCycle: cycleRed}},
+		{ID: "task-1", Title: "one", TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}, Exec: &spec.ExecState{TDDCycle: cycleRed}},
 	}
 	ctx := seedDagSpec(t, root, slug, tasks, nil, 0)
 
@@ -921,6 +937,7 @@ func TestDag_RedStage_EmptyReport_ReturnsTraceabilityError(t *testing.T) {
 
 func TestDag_WorktreePath_UsesForwardSlashes(t *testing.T) {
 	root := t.TempDir()
+	markGitRepo(t, root)
 	slug := "dag-worktree-path"
 	tasks := []spec.Task{
 		{ID: "task-1", Title: "one", TDDEnabled: false},

@@ -30,8 +30,8 @@ func settingsPrompt() engine.Action {
 	instr := promptregistry.MustInstruction(promptregistry.KeySettings)
 	d := spec.DefaultSettings()
 	return engine.Action{
-		Action:      engine.ActionAsk,
-		Instruction: instr,
+		Action:             engine.ActionAsk,
+		Instruction:        instr,
 		MultiSelect:        true,
 		InteractiveOptions: settingsInteractiveOptions(),
 		ExpectedInput: engine.ExpectedInput{

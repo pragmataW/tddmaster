@@ -76,6 +76,8 @@ const (
 	KeyUnknownTaskID        ErrorKey = "spec:unknown-task-id"
 	KeyAddRequiresTitle     ErrorKey = "spec:add-requires-title"
 	KeyCannotRemoveDeps     ErrorKey = "spec:cannot-remove-dependents"
+	KeyTaskNeedsCriteria    ErrorKey = "spec:task-needs-criteria"
+	KeyCriterionNeedsThen   ErrorKey = "spec:criterion-needs-then"
 )
 
 const (
@@ -131,6 +133,7 @@ const (
 	KeyMarshalManifest    ErrorKey = "scaffold:marshal-manifest"
 	KeyWriteManifest      ErrorKey = "scaffold:write-manifest"
 	KeyToolRequired       ErrorKey = "scaffold:tool-required"
+	KeyNoKnownTool        ErrorKey = "scaffold:no-known-tool"
 	KeyCreateTddmasterDir ErrorKey = "scaffold:create-tddmaster-dir"
 	KeyAdapter            ErrorKey = "scaffold:adapter"
 )
@@ -146,9 +149,14 @@ const (
 	KeyTraceabilityMissingTestPath ErrorKey = "loop:traceability-missing-test-path"
 	KeyTraceabilityMissingFunc     ErrorKey = "loop:traceability-missing-func"
 	KeyTraceabilityMissingACEC     ErrorKey = "loop:traceability-missing-ac-ec"
+	KeyTraceabilityMalformedID     ErrorKey = "loop:traceability-malformed-id"
+	KeyTraceabilityUnknownID       ErrorKey = "loop:traceability-unknown-id"
 	KeyReportMissingTaskID         ErrorKey = "loop:report-missing-task-id"
 	KeyTaskAlreadyDone             ErrorKey = "loop:task-already-done"
 	KeyTaskNotReady                ErrorKey = "loop:task-not-ready"
 	KeyUnknownTaskIDReady          ErrorKey = "loop:unknown-task-id-ready"
 	KeyNoApplicableStage           ErrorKey = "loop:no-applicable-stage"
+	KeyRedTestsWrittenEmpty        ErrorKey = "loop:red-tests-written-empty"
+	KeyRedFilesModifiedEmpty       ErrorKey = "loop:red-files-modified-empty"
+	KeyReportShape                 ErrorKey = "loop:report-shape"
 )

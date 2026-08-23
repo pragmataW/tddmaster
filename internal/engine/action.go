@@ -31,13 +31,22 @@ type InteractiveOption struct {
 	Description string `json:"description,omitempty"`
 }
 
+type TaskCompletionCondition string
+
+const (
+	TaskCompletionNever                         TaskCompletionCondition = "never"
+	TaskCompletionOnSuccess                     TaskCompletionCondition = "on-success"
+	TaskCompletionOnSuccessWithoutRefactorNotes TaskCompletionCondition = "on-success-without-refactor-notes"
+)
+
 type TaskAction struct {
-	TaskID        string            `json:"taskId"`
-	Stage         string            `json:"stage"`
-	Instruction   string            `json:"instruction"`
-	DelegateAgent string            `json:"delegateAgent,omitempty"`
-	ExpectedInput ExpectedInput     `json:"expectedInput"`
-	Worktree      *spec.WorktreeRef `json:"worktree,omitempty"`
+	TaskID              string                  `json:"taskId"`
+	Stage               string                  `json:"stage"`
+	CompletionCondition TaskCompletionCondition `json:"completionCondition"`
+	Instruction         string                  `json:"instruction"`
+	DelegateAgent       string                  `json:"delegateAgent,omitempty"`
+	ExpectedInput       ExpectedInput           `json:"expectedInput"`
+	Worktree            *spec.WorktreeRef       `json:"worktree,omitempty"`
 }
 
 type Action struct {

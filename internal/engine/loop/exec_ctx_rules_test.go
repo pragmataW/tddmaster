@@ -73,7 +73,7 @@ func TestBuildExecCtx_Rules_CopiedFromContext(t *testing.T) {
 
 	task := tasks[0]
 	d := NewLoopDriver()
-	execCtx := d.buildExecCtx(ctx, task, 0)
+	execCtx := d.buildExecCtx(ctx, task, 0, nil)
 
 	ctxRules := ctx.Rules().For("executor")
 	execCtxRules := execCtx.Rules.For("executor")
@@ -103,7 +103,7 @@ func TestBuildExecCtx_Rules_EmptyWhenNoRulesDir(t *testing.T) {
 
 	task := tasks[0]
 	d := NewLoopDriver()
-	execCtx := d.buildExecCtx(ctx, task, 0)
+	execCtx := d.buildExecCtx(ctx, task, 0, nil)
 
 	got := execCtx.Rules.For("executor")
 	if len(got) != 0 {
@@ -126,7 +126,7 @@ func TestBuildExecCtx_Rules_GlobalRuleVisibleForAllAgents(t *testing.T) {
 
 	task := tasks[0]
 	d := NewLoopDriver()
-	execCtx := d.buildExecCtx(ctx, task, 0)
+	execCtx := d.buildExecCtx(ctx, task, 0, nil)
 
 	for _, agent := range []string{"executor", "test-writer", "verifier", "planner"} {
 		got := execCtx.Rules.For(agent)
@@ -152,7 +152,7 @@ func TestBuildExecCtx_Rules_MatchesContextRulesExactly(t *testing.T) {
 
 	task := tasks[0]
 	d := NewLoopDriver()
-	execCtx := d.buildExecCtx(ctx, task, 0)
+	execCtx := d.buildExecCtx(ctx, task, 0, nil)
 
 	for _, agent := range []string{"executor", "verifier", "test-writer", "planner"} {
 		ctxRules := ctx.Rules().For(agent)

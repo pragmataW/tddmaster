@@ -54,3 +54,8 @@ func claudeAgentFile(spec AgentSpec, cmd string) (string, error) {
 		"---\n"
 	return frontmatter + body, nil
 }
+
+// Files lists what Sync writes, relative to the project root.
+func (ClaudeCodeAdapter) Files() []string {
+	return agentFiles(paths.ClaudeMd(""), paths.ClaudeAgents(""), ".md")
+}

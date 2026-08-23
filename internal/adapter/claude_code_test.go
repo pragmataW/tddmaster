@@ -91,7 +91,7 @@ func TestClaudeCodeAdapter_Sync_ParallelWorktreeProtocol(t *testing.T) {
 		{"worktree protocol section", "### Parallel execution (worktree protocol)"},
 		{"worktree add command", "git worktree add <worktree.path> -b <worktree.branch>"},
 		{"merge-then-submit rule", "MERGE-THEN-SUBMIT (binding)"},
-		{"no-git fallback", "git rev-parse --is-inside-work-tree"},
+		{"no-git fallback", "In a non-git project no task entry carries a `worktree` block"},
 		{"git worktree exception", "NARROW EXCEPTION — worktree lifecycle only"},
 		{"tasks array contract", "\"taskId\": \"task-1\""},
 	}

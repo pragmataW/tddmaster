@@ -87,6 +87,9 @@ func Rollback(root, slug, targetPhase string) ([]string, error) {
 	if err := ResetArtifacts(targetPhase, root, slug); err != nil {
 		return warnings, err
 	}
+	if err := spec.RefreshSpecMd(root, slug); err != nil {
+		return warnings, err
+	}
 
 	return warnings, nil
 }
@@ -179,6 +182,13 @@ func listSpecDir(dir string, archived bool) ([]SpecInfo, error) {
 			if err := json.Unmarshal(data, &prog); err == nil {
 				info.Status = prog.Status
 			}
+		}
+
+		// progress.Status goes completed as soon as the last task is done, but a
+		// spec sitting in rule-learning still has work left. Reporting it as
+		// completed reads as "nothing to do" when `next` would still return an action.
+		if info.Status == spec.StatusCompleted && info.Phase != "" && info.Phase != string(engine.PhaseComplete) {
+			info.Status = spec.StatusExecuting
 		}
 
 		infos = append(infos, info)

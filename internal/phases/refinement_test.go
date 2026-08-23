@@ -562,3 +562,20 @@ func TestRefinementDriver_SubmitApprove_ValidDAG_Advances(t *testing.T) {
 		t.Error("phase still 'refinement' after approve with valid DAG, want phase advanced")
 	}
 }
+
+func TestRenderTaskList_ShowsEdgeCasesWithIDs(t *testing.T) {
+	tasks := []spec.Task{{
+		ID:        "task-1",
+		Title:     "Coupons",
+		Criteria:  []spec.Criterion{{ID: "ac-1", Then: "it works"}},
+		EdgeCases: []string{"unknown code", "empty code"},
+	}}
+
+	got := RenderTaskList(tasks)
+	if !strings.Contains(got, "[ec-1] edge case: unknown code") {
+		t.Fatalf("refinement list must show ec-1, got:\n%s", got)
+	}
+	if !strings.Contains(got, "[ec-2] edge case: empty code") {
+		t.Fatalf("refinement list must show ec-2, got:\n%s", got)
+	}
+}

@@ -68,6 +68,8 @@ var templateMap = map[ErrorKey]string{
 	KeyUnknownTaskID:        "unknown task id: %s",
 	KeyAddRequiresTitle:     "add op requires a non-empty title",
 	KeyCannotRemoveDeps:     "cannot remove %s: %s depend on it; update their dependsOn in the same payload",
+	KeyTaskNeedsCriteria:    "%s requires at least one acceptance criterion; a task with none cannot be verified",
+	KeyCriterionNeedsThen:   "%s: criterion %d has an empty \"then\"; \"then\" is the observable outcome and is required",
 
 	KeyUnknownResetTarget:           "unknown reset target phase %q",
 	KeyUnknownTargetPhase:           "unknown target phase %q: valid phases are %v",
@@ -111,6 +113,7 @@ var templateMap = map[ErrorKey]string{
 	KeyMarshalManifest:    "failed to marshal manifest",
 	KeyWriteManifest:      "failed to write manifest",
 	KeyToolRequired:       "at least one tool is required",
+	KeyNoKnownTool:        "no known tool selected: %s",
 	KeyCreateTddmasterDir: "failed to create .tddmaster dir",
 	KeyAdapter:            "adapter %s",
 
@@ -121,12 +124,17 @@ var templateMap = map[ErrorKey]string{
 	KeyTraceabilityEmpty:           "RED phase: traceability is required but report.Traceability is empty",
 	KeyTraceabilityMissingTestPath: "RED phase: traceability entry missing TestFilePath",
 	KeyTraceabilityMissingFunc:     "RED phase: traceability entry missing FunctionName",
-	KeyTraceabilityMissingACEC:     "RED phase: traceability entry must have at least one AC or EC",
+	KeyTraceabilityMissingACEC:     "RED phase: traceability entry %q must cover at least one ac-N or ec-N id",
+	KeyTraceabilityMalformedID:     "RED phase: traceability entry %q carries malformed id %q: expected the lowercase form %s1, %s2, ...",
+	KeyTraceabilityUnknownID:       "RED phase: traceability entry %q references unknown id %q; this task defines %s",
 	KeyReportMissingTaskID:         "report missing taskId; ready tasks: %s",
 	KeyTaskAlreadyDone:             "task %q is already done; ready tasks: %s",
 	KeyTaskNotReady:                "task %q is not ready (waiting on dependencies); ready tasks: %s",
 	KeyUnknownTaskIDReady:          "unknown taskId %q; ready tasks: %s",
 	KeyNoApplicableStage:           "no applicable stage for task %s (exec: %+v)",
+	KeyRedTestsWrittenEmpty:        "RED phase: report.TestsWritten is empty; list every test function you wrote or report blocked — an empty list leaves the task in RED forever",
+	KeyRedFilesModifiedEmpty:       "RED phase: report.FilesModified is empty; the GREEN executor is handed that list as the failing tests it must make pass",
+	KeyReportShape:                 "report field %s has the wrong shape: %s",
 }
 
 type registryError struct {

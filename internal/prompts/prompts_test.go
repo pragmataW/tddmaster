@@ -180,3 +180,18 @@ func TestRender_ClaudeMd_GateSubmitsIncludeTaskID(t *testing.T) {
 		t.Fatal("gate revise/reject example must include taskId")
 	}
 }
+
+func TestRender_ClaudeMd_ExplainsCompletionSignalAndRealRuleCLI(t *testing.T) {
+	out, err := Render("claude_md", RenderData{Command: "tddmaster", ParallelSubagents: true})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	for _, condition := range []string{"completionCondition", "on-success", "on-success-without-refactor-notes"} {
+		if !strings.Contains(out, condition) {
+			t.Fatalf("execution protocol must explain %q", condition)
+		}
+	}
+	if strings.Contains(out, "--overwrite") {
+		t.Fatal("generated protocol must not mention the nonexistent --overwrite flag")
+	}
+}

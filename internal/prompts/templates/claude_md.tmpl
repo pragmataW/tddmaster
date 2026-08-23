@@ -46,6 +46,7 @@ In the execution phase, `instruct` actions ALWAYS carry a `tasks` array — even
     {
       "taskId": "task-1",
       "stage": "green",
+      "completionCondition": "never|on-success|on-success-without-refactor-notes",
       "instruction": "...",
       "delegateAgent": "tddmaster-executor",
       "expectedInput": { "format": "json", "submitCmd": "{{.Command}} next <slug> --answer='...'", "example": "..." },
@@ -61,11 +62,11 @@ Drive entirely off the JSON:
 
 - `action: "ask"` — present the question or delegate to `delegateAgent` if set; submit the answer via `--answer`.
 - `action: "instruct"` — spawn the `delegateAgent` sub-agent with the `instruction`; submit its status report via `--answer`.
-- `action: "notify"` — display to the user; call `next` again (no `--answer` needed).
+- `action: "notify"` — display to the user; call `next` again (no `--answer` needed); `expectedInput.submitCmd` carries that bare `next` command.
 - `action: "terminal"` — spec is complete or cancelled; stop the loop.
 - `action: "error"` — surface the error to the user; do not advance.
 - `interactiveOptions` — use AskUserQuestion; resolve selection via `commandMap`.
-- `expectedInput.submitCmd` — use this exact command shape to submit.
+- `expectedInput.submitCmd` — the exact command shape to submit; every action that expects an answer carries it, and entries in `tasks` carry their own. Placeholders like `<json>` mark where your answer goes.
 
 ### Core rules
 
@@ -75,11 +76,10 @@ Drive entirely off the JSON:
 - Once a spec is active, NEVER suggest bypassing or skipping tddmaster. Discovery is not overhead.
 - NEVER ask permission to run the next command. Each step has one next step. Just run it.
 - Execute tddmaster commands IMMEDIATELY — the JSON output has all context needed.
-- Display `roadmap` before content. Display `gate` prominently.
 
 ### Important task gate (runtime-delegated)
 
-When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`, the engine has detected an important task without an approved plan. The JSON will contain an `importantTaskGate` block. Required behavior:
+When `next` returns an `action: "ask"` with `delegateAgent: "tddmaster-planner"`, the engine has detected an important task without an approved plan. The gated task is the entry in `tasks` whose `stage` is `"gate"`. Required behavior:
 
 - The gate action may carry a `tasks` array. The entry with stage `"gate"` is the question itself — do NOT spawn it as a worker. Every other entry is a regular ready task: dispatch them as parallel sub-agents (worktree protocol applies) while the plan gate is being handled; submit their reports as usual.
 - Spawn `tddmaster-planner` (read-only: Read/Grep/Glob/LS) with the task scope plus `priorFeedback` when present. Do NOT edit files in this phase.
@@ -108,9 +108,9 @@ Submit the auditor JSON via `--answer`. The engine merges the auditor findings w
 
 - Severity policy is STRICT: only `info`-severity findings are advisory. If every finding is `info` (or there are none), the phase passes through to execution — display the findings and continue.
 - If ANY finding has severity other than `info` (e.g. `warn` or `block`), `next` returns an `action: "ask"` whose `interactiveOptions` are `return-to-refinement | accept-anyway | edit`. Display the flagged findings prominently, then ask the user via AskUserQuestion and resolve the selection through `commandMap`:
-  - `return-to-refinement` — apply a refinement `payload` inline to address the flagged findings and re-run the audit in place (no phase transition); submit `{{.Command}} next <slug> --answer='{"action":"return-to-refinement","payload":{...}}'`. The `payload` is required — an empty payload leaves the tasks unchanged and the same findings recur.
+  - `return-to-refinement` — a real phase transition back to refinement, where the task list is reworked with `{{.Command}} refine <slug>`; submit `{{.Command}} next <slug> --answer='return-to-refinement'`. No payload — the audit re-runs from scratch once refinement is approved again.
   - `accept-anyway` — accept the analysis despite the flagged findings and continue; submit `{{.Command}} next <slug> --answer='accept-anyway'`.
-  - `edit` — edit the tasks inline (a refine payload) and re-run the audit; submit `{{.Command}} next <slug> --answer='{"action":"edit","payload":{...}}'`.
+  - `edit` — stay in this phase: apply a refine payload inline and re-run the audit; submit `{{.Command}} next <slug> --answer='{"action":"edit","payload":{...}}'`. The `payload` is required — an empty payload leaves the tasks unchanged and the same findings recur.
 
 The re-audit loop is capped; after the attempt limit the phase auto-accepts and continues to execution.
 
@@ -120,10 +120,49 @@ When TDD is enabled the engine emits stage-specific `delegateAgent` values in th
 
 - `delegateAgent: "tddmaster-test-writer"` and stage `red` — write failing tests ONLY; no implementation code.
 - `delegateAgent: "tddmaster-executor"` and stage `green` — implement clean, working code that makes failing tests pass. Submit the executor's status report to `next`. Do NOT spawn the verifier yourself — the engine dispatches `tddmaster-verifier` as a separate stage on the next `next` call.
-- `delegateAgent: "tddmaster-executor"` and stage `refactor` — apply every refactor note VERBATIM; behavior must not change and all tests must continue to pass.
-- `delegateAgent: "tddmaster-verifier"` — verify the work; submit a pass/fail report.
+- `delegateAgent: "tddmaster-executor"` and stage `refactor` — apply every refactor note VERBATIM; behavior must not change and all tests must continue to pass. Refactor notes come from the verifier scanning every file the task modified, so some may target TEST files, which the executor may never edit. Read the `=== REFACTOR NOTES ===` section before spawning: if any note names a test file, spawn `tddmaster-test-writer` for that task first — in the same worktree — to apply exactly those notes, then run the executor entry for the rest. If you skip this the executor reports `blocked` with `tests-must-come-from-test-writer`, and no engine stage can clear it: an unblock submit re-emits the identical round forever. The batch summary reminds you whenever a batch contains a refactor apply round.
+- `delegateAgent: "tddmaster-verifier"` — verify the work; submit a pass/fail report. `refactorNotes` is an array of OBJECTS (`{"file","suggestion","rationale"}`) — a list of plain strings is rejected. When a passing report carries a `reason`, the engine returns an `action: "notify"` with it: relay that text to the user, then call `next` again.
 
-Include `tddPhase` in status reports. When `tddFailureReport` is present in the instruction, address `failedACs` before reporting done. In parallel execution, stage actions carry a `taskId` and every stage runs inside that task's worktree.
+Include the `phase` field in status reports, echoing the `tddPhase` value from the instruction's `=== TASK ===` section. When the instruction carries a `=== LAST VERIFICATION FAILURE ===` section, the sub-agent must address every listed item before reporting done. In parallel execution, stage actions carry a `taskId` and every stage runs inside that task's worktree.
+
+The RED stage report MUST carry a `traceability` array — one entry per test function, each with `testFilePath`, `functionName`, `taskId`, and the `ac` / `ec` id arrays it covers. Ids are lowercase (`ac-1`, `ec-2`) exactly as printed in the instruction sections; the engine normalises case but REJECTS a malformed id (`ac1`) or one the task does not define (`ac-9`). A RED submit without `traceability` is rejected. Every entry must cover at least one id — the sole exception is a RED round the coverage gate triggered, where a test protecting pre-existing code may map to no criterion. RED must also report `testsWritten` and `filesModified`: the engine hands `filesModified` to the GREEN executor as the failing tests it has to make pass, and rejects a report missing either field rather than leaving the task stuck in RED.
+
+Report every path in `filesModified` and `traceability[].testFilePath` relative to the directory the sub-agent worked in — the worktree cwd when a `=== WORKTREE (binding) ===` section is present, the project root otherwise. Never prefix a path with the worktree location; the engine strips such a prefix, but a mixed report still reads as two different files.
+
+When a GREEN verification reports `uncoveredEdgeCases`, the engine returns the task to RED rather than to GREEN: only the test-writer may add the missing test. `failedACs` alone keeps the task in GREEN for the executor.
+
+When TDD is OFF the stage is `executor` and there is no red stage, but `tddmaster-executor` still refuses to write tests (it reports `blocked` with reason `tests-must-come-from-test-writer`). The engine has no stage that can clear that. So if such a task genuinely needs test files, spawn `tddmaster-test-writer` for it yourself — in the same worktree, before the executor entry — then run the executor entry normally. The batch summary reminds you whenever a batch contains an `executor` stage. An `executor` report may carry the same `traceability` array a RED report does; it is optional there, but including it is the only way tests written outside the TDD cycle reach `traceability.json`.
+
+### Sub-agent instruction format
+
+Every stage instruction is assembled from section blocks. Pass the instruction to the sub-agent VERBATIM — do not summarise, reorder, or strip sections. A section appears only when it carries data.
+
+A section starts at a line that is nothing but `=== NAME ===`. Anchor your parsing to whole lines: a section name mentioned inside a sentence is a cross-reference, not a boundary.
+
+| Section | Meaning |
+| --- | --- |
+| `=== WORKTREE (binding) ===` | absolute `projectRoot`, absolute `cwd`, and the branch the sub-agent must stay inside |
+| `=== TASK ===` | spec slug, taskId, title, stage, discoveryMode, tddPhase, dependsOn |
+| `=== SPEC OVERVIEW ===` | every task in the spec with its state; the owning task is marked `<- YOU` |
+| `=== SPEC CONTEXT ===` | the user's listen-first context, verbatim |
+| `=== SPEC INTENT ===` | the discovery answers on status quo, ambition, reversibility, user impact, plus premises the user rejected or revised |
+| `=== ACCEPTANCE CRITERIA ===` | Given/When/Then triples with `ac-N` ids |
+| `=== EDGE CASES ===` | edge cases with `ec-N` ids |
+| `=== OUT OF SCOPE ===` | the discovery scope boundary — work here must be refused |
+| `=== VERIFICATION METHOD ===` | how the user said the work is verified |
+| `=== APPROVED PLAN ===` | binding plan from the important-task gate |
+| `=== CHANGED FILES ===` | every file this task has written so far, accumulated across rounds; in GREEN the RED test files lead the list, retries included |
+| `=== TEST TRACEABILITY ===` | tests already written for this task and the `ac-N` / `ec-N` ids they cover |
+| `=== REFACTOR NOTES ===` | notes to apply verbatim in a refactor round |
+| `=== LAST VERIFICATION FAILURE ===` | failed criteria and uncovered edge cases to fix first |
+| `=== COVERAGE ===` | coverage threshold, files to measure, low-coverage feedback |
+| `=== PROJECT COMMANDS ===` | build / type-check / test / coverage commands detected from the project root; `=== VERIFICATION METHOD ===` outranks it where the two disagree |
+| `=== PARALLEL TASKS ===` | concurrent tasks — off limits; each carries an `owns:` file list once it has one |
+| `=== PRIOR PLAN FEEDBACK ===` | the user's rejection reason plus `attemptCount` |
+| `=== RULES ===` | project rule files, inlined when small |
+| `=== INSTRUCTION ===` | the stage instruction — always last |
+
+Coverage measurement belongs exclusively to the verifier sub-agent: when a stage carries a `=== COVERAGE ===` section, delegate it and never run coverage tooling yourself.
 
 ### Parallel execution (worktree protocol)
 
@@ -131,10 +170,11 @@ Include `tddPhase` in status reports. When `tddFailureReport` is present in the 
 - Before spawning a task's sub-agent, create its worktree: `git worktree add <worktree.path> -b <worktree.branch>` (base = current branch HEAD). If the worktree already exists, reuse it (resume). Run `git worktree prune` once at session start.
 - ALL stages of a task (red, green, refactor, verify) run in the SAME worktree. The verifier runs read-only in that same worktree. Tests and coverage run inside the worktree.
 - Each sub-agent instruction includes the engine-provided `worktree` block verbatim. Sub-agents NEVER call the {{.Command}} CLI — submitting is exclusively the orchestrator's job, and submits are serialized.
-- MERGE-THEN-SUBMIT (binding): BEFORE submitting a task's terminal (done) report, commit in the worktree → `git merge --no-ff <worktree.branch>` on the main working branch → `git worktree remove <worktree.path>` → `git branch -d <worktree.branch>` → THEN submit the report. This guarantees dependent tasks open their worktrees from an up-to-date base.
+- Every task entry carries `completionCondition`: `never` means this stage cannot finish the task; `on-success` means a successful report finishes it; `on-success-without-refactor-notes` means a successful report finishes it only when `refactorNotes` is empty. "Successful" means the report satisfies the full stage contract, including required coverage; `passed:true` by itself is not enough. This is the binding signal for deciding whether a report is terminal.
+- MERGE-THEN-SUBMIT (binding): when the task entry's `completionCondition` says the report will finish the task, BEFORE submitting that successful terminal report commit in the worktree → `git merge --no-ff <worktree.branch>` on the main working branch → `git worktree remove <worktree.path>` → `git branch -d <worktree.branch>` → THEN submit the report. This guarantees dependent tasks open their worktrees from an up-to-date base.
 - Merge conflict: the orchestrator resolves it. If it cannot, run `git merge --abort`, leave the worktree in place, and submit `{"taskId":"...","blocked":["merge-conflict: <files>"],...}`.
 - UNBLOCK: a blocked task stays out of the ready set until a new report clears it. Once the obstacle is resolved (e.g. the user fixed the conflict), submit a report for that `taskId` with no `blocked` entries. A bare report (only `taskId`) just clears the flag and the flow resumes from the stage where the task stopped; a report carrying real stage results (e.g. the completed done report held back by a merge conflict) is processed as that stage's result — do not re-run work that already finished.
-- NO-GIT FALLBACK: before processing a batch, run `git rev-parse --is-inside-work-tree`. If the project is not a git repo, skip all worktree steps and run the batch tasks SEQUENTIALLY in the project root (no isolation for concurrent writes); DAG, `taskId`, and submit rules apply unchanged.
+- NO-GIT FALLBACK: the engine detects this itself. In a non-git project no task entry carries a `worktree` block and no `=== WORKTREE (binding) ===` section is emitted; the batch summary says so explicitly. Run those tasks SEQUENTIALLY in the project root (there is no isolation for concurrent writes); DAG, `taskId`, and submit rules apply unchanged.
 - On a deadlock/all-blocked `error` action, stop the loop, display the blocked and waiting tasks as a table, and ask the user. After the user resolves an obstacle, use the UNBLOCK report above — do NOT enter a retry loop.
 - Spawn sub-agents only for tasks whose report has not yet been submitted — the engine idempotently re-lists a task that is still running.
 
@@ -195,7 +235,7 @@ Present the proposed rules to the user and ask via AskUserQuestion with options 
 
 - **accept** — the synthesizer APPLIES the rules via the non-interactive CLI (one call per rule):
   `{{.Command}} rule add --scope <scope> --name <name> --content-file <path>`
-  The synthesizer writes content to a temp file first, then calls the command. It never edits `.tddmaster/rules/` directly and never passes `--overwrite`.
+  The synthesizer writes content to a temp file first, then calls the command. It never edits `.tddmaster/rules/` directly. The command rejects an existing rule name instead of overwriting it.
 - **revise** — re-propose with the user's feedback; submit `--answer='{"feedback":"<reason>"}'`
 - **reject** — no rules written; submit `--answer='{"accepted":false}'`
 
@@ -213,7 +253,7 @@ Ask EVERY discovery question via the AskUserQuestion tool — never as plain pro
 
 ### Stop / resume
 
-When `next` returns `action: "notify"` and the payload includes `RestartRecommended: true`, the iteration limit for this session has been reached. Either start a new conversation and call `{{.Command}} next <slug>` to resume, or submit `{{.Command}} next <slug> --answer="continue"` in the current conversation to reset the counter and keep going.
+When `next` returns `action: "notify"` with an `instruction` starting `Iteration limit reached.`, the iteration limit for this session has been reached. Either start a new conversation and call `{{.Command}} next <slug>` to resume, or submit `{{.Command}} next <slug> --answer="continue"` in the current conversation to reset the counter and keep going.
 
 ### Git
 
@@ -226,4 +266,4 @@ Read-only: log, diff, status, show, blame. No write commands (commit, push, chec
 - If search returns few results, re-run narrower — assume truncation.
 - Clean dead code before structural refactors on files >300 LOC.
 - Complete the spec — no mid-execution pauses or checkpoints.
-- `meta` block has resume context for session start or after compaction.
+- Resuming after a new session or a compaction: call `{{.Command}} next <slug>` — the returned action carries the full context for the current step; do NOT read `.tddmaster/` files to reconstruct it.

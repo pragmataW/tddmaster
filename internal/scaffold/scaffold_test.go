@@ -251,3 +251,66 @@ func TestScaffold_Idempotent_SecondRunSucceedsAndSingleMarker(t *testing.T) {
 		t.Errorf("tddmasterStart marker appears %d times in CLAUDE.md, want exactly 1", count)
 	}
 }
+
+func TestScaffold_UnknownTool_DroppedFromManifest(t *testing.T) {
+	tmp := t.TempDir()
+	opts := Options{
+		Root: tmp,
+		Manifest: &manifest.Manifest{
+			SelectedTools:           []manifest.ToolID{manifest.ToolClaudeCode, "nope"},
+			MaxIterationBeforeStart: 15,
+			Command:                 "tddmaster",
+		},
+	}
+
+	res, err := Scaffold(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(paths.Manifest(tmp))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var m manifest.Manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("parse manifest: %v", err)
+	}
+	for _, id := range m.SelectedTools {
+		if id == "nope" {
+			t.Fatalf("unknown tool persisted into manifest: %v", m.SelectedTools)
+		}
+	}
+	if len(m.SelectedTools) != 1 || m.SelectedTools[0] != manifest.ToolClaudeCode {
+		t.Fatalf("expected only the known tool, got %v", m.SelectedTools)
+	}
+	if len(res.Warnings) == 0 {
+		t.Fatal("expected a warning for the unknown tool")
+	}
+	if !strings.Contains(res.Warnings[0], "nope") {
+		t.Fatalf("warning does not name the tool: %q", res.Warnings[0])
+	}
+}
+
+func TestScaffold_AllToolsUnknown_ReturnsError(t *testing.T) {
+	tmp := t.TempDir()
+	opts := Options{
+		Root: tmp,
+		Manifest: &manifest.Manifest{
+			SelectedTools:           []manifest.ToolID{"nope", "also-nope"},
+			MaxIterationBeforeStart: 15,
+			Command:                 "tddmaster",
+		},
+	}
+
+	_, err := Scaffold(opts)
+	if err == nil {
+		t.Fatal("expected an error when no selected tool has an adapter")
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("error should name the unknown tools, got %q", err.Error())
+	}
+	if _, statErr := os.Stat(paths.Manifest(tmp)); statErr == nil {
+		t.Fatal("manifest must not be written when no tool is usable")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pragmataW/tddmaster/internal/prompts"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -289,10 +290,42 @@ func TestAppendCoverageRequirement_StatesVerifierIsSoleMeasurer(t *testing.T) {
 	ctx := makeGreenVerifierCtx(80, []string{"internal/foo/bar.go"}, nil)
 	appendCoverageRequirement(&b, ctx)
 	result := strings.ToLower(b.String())
-	if !strings.Contains(result, "verifier") {
-		t.Errorf("appendCoverageRequirement: must state measurement belongs to the verifier sub-agent; got %q", b.String())
+	if !strings.Contains(result, "only agent that measures coverage") {
+		t.Errorf("appendCoverageRequirement: must tell the sub-agent it is the sole measurer; got %q", b.String())
 	}
-	if !strings.Contains(result, "orchestrator") {
-		t.Errorf("appendCoverageRequirement: must instruct the orchestrator not to measure itself; got %q", b.String())
+	if strings.Contains(result, "orchestrator") {
+		t.Errorf("appendCoverageRequirement: must not address the orchestrator inside a sub-agent prompt; got %q", b.String())
+	}
+}
+
+func TestOrchestratorDoc_DelegatesCoverageToTheVerifier(t *testing.T) {
+	rendered, err := prompts.Render("claude_md", prompts.RenderData{Command: "tddmaster"})
+	if err != nil {
+		t.Fatalf("render claude_md: %v", err)
+	}
+	if !strings.Contains(rendered, "never run coverage tooling yourself") {
+		t.Error("claude_md must tell the orchestrator to delegate coverage measurement to the verifier")
+	}
+}
+
+func TestCoverageRequirement_ExcludesTestFilesFromMeasurement(t *testing.T) {
+	ctx := ExecCtx{
+		Settings: spec.Settings{MinTestCoverage: 80},
+		State: spec.ExecState{
+			Plan: &spec.TaskPlan{TouchedFiles: []string{
+				"internal/cart/coupon.go",
+				"internal/cart/coupon_test.go",
+				"src/math.spec.js",
+			}},
+		},
+	}
+	var b strings.Builder
+	appendCoverageRequirement(&b, ctx)
+	got := b.String()
+	if !strings.Contains(got, "internal/cart/coupon.go") {
+		t.Fatalf("production file must be measured, got:\n%s", got)
+	}
+	if strings.Contains(got, "coupon_test.go") || strings.Contains(got, "math.spec.js") {
+		t.Fatalf("test files must not be listed for coverage measurement, got:\n%s", got)
 	}
 }

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -34,7 +35,8 @@ func TestStageReport_UnmarshalExecutor(t *testing.T) {
 
 func TestStageReport_UnmarshalVerifier(t *testing.T) {
 	var report StageReport
-	if err := json.Unmarshal([]byte(promptregistry.ReportExampleVerifier), &report); err != nil {
+	raw := strings.TrimSuffix(promptregistry.ReportExampleVerifier, "}") + `,"output":"suite failed at TestFoo"}`
+	if err := json.Unmarshal([]byte(raw), &report); err != nil {
 		t.Fatalf("unmarshal verifier report: %v", err)
 	}
 	if !report.Passed {
@@ -45,6 +47,36 @@ func TestStageReport_UnmarshalVerifier(t *testing.T) {
 	}
 	if report.UncoveredEdgeCases == nil {
 		t.Error("expected UncoveredEdgeCases to be non-nil (empty slice)")
+	}
+	if report.Output != "suite failed at TestFoo" {
+		t.Fatalf("Output = %q, want verifier summary preserved", report.Output)
+	}
+}
+
+func TestFailureLearningEntries_AssociatesIDsWithVerifierReasonAndOutput(t *testing.T) {
+	report := StageReport{
+		Passed:             false,
+		Reason:             "expected-pass-but-failed",
+		Output:             "TestFoo: wanted 200, got 500",
+		FailedACs:          []string{"ac-1"},
+		UncoveredEdgeCases: []string{"ec-2"},
+	}
+
+	got := failureLearningEntries(report)
+	want := []string{
+		"ac-1: expected-pass-but-failed; TestFoo: wanted 200, got 500",
+		"ec-2: expected-pass-but-failed; TestFoo: wanted 200, got 500",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("failureLearningEntries() = %#v, want %#v", got, want)
+	}
+}
+
+func TestStageReport_HasStageResult_ForVerifierReasonOrOutput(t *testing.T) {
+	for _, report := range []StageReport{{Reason: "failure reason"}, {Output: "failure output"}} {
+		if !report.HasStageResult() {
+			t.Fatalf("verifier prose must count as a stage result: %+v", report)
+		}
 	}
 }
 

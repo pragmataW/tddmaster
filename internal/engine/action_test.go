@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -192,5 +193,19 @@ func TestAction_JSONRoundTrip(t *testing.T) {
 	}
 	if got.CommandMap["yes"] != "next --answer=yes" {
 		t.Fatalf("CommandMap round-trip failed: %v", got.CommandMap)
+	}
+}
+
+func TestTaskActionJSON_AlwaysCarriesCompletionCondition(t *testing.T) {
+	raw, err := json.Marshal(TaskAction{
+		TaskID:              "task-1",
+		Stage:               "verifier",
+		CompletionCondition: TaskCompletionOnSuccessWithoutRefactorNotes,
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"completionCondition":"on-success-without-refactor-notes"`) {
+		t.Fatalf("TaskAction JSON lacks completion signal: %s", raw)
 	}
 }

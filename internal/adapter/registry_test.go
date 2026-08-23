@@ -23,6 +23,10 @@ func (f *fakeAdapter) Sync(ctx SyncContext) error {
 	return nil
 }
 
+func (f *fakeAdapter) Files() []string {
+	return []string{"FAKE.md"}
+}
+
 func TestGet_EmptyRegistryReturnsFalse(t *testing.T) {
 	Reset()
 

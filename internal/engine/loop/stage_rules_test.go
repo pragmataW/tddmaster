@@ -11,9 +11,9 @@ import (
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
-var mandatorySentence = strings.TrimSpace(promptregistry.RulesInjectionHeader)
+const rulesSectionMarker = promptregistry.SectionRules
 
-const closingLine = promptregistry.RulesInjectionFooter
+var ruleBodyMarkers = []string{"UNIQUE_GLOBAL_MARKER_CONTENT", "UNIQUE_AGENT_MARKER_CONTENT"}
 
 func writeRuleFile(t *testing.T, path, content string) {
 	t.Helper()
@@ -55,27 +55,30 @@ func ctxWithEmptyRules(settings spec.Settings, task spec.Task, state spec.ExecSt
 
 func assertContainsMandatoryBlock(t *testing.T, instruction, path1, path2 string) {
 	t.Helper()
-	if !strings.Contains(instruction, mandatorySentence) {
-		t.Errorf("Instruction missing mandatory sentence; got:\n%s", instruction)
+	if !strings.Contains(instruction, rulesSectionMarker) {
+		t.Errorf("Instruction missing rules section; got:\n%s", instruction)
 	}
-	if !strings.Contains(instruction, closingLine) {
-		t.Errorf("Instruction missing closing line; got:\n%s", instruction)
+	for _, p := range []string{path1, path2} {
+		if !strings.Contains(instruction, p) {
+			t.Errorf("Instruction missing rule path %q; got:\n%s", p, instruction)
+		}
 	}
-	if !strings.Contains(instruction, "- "+path1) {
-		t.Errorf("Instruction missing path %q; got:\n%s", path1, instruction)
-	}
-	if !strings.Contains(instruction, "- "+path2) {
-		t.Errorf("Instruction missing path %q; got:\n%s", path2, instruction)
+	for _, marker := range ruleBodyMarkers {
+		if !strings.Contains(instruction, marker) {
+			t.Errorf("Instruction missing inlined rule body %q; got:\n%s", marker, instruction)
+		}
 	}
 }
 
 func assertNoRulesBlock(t *testing.T, instruction string) {
 	t.Helper()
-	if strings.Contains(instruction, mandatorySentence) {
-		t.Errorf("Instruction must NOT contain mandatory sentence when no rules apply; got:\n%s", instruction)
+	if strings.Contains(instruction, rulesSectionMarker) {
+		t.Errorf("Instruction must NOT contain a rules section when no rules apply; got:\n%s", instruction)
 	}
-	if strings.Contains(instruction, closingLine) {
-		t.Errorf("Instruction must NOT contain closing line when no rules apply; got:\n%s", instruction)
+	for _, marker := range ruleBodyMarkers {
+		if strings.Contains(instruction, marker) {
+			t.Errorf("Instruction must NOT contain rule body %q when no rules apply; got:\n%s", marker, instruction)
+		}
 	}
 }
 
@@ -254,11 +257,11 @@ func TestAppendRules_GlobalBeforeAgentSpecific_LexicalOrder(t *testing.T) {
 	}
 }
 
-func TestAppendRules_PathsOnly_NoFileContentInjected(t *testing.T) {
-	uniqueMarker := "SUPER_UNIQUE_SECRET_CONTENT_MUST_NOT_APPEAR_IN_INSTRUCTION_XYZ987"
+func TestAppendRules_SmallRules_InlinedWithPathLabel(t *testing.T) {
+	uniqueMarker := "UNIQUE_RULE_BODY_XYZ987"
 	root := t.TempDir()
 	rulesBase := filepath.Join(root, ".tddmaster", "rules")
-	writeRuleFile(t, filepath.Join(rulesBase, "test-writer", "secret-rule.md"), uniqueMarker)
+	writeRuleFile(t, filepath.Join(rulesBase, "test-writer", "small-rule.md"), uniqueMarker)
 	r := loadRulesFixture(t, root)
 
 	settings := makeSettings(true, false, false)
@@ -267,11 +270,38 @@ func TestAppendRules_PathsOnly_NoFileContentInjected(t *testing.T) {
 
 	action := redStage().Prompt(ctx)
 
-	if strings.Contains(action.Instruction, uniqueMarker) {
-		t.Errorf("Instruction must NOT contain rule file content, only paths; found marker %q", uniqueMarker)
+	if !strings.Contains(action.Instruction, uniqueMarker) {
+		t.Errorf("Instruction must inline the rule body; got:\n%s", action.Instruction)
 	}
-	if !strings.Contains(action.Instruction, ".tddmaster/rules/test-writer/secret-rule.md") {
-		t.Errorf("Instruction must contain the path to the rule file")
+	if !strings.Contains(action.Instruction, ".tddmaster/rules/test-writer/small-rule.md") {
+		t.Errorf("Instruction must label the inlined body with its rule file path")
+	}
+}
+
+func TestAppendRules_OversizedRules_FallBackToPathsOnly(t *testing.T) {
+	body := strings.Repeat("x", inlineRulesBudget+1)
+	root := t.TempDir()
+	rulesBase := filepath.Join(root, ".tddmaster", "rules")
+	writeRuleFile(t, filepath.Join(rulesBase, "test-writer", "huge-rule.md"), body)
+	r := loadRulesFixture(t, root)
+
+	settings := makeSettings(true, false, false)
+	task := makeTask("t-1", true, false)
+	ctx := ctxWithRules(settings, task, makeExecState("red"), r)
+
+	action := redStage().Prompt(ctx)
+
+	if strings.Contains(action.Instruction, body) {
+		t.Error("Instruction must NOT inline a rule file larger than the inline budget")
+	}
+	if !strings.Contains(action.Instruction, "- .tddmaster/rules/test-writer/huge-rule.md") {
+		t.Errorf("Instruction must list the rule path when inlining is skipped; got:\n%s", action.Instruction)
+	}
+	if !strings.Contains(action.Instruction, promptregistry.RulesTruncatedNote) {
+		t.Errorf("Instruction must say WHY the bodies are missing when inlining is skipped; got:\n%s", action.Instruction)
+	}
+	if !strings.Contains(action.Instruction, promptregistry.RulesInjectionFooter) {
+		t.Error("Instruction must instruct the agent to read the listed rule files")
 	}
 }
 
@@ -466,7 +496,12 @@ func TestAppendRules_GlobalOnlyRules_AppliedToAllAgents(t *testing.T) {
 	if !strings.Contains(actionRed.Instruction, ".tddmaster/rules/shared.md") {
 		t.Error("red stage: global rule must appear even without agent-specific rules")
 	}
-	assertContainsMandatoryBlock(t, actionRed.Instruction, ".tddmaster/rules/shared.md", ".tddmaster/rules/shared.md")
+	if !strings.Contains(actionRed.Instruction, rulesSectionMarker) {
+		t.Errorf("red stage: missing rules section; got:\n%s", actionRed.Instruction)
+	}
+	if !strings.Contains(actionRed.Instruction, "global content") {
+		t.Errorf("red stage: global rule body must be inlined; got:\n%s", actionRed.Instruction)
+	}
 
 	ctxGreen := ctxWithRules(settings, task, makeExecState("green"), r)
 	actionGreen := greenStage().Prompt(ctxGreen)

@@ -409,7 +409,7 @@ func TestRedStage_OnReport_AdvancesToGreen(t *testing.T) {
 	task := makeTask("t-1", true, false)
 	ctx := makeExecCtx(settings, task, makeExecState("red"), 0, 3)
 
-	report := StageReport{Passed: true, TestsWritten: []string{"t1_test.go"}}
+	report := StageReport{Passed: true, TestsWritten: []string{"TestT1"}, FilesModified: []string{"t1_test.go"}}
 	newCtx, err := redStage().OnReport(ctx, report)
 
 	if err != nil {
@@ -417,6 +417,9 @@ func TestRedStage_OnReport_AdvancesToGreen(t *testing.T) {
 	}
 	if newCtx.State.TDDCycle != cycleGreen {
 		t.Errorf("TDDCycle: got %q, want %q", newCtx.State.TDDCycle, cycleGreen)
+	}
+	if len(newCtx.State.TestFiles) != 1 || newCtx.State.TestFiles[0] != "t1_test.go" {
+		t.Errorf("TestFiles: got %v, want [t1_test.go]", newCtx.State.TestFiles)
 	}
 }
 
@@ -574,19 +577,34 @@ func TestRefactorStage_OnReport_SkipVerifier_ApplyAdvancesDirectly(t *testing.T)
 	}
 }
 
-func TestRedStage_OnReport_Failed_StaysRed(t *testing.T) {
+// An incomplete RED report used to be absorbed in silence: the cycle stayed in
+// RED, no error surfaced, and `next` re-emitted the identical round until the
+// iteration limit. Both missing fields must now be reported as errors.
+func TestRedStage_OnReport_IncompleteReport_IsRejectedNotSilentlyStuck(t *testing.T) {
 	settings := makeSettings(true, false, false)
 	task := makeTask("t-1", true, false)
-	ctx := makeExecCtx(settings, task, makeExecState("red"), 0, 3)
 
-	report := StageReport{Passed: false}
-	newCtx, err := redStage().OnReport(ctx, report)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if newCtx.State.TDDCycle != cycleRed {
-		t.Errorf("TDDCycle: got %q, want %q (failed → stay red)", newCtx.State.TDDCycle, cycleRed)
+	for _, tc := range []struct {
+		name   string
+		report StageReport
+		want   string
+	}{
+		{"no testsWritten", StageReport{Passed: false}, "TestsWritten"},
+		{"no filesModified", StageReport{TestsWritten: []string{"TestT1"}}, "FilesModified"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := makeExecCtx(settings, task, makeExecState("red"), 0, 3)
+			newCtx, err := redStage().OnReport(ctx, tc.report)
+			if err == nil {
+				t.Fatalf("expected an error naming %s, got nil", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error must name the missing field %s, got %q", tc.want, err)
+			}
+			if newCtx.State.TDDCycle != cycleRed {
+				t.Errorf("TDDCycle: got %q, want %q (rejected report must not advance)", newCtx.State.TDDCycle, cycleRed)
+			}
+		})
 	}
 }
 
@@ -1341,5 +1359,116 @@ func TestGateOnReport_PlanWithoutAcceptedFlag_Approves(t *testing.T) {
 	}
 	if newCtx.State.Plan == nil || newCtx.State.Plan.Approach != "do X" {
 		t.Fatalf("expected plan stored, got %+v", newCtx.State.Plan)
+	}
+}
+
+func TestRefactorSkipVerify_ApplyReportWithoutPassed_AdvancesTask(t *testing.T) {
+	root := t.TempDir()
+	slug := "refactor-skip-advance"
+	tasks := []spec.Task{{
+		ID:         "task-1",
+		Title:      "one",
+		TDDEnabled: true,
+		Criteria:   []spec.Criterion{{ID: "ac-1", Then: "it works"}},
+		Exec: &spec.ExecState{
+			TDDCycle:      cycleRefactor,
+			Implemented:   true,
+			RefactorNotes: []spec.RefactorNote{{File: "a.go", Suggestion: "extract constant"}},
+		},
+	}}
+	ctx := seedLoopSpecCore(t, root, slug, tasks, func(s *spec.Settings) {
+		s.TDDEnabled = true
+		s.SkipVerifierEnabled = true
+	}, 0)
+
+	// The executor's apply report carries no `passed` field — the engine must
+	// still advance instead of re-emitting the same apply stage forever.
+	report := StageReport{
+		TaskID:          "task-1",
+		Phase:           "refactor",
+		RefactorApplied: true,
+		Completed:       []string{"task-1"},
+		FilesModified:   []string{"a.go"},
+	}
+	if _, err := ctx.Submit(marshalStageReport(t, report)); err != nil {
+		t.Fatalf("Submit refactor apply: %v", err)
+	}
+
+	pr, err := spec.LoadProgress(root, slug)
+	if err != nil {
+		t.Fatalf("LoadProgress: %v", err)
+	}
+	if !pr.Tasks[0].Done {
+		t.Fatalf("refactor apply report must advance the task, got exec %+v", pr.Tasks[0].Exec)
+	}
+}
+
+func TestChangedFiles_RedAfterGreen_StillNamesImplementationFiles(t *testing.T) {
+	ctx := ExecCtx{
+		State: spec.ExecState{
+			ImplFiles:         []string{"internal/cart/coupon.go", "internal/cart/cart.go"},
+			TestFiles:         []string{"internal/cart/coupon_test.go"},
+			LastModifiedFiles: []string{"internal/cart/coupon_test.go"},
+		},
+	}
+
+	var green strings.Builder
+	appendGreenChangedFiles(&green, ctx)
+	for _, want := range []string{"internal/cart/coupon_test.go", "internal/cart/coupon.go", "internal/cart/cart.go"} {
+		if !strings.Contains(green.String(), want) {
+			t.Fatalf("green CHANGED FILES must list %q, got:\n%s", want, green.String())
+		}
+	}
+	testIdx := strings.Index(green.String(), "internal/cart/coupon_test.go")
+	implIdx := strings.Index(green.String(), "internal/cart/coupon.go")
+	if testIdx == -1 || implIdx == -1 || testIdx > implIdx {
+		t.Fatalf("green CHANGED FILES must lead with the RED test files, got:\n%s", green.String())
+	}
+
+	var verify strings.Builder
+	appendChangedFiles(&verify, ctx)
+	for _, want := range []string{"internal/cart/coupon.go", "internal/cart/cart.go", "internal/cart/coupon_test.go"} {
+		if !strings.Contains(verify.String(), want) {
+			t.Fatalf("verifier CHANGED FILES must list %q, got:\n%s", want, verify.String())
+		}
+	}
+}
+
+func TestGreenOnReport_AccumulatesImplementationFilesAcrossRounds(t *testing.T) {
+	ctx := ExecCtx{State: spec.ExecState{ImplFiles: []string{"a.go"}}}
+	got, err := greenStageImpl{}.OnReport(ctx, StageReport{FilesModified: []string{"b.go"}})
+	if err != nil {
+		t.Fatalf("OnReport: %v", err)
+	}
+	if len(got.State.ImplFiles) != 2 || got.State.ImplFiles[0] != "a.go" || got.State.ImplFiles[1] != "b.go" {
+		t.Fatalf("expected accumulated impl files [a.go b.go], got %v", got.State.ImplFiles)
+	}
+}
+
+func TestAppendSiblings_UnknownFilesNote(t *testing.T) {
+	var b strings.Builder
+	appendSiblings(&b, ExecCtx{
+		Worktrees: true,
+		Siblings:  []SiblingTask{{ID: "task-2", Title: "Other work"}},
+	})
+	out := b.String()
+	if !strings.Contains(out, "task-2: Other work") {
+		t.Fatalf("sibling not listed:\n%s", out)
+	}
+	if !strings.Contains(out, "has not declared its files yet") {
+		t.Fatalf("a sibling with no owned files must be called out:\n%s", out)
+	}
+
+	var withFiles strings.Builder
+	appendSiblings(&withFiles, ExecCtx{
+		Worktrees: true,
+		Siblings:  []SiblingTask{{ID: "task-2", Title: "Other work", Files: []string{"internal/cart/count.go"}}},
+	})
+	out = withFiles.String()
+	if !strings.Contains(out, "(owns: internal/cart/count.go)") {
+		t.Fatalf("owned files not rendered:\n%s", out)
+	}
+	if strings.Contains(out, "has not declared its files yet") {
+		t.Fatalf("note must be omitted once every sibling declares files:\n%s", out)
 	}
 }

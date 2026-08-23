@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+func okCriteria() []Criterion { return []Criterion{{Then: "an observable outcome"}} }
+
 func strPtr(s string) *string { return &s }
 func boolPtr(b bool) *bool    { return &b }
 
@@ -169,7 +171,7 @@ func TestApplyRefinement_Update_DoneFlag_NeverModified(t *testing.T) {
 
 func TestApplyRefinement_Add_AutoID_StartsAtTaskOne_WhenEmpty(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("New Task")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("New Task")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -188,7 +190,7 @@ func TestApplyRefinement_Add_AutoID_MaxPlusOne(t *testing.T) {
 		{ID: "task-2", Title: "B"},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("C")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("C")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -204,7 +206,7 @@ func TestApplyRefinement_Add_AutoID_IgnoresNonNumericIDs(t *testing.T) {
 		{ID: "task-2", Title: "B"},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("C")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("C")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -219,7 +221,7 @@ func TestApplyRefinement_Add_AutoID_OnlyNonNumericIDs_FallsBackToTaskOne(t *test
 		{ID: "garbage-id", Title: "A"},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("New")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("New")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -235,8 +237,8 @@ func TestApplyRefinement_Add_MultipleAdds_IncrementSequentially(t *testing.T) {
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Add: []RefineOp{
-			{Title: strPtr("Second")},
-			{Title: strPtr("Third")},
+			{Criteria: okCriteria(), Title: strPtr("Second")},
+			{Criteria: okCriteria(), Title: strPtr("Third")},
 		},
 	}, false, 0)
 	if err != nil {
@@ -252,7 +254,7 @@ func TestApplyRefinement_Add_MultipleAdds_IncrementSequentially(t *testing.T) {
 
 func TestApplyRefinement_Add_NilTitle_ReturnsError(t *testing.T) {
 	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: nil}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: nil}},
 	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for nil title in add op")
@@ -261,7 +263,7 @@ func TestApplyRefinement_Add_NilTitle_ReturnsError(t *testing.T) {
 
 func TestApplyRefinement_Add_EmptyTitle_ReturnsError(t *testing.T) {
 	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("")}},
 	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for empty title in add op")
@@ -270,7 +272,7 @@ func TestApplyRefinement_Add_EmptyTitle_ReturnsError(t *testing.T) {
 
 func TestApplyRefinement_Add_NewTaskDoneIsFalse(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -282,7 +284,7 @@ func TestApplyRefinement_Add_NewTaskDoneIsFalse(t *testing.T) {
 
 func TestApplyRefinement_Add_TDDEnabled_DefaultsFalse(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -294,7 +296,7 @@ func TestApplyRefinement_Add_TDDEnabled_DefaultsFalse(t *testing.T) {
 
 func TestApplyRefinement_Add_TDDEnabled_TrueWhenSet(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T"), TDDEnabled: boolPtr(true)}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T"), TDDEnabled: boolPtr(true)}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -306,7 +308,7 @@ func TestApplyRefinement_Add_TDDEnabled_TrueWhenSet(t *testing.T) {
 
 func TestApplyRefinement_Add_Important_DefaultsFalse(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -324,7 +326,7 @@ func TestApplyRefinement_Order_RemoveThenAdd_DoesNotReuseRemovedID(t *testing.T)
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Remove: []string{"task-3"},
-		Add:    []RefineOp{{Title: strPtr("D")}},
+		Add:    []RefineOp{{Criteria: okCriteria(), Title: strPtr("D")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -345,7 +347,7 @@ func TestApplyRefinement_Order_RemoveUpdateAdd_Sequence(t *testing.T) {
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
 		Remove: []string{"task-1"},
 		Update: map[string]RefineOp{"task-2": {Title: strPtr("B-updated")}},
-		Add:    []RefineOp{{Title: strPtr("C")}},
+		Add:    []RefineOp{{Criteria: okCriteria(), Title: strPtr("C")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -422,7 +424,7 @@ func TestApplyRefinement_ReturnedSlice_OrderIsOriginalThenAdded(t *testing.T) {
 		{ID: "task-2", Title: "B"},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("C")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("C")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -435,7 +437,7 @@ func TestApplyRefinement_ReturnedSlice_OrderIsOriginalThenAdded(t *testing.T) {
 
 func TestApplyRefinement_Add_TDDEnabled_DefaultsToTDDDefault(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T")}},
 	}, true, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -447,7 +449,7 @@ func TestApplyRefinement_Add_TDDEnabled_DefaultsToTDDDefault(t *testing.T) {
 
 func TestApplyRefinement_Add_TDDEnabled_ExplicitFalse_OverridesDefault(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("T"), TDDEnabled: boolPtr(false)}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("T"), TDDEnabled: boolPtr(false)}},
 	}, true, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -471,7 +473,7 @@ func TestApplyRefinement_Seq_PreventsIDReuseAcrossCalls(t *testing.T) {
 		t.Fatalf("got seq %d, want 3 — removed IDs must stay reserved", seq)
 	}
 	result, seq2, err := ApplyRefinement(afterRemove, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("D")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("D")}},
 	}, false, seq)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -575,7 +577,7 @@ func TestApplyRefinement_Seq_TakesMaxOfSeqAndTaskIDs(t *testing.T) {
 		{ID: "task-5", Title: "E"},
 	}
 	result, seq, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("F")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("F")}},
 	}, false, 2)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -646,7 +648,7 @@ func TestApplyRefinement_Add_WithDependsOn(t *testing.T) {
 		{ID: "task-1", Title: "A"},
 	}
 	result, _, err := ApplyRefinement(tasks, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("B"), DependsOn: depsPtr("task-1")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("B"), DependsOn: depsPtr("task-1")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -658,7 +660,7 @@ func TestApplyRefinement_Add_WithDependsOn(t *testing.T) {
 
 func TestApplyRefinement_Add_NoDependsOn_DefaultsEmptyNonNil(t *testing.T) {
 	result, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("A")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("A")}},
 	}, false, 0)
 	if err != nil {
 		t.Fatalf("got error %v, want nil", err)
@@ -765,7 +767,7 @@ func TestApplyRefinement_Update_Cycle_ReturnsError(t *testing.T) {
 
 func TestApplyRefinement_Add_UnknownDependency_ReturnsError(t *testing.T) {
 	_, _, err := ApplyRefinement([]Task{}, RefinePayload{
-		Add: []RefineOp{{Title: strPtr("A"), DependsOn: depsPtr("task-42")}},
+		Add: []RefineOp{{Criteria: okCriteria(), Title: strPtr("A"), DependsOn: depsPtr("task-42")}},
 	}, false, 0)
 	if err == nil {
 		t.Fatal("got nil error, want non-nil for add with unknown dependency")
@@ -803,7 +805,7 @@ func TestApplyRefinement_RemoveWithDependents_AndUnknownDep_BothReported(t *test
 	}
 	payload := RefinePayload{
 		Remove: []string{"task-2"},
-		Add:    []RefineOp{{Title: strPtr("D"), DependsOn: &[]string{"task-9"}}},
+		Add:    []RefineOp{{Criteria: okCriteria(), Title: strPtr("D"), DependsOn: &[]string{"task-9"}}},
 	}
 	_, _, err := ApplyRefinement(tasks, payload, false, 0)
 	if err == nil {
@@ -829,5 +831,61 @@ func TestApplyRefinement_Remove_DuplicateID_ReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "duplicate task id in remove: task-2") {
 		t.Fatalf("expected duplicate-remove error, got %q", err.Error())
+	}
+}
+
+// A task with no acceptance criterion cannot be verified by any stage, and a
+// criterion with no `then` has no observable outcome to check. The prompts
+// already stated both; refine used to accept them anyway.
+func TestApplyRefinement_Add_WithoutCriteria_IsRejected(t *testing.T) {
+	_, _, err := ApplyRefinement(nil, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("No criteria")}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("expected an error for an add op with no criteria")
+	}
+	if !strings.Contains(err.Error(), "acceptance criterion") {
+		t.Fatalf("error must explain what is missing, got %q", err)
+	}
+}
+
+func TestApplyRefinement_Add_CriterionWithEmptyThen_IsRejected(t *testing.T) {
+	_, _, err := ApplyRefinement(nil, RefinePayload{
+		Add: []RefineOp{{Title: strPtr("Empty then"), Criteria: []Criterion{{Given: "g", When: "w"}}}},
+	}, false, 0)
+	if err == nil {
+		t.Fatal("expected an error for a criterion with an empty then")
+	}
+	if !strings.Contains(err.Error(), "then") {
+		t.Fatalf("error must name the missing field, got %q", err)
+	}
+}
+
+func TestApplyRefinement_Update_CannotWipeCriteriaToEmpty(t *testing.T) {
+	tasks := []Task{{ID: "task-1", Title: "Alpha", Criteria: []Criterion{{ID: "ac-1", Then: "it works"}}}}
+
+	_, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {Criteria: []Criterion{}}},
+	}, false, 0)
+
+	if err == nil {
+		t.Fatal("expected an error: an empty criteria array leaves the task unverifiable")
+	}
+	if !strings.Contains(err.Error(), "task-1") {
+		t.Fatalf("error must name the task, got %q", err)
+	}
+}
+
+func TestApplyRefinement_Update_OmittedCriteria_StillAllowed(t *testing.T) {
+	tasks := []Task{{ID: "task-1", Title: "Alpha", Criteria: []Criterion{{ID: "ac-1", Then: "it works"}}}}
+
+	result, _, err := ApplyRefinement(tasks, RefinePayload{
+		Update: map[string]RefineOp{"task-1": {Important: boolPtr(true)}},
+	}, false, 0)
+	if err != nil {
+		t.Fatalf("a flag-only update must not require criteria: %v", err)
+	}
+	if len(result[0].Criteria) != 1 {
+		t.Fatalf("existing criteria must be preserved, got %v", result[0].Criteria)
 	}
 }

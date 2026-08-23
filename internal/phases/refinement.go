@@ -2,6 +2,7 @@ package phases
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/engine"
@@ -30,9 +31,16 @@ func RenderTaskList(tasks []spec.Task) string {
 		for _, c := range task.Criteria {
 			lines = append(lines, "  - ["+c.ID+"]"+spec.FormatCriterionInline(c))
 		}
+		for i, ec := range task.EdgeCases {
+			lines = append(lines, "  - ["+spec.EdgeCaseIDPrefix+strconv.Itoa(i+1)+"] edge case: "+ec)
+		}
 	}
 	return strings.Join(lines, "\n")
 }
+
+// refinementApprovedKey marks the refinement phase as finished. The analysis
+// phase clears it when the user sends the spec back here.
+const refinementApprovedKey = "refinement_approved"
 
 type refinementDriver struct{}
 
@@ -41,7 +49,7 @@ func RefinementDriver() engine.Driver {
 }
 
 func (d *refinementDriver) Next(c *engine.Context, ph *engine.PhaseDef) (engine.Action, bool) {
-	if c.HasAnswer("refinement_approved") {
+	if c.HasAnswer(refinementApprovedKey) {
 		return engine.Action{}, true
 	}
 	instr := promptregistry.MustInstruction(promptregistry.KeyRefinePrompt)
@@ -61,7 +69,7 @@ func (d *refinementDriver) Submit(c *engine.Context, ph *engine.PhaseDef, answer
 		if err := spec.ValidateDAG(c.Progress().Tasks); err != nil {
 			return engine.Action{}, false, err
 		}
-		if err := c.SetAnswer("refinement_approved", "approve"); err != nil {
+		if err := c.SetAnswer(refinementApprovedKey, "approve"); err != nil {
 			return engine.Action{}, false, err
 		}
 		return engine.Action{}, true, nil

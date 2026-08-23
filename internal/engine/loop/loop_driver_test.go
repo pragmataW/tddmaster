@@ -199,17 +199,18 @@ func TestLoopDriver_Edge14_TDDTask_RedToGreenOnPassingReport(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge14"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
-		TaskID:       "t1",
-		Passed:       true,
-		TestsWritten: []string{"t1_test.go"},
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestT1"},
+		FilesModified: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac-1"}},
 		},
 	}))
 	if err != nil {
@@ -232,7 +233,7 @@ func TestLoopDriver_Edge10_GreenPassWithoutRefactorNotes_TaskDone(t *testing.T) 
 	root := t.TempDir()
 	slug := "edge10-done"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -252,7 +253,7 @@ func TestLoopDriver_Edge10_GreenPassWithRefactorNotes_CycleAdvancesToRefactor(t 
 	root := t.TempDir()
 	slug := "edge10-refactor"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -278,7 +279,7 @@ func TestLoopDriver_Edge5_RefactorCap_TaskDoneAfterCapReached(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge5"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRefactor, RefactorRounds: 0, RefactorApplied: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -311,7 +312,7 @@ func TestLoopDriver_Edge9_RefactorApplyHead_WaitsForVerifier(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge9"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRefactor, RefactorApplied: false}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -347,7 +348,7 @@ func TestLoopDriver_Edge12_MalformedJSON_SubmitReturnsErrorStateUnchanged(t *tes
 	root := t.TempDir()
 	slug := "edge12"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 2)
@@ -376,7 +377,7 @@ func TestLoopDriver_Edge12_EmptyAnswer_SubmitReturnsError(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge12-empty"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -391,7 +392,7 @@ func TestLoopDriver_Edge13_MixedTDDEnabled_NextTaskSeededEmptyForNonTDD(t *testi
 	root := t.TempDir()
 	slug := "edge13"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 		{ID: "t2", Title: "non-tdd task", Done: false, TDDEnabled: false},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
@@ -435,7 +436,7 @@ func TestLoopDriver_Edge11_IterationExceedsMax_ReturnsStopAction(t *testing.T) {
 	root := t.TempDir()
 	slug := "edge11"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	maxIter := 15
 	execution := &spec.ExecState{TDDCycle: cycleRed}
@@ -457,17 +458,18 @@ func TestLoopDriver_Persistence_SubmitPersistsExecAndTaskDone(t *testing.T) {
 	root := t.TempDir()
 	slug := "persist"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
 
 	_, err := ctx.Submit(marshalStageReport(t, StageReport{
-		TaskID:       "t1",
-		Passed:       true,
-		TestsWritten: []string{"t1_test.go"},
+		TaskID:        "t1",
+		Passed:        true,
+		TestsWritten:  []string{"TestT1"},
+		FilesModified: []string{"t1_test.go"},
 		Traceability: []TraceReportEntry{
-			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac1"}},
+			{TestFilePath: "t1_test.go", FunctionName: "TestT1", TaskID: "t1", AC: []string{"ac-1"}},
 		},
 	}))
 	if err != nil {
@@ -490,7 +492,7 @@ func TestLoopDriver_Persistence_AllTasksDone_StatusPersistedAsCompleted(t *testi
 	root := t.TempDir()
 	slug := "persist-done"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -524,7 +526,7 @@ func TestLoopDriver_Edge3_GreenPassWithFailedACs_TaskNotDone(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-guard-failedacs"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -552,11 +554,11 @@ func TestLoopDriver_Edge3_GreenPassWithFailedACs_TaskNotDone(t *testing.T) {
 	}
 }
 
-func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_TaskNotDone(t *testing.T) {
+func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_ReturnsToRed(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-guard-ec"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen, Implemented: true}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -576,8 +578,11 @@ func TestLoopDriver_Edge4_GreenPassWithUncoveredEC_TaskNotDone(t *testing.T) {
 	if pr.Tasks[0].Exec == nil {
 		t.Fatal("expected non-nil task Exec")
 	}
-	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
-		t.Fatalf("expected TDDCycle=%q (unchanged), got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
+	if pr.Tasks[0].Exec.TDDCycle != cycleRed {
+		t.Fatalf("expected TDDCycle=%q (only the test-writer can cover an edge case), got %q", cycleRed, pr.Tasks[0].Exec.TDDCycle)
+	}
+	if pr.Tasks[0].Exec.Implemented {
+		t.Fatal("expected Implemented=false after a failed verification")
 	}
 	if len(pr.Tasks[0].Exec.LastUncoveredEC) == 0 || pr.Tasks[0].Exec.LastUncoveredEC[0] != "ec-2" {
 		t.Fatalf("expected LastUncoveredEC=[\"ec-2\"], got %v", pr.Tasks[0].Exec.LastUncoveredEC)
@@ -588,7 +593,7 @@ func TestLoopDriver_CoverageCleared_OnCleanPass(t *testing.T) {
 	root := t.TempDir()
 	slug := "cov-cleared"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{
 		TDDCycle:      cycleGreen,
@@ -820,7 +825,7 @@ func TestLoopDriver_TaskDone_RerendersSpecMd(t *testing.T) {
 	root := t.TempDir()
 	slug := "rerender-done"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -841,7 +846,7 @@ func TestLoopDriver_AllTasksDone_SpecMdStatusCompleted(t *testing.T) {
 	root := t.TempDir()
 	slug := "rerender-completed"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -865,7 +870,7 @@ func TestLoopDriver_TaskNotDone_SpecMdNotMarked(t *testing.T) {
 	root := t.TempDir()
 	slug := "rerender-notdone"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -897,7 +902,7 @@ func TestLoopDriver_IterationMax_NextNotifyHasRestartText(t *testing.T) {
 	root := t.TempDir()
 	slug := "iter-max-notify"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	maxIter := 15
 	execution := &spec.ExecState{TDDCycle: cycleRed}
@@ -919,7 +924,7 @@ func TestLoopDriver_Continue_ResetsIterationsToZero(t *testing.T) {
 	root := t.TempDir()
 	slug := "continue-reset"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	maxIter := 15
 	execution := &spec.ExecState{TDDCycle: cycleRed}
@@ -946,7 +951,7 @@ func TestLoopDriver_Continue_NotTreatedAsInvalidJSON(t *testing.T) {
 	root := t.TempDir()
 	slug := "continue-valid"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	maxIter := 15
 	execution := &spec.ExecState{TDDCycle: cycleRed}
@@ -962,7 +967,7 @@ func TestLoopDriver_InvalidJSON_StillErrors(t *testing.T) {
 	root := t.TempDir()
 	slug := "invalid-json-still-err"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleRed}
 	ctx := seedLoopSpecIter(t, root, slug, tasks, execution, 15)
@@ -977,7 +982,7 @@ func TestLoopDriver_Edge5_GreenExecutorSelfReport_DoesNotAdvance(t *testing.T) {
 	root := t.TempDir()
 	slug := "green-executor-self"
 	tasks := []spec.Task{
-		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true},
+		{ID: "t1", Title: "tdd task", Done: false, TDDEnabled: true, Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}}},
 	}
 	execution := &spec.ExecState{TDDCycle: cycleGreen}
 	ctx := seedLoopSpec(t, root, slug, tasks, execution)
@@ -1008,5 +1013,193 @@ func TestLoopDriver_Edge5_GreenExecutorSelfReport_DoesNotAdvance(t *testing.T) {
 	}
 	if pr.Tasks[0].Exec.TDDCycle != cycleGreen {
 		t.Fatalf("expected TDDCycle=%q unchanged, got %q", cycleGreen, pr.Tasks[0].Exec.TDDCycle)
+	}
+}
+
+func TestWorktreeBlock_OmittedWhenProjectIsNotAGitRepo(t *testing.T) {
+	root := t.TempDir()
+	slug := "nogit-worktree"
+	tasks := []spec.Task{{ID: "task-1", Title: "one", TDDEnabled: false}}
+	ctx := seedDagSpec(t, root, slug, tasks, nil, 0)
+
+	action, err := ctx.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if len(action.Tasks) != 1 {
+		t.Fatalf("expected one task action, got %d", len(action.Tasks))
+	}
+	if action.Tasks[0].Worktree != nil {
+		t.Fatalf("non-git project must not carry a worktree ref, got %+v", action.Tasks[0].Worktree)
+	}
+	if strings.Contains(action.Tasks[0].Instruction, "=== WORKTREE (binding) ===") {
+		t.Fatalf("non-git project must not emit a worktree block:\n%s", action.Tasks[0].Instruction)
+	}
+	if !strings.Contains(action.Instruction, "NOT a git repository") {
+		t.Fatalf("batch summary must state the no-git fallback, got %q", action.Instruction)
+	}
+}
+
+func TestWorktreeBlock_PresentWhenProjectIsAGitRepo(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(root+"/.git", 0o755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	slug := "git-worktree"
+	tasks := []spec.Task{{ID: "task-1", Title: "one", TDDEnabled: false}}
+	ctx := seedDagSpec(t, root, slug, tasks, nil, 0)
+
+	action, err := ctx.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if action.Tasks[0].Worktree == nil {
+		t.Fatal("git project must carry a worktree ref")
+	}
+	if !strings.Contains(action.Tasks[0].Instruction, "=== WORKTREE (binding) ===") {
+		t.Fatal("git project must emit a worktree block")
+	}
+}
+
+func TestGateAction_TopLevelInstructionDoesNotLeakIntoPlannerBrief(t *testing.T) {
+	root := t.TempDir()
+	slug := "gate-audience"
+	tasks := []spec.Task{{
+		ID:        "task-1",
+		Title:     "important one",
+		Important: true,
+		Criteria:  []spec.Criterion{{ID: "ac-1", Then: "it works"}},
+	}}
+	ctx := seedDagSpec(t, root, slug, tasks, func(s *spec.Settings) {
+		s.ImportantTaskGateEnabled = true
+	}, 0)
+
+	action, err := ctx.Next()
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if len(action.Tasks) == 0 || action.Tasks[0].Stage != StageIDGate {
+		t.Fatalf("expected a gate task entry, got %+v", action.Tasks)
+	}
+	brief := action.Tasks[0].Instruction
+	for _, leak := range []string{"Spawn `tddmaster-planner`", "AskUserQuestion"} {
+		if strings.Contains(brief, leak) {
+			t.Fatalf("planner brief must not carry orchestrator directive %q:\n%s", leak, brief)
+		}
+	}
+	if !strings.Contains(action.Instruction, "Spawn `tddmaster-planner`") {
+		t.Fatalf("orchestrator instruction must carry the spawn directive, got %q", action.Instruction)
+	}
+	if !strings.Contains(action.Instruction, "AskUserQuestion") {
+		t.Fatalf("orchestrator instruction must carry the approval directive, got %q", action.Instruction)
+	}
+}
+
+func TestBatchSummary_IsolationWordingMatchesGitAvailability(t *testing.T) {
+	withGit := batchSummary([]string{"task-1 (red)", "task-2 (red)"}, true, false, false)
+	if !strings.Contains(withGit, "IN PARALLEL") {
+		t.Fatalf("worktree batch should say it runs in parallel, got %q", withGit)
+	}
+	if strings.Contains(withGit, "SEQUENTIALLY") {
+		t.Fatalf("worktree batch must not also demand sequential runs, got %q", withGit)
+	}
+
+	noGit := batchSummary([]string{"task-1 (red)"}, false, false, false)
+	if !strings.Contains(noGit, "SEQUENTIALLY") {
+		t.Fatalf("no-git batch should demand sequential runs, got %q", noGit)
+	}
+	if strings.Contains(noGit, "parallel execution") {
+		t.Fatalf("no-git batch must not advertise parallel execution, got %q", noGit)
+	}
+}
+
+func TestBatchSummary_SingleWorktreeTaskUsesSingularWording(t *testing.T) {
+	got := batchSummary([]string{"task-1 (red)"}, true, false, false)
+	if strings.Contains(got, "Run them IN PARALLEL") {
+		t.Fatalf("single-task batch must not demand parallel execution, got %q", got)
+	}
+	if !strings.Contains(got, "Run it in its own worktree") {
+		t.Fatalf("single-task batch should use singular worktree wording, got %q", got)
+	}
+}
+
+func TestTaskCompletionCondition_DescribesTerminalSubmitContract(t *testing.T) {
+	tests := []struct {
+		name    string
+		ctx     ExecCtx
+		stageID string
+		want    engine.TaskCompletionCondition
+	}{
+		{
+			name:    "green executor never completes because mandatory verifier follows",
+			ctx:     makeExecCtx(makeSettings(true, true, false), makeTask("task-1", true, false), makeExecState(cycleGreen), 0, 3),
+			stageID: StageIDGreen,
+			want:    engine.TaskCompletionNever,
+		},
+		{
+			name:    "green verifier completes only without refactor notes",
+			ctx:     makeExecCtx(makeSettings(true, true, false), makeTask("task-1", true, false), implementedGreen(), 0, 3),
+			stageID: StageIDVerifier,
+			want:    engine.TaskCompletionOnSuccessWithoutRefactorNotes,
+		},
+		{
+			name:    "non-TDD executor with verifier skipped completes on success",
+			ctx:     makeExecCtx(makeSettings(false, true, false), makeTask("task-1", false, false), makeExecState(cycleEmpty), 0, 3),
+			stageID: StageIDExecutor,
+			want:    engine.TaskCompletionOnSuccess,
+		},
+		{
+			name: "refactor apply with verifier skipped is conditionally terminal",
+			ctx: makeExecCtx(makeSettings(true, true, false), makeTask("task-1", true, false), spec.ExecState{
+				TDDCycle: cycleRefactor,
+			}, 0, 3),
+			stageID: StageIDRefactor,
+			want:    engine.TaskCompletionOnSuccessWithoutRefactorNotes,
+		},
+		{
+			name: "final refactor round completes on success even when notes remain",
+			ctx: makeExecCtx(makeSettings(true, false, false), makeTask("task-1", true, false), spec.ExecState{
+				TDDCycle:        cycleRefactor,
+				RefactorApplied: true,
+				RefactorRounds:  2,
+			}, 0, 3),
+			stageID: StageIDRefactor,
+			want:    engine.TaskCompletionOnSuccess,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := taskCompletionCondition(tt.ctx, tt.stageID); got != tt.want {
+				t.Fatalf("taskCompletionCondition() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBatchSummary_TestWriterNoteOnlyForNonTDDBatch(t *testing.T) {
+	withNote := batchSummary([]string{"task-1 (executor)"}, true, true, false)
+	if !strings.Contains(withNote, "tddmaster-test-writer") {
+		t.Fatalf("a non-TDD batch should tell the orchestrator it may spawn the test-writer, got %q", withNote)
+	}
+
+	without := batchSummary([]string{"task-1 (red)"}, true, false, false)
+	if strings.Contains(without, "tddmaster-test-writer") {
+		t.Fatalf("a TDD batch already has a red stage; no note expected, got %q", without)
+	}
+}
+
+func TestBatchSummary_RefactorNoteOnlyForApplyRounds(t *testing.T) {
+	withNote := batchSummary([]string{"task-1 (refactor)"}, true, false, true)
+	if !strings.Contains(withNote, "tddmaster-test-writer") {
+		t.Fatalf("a refactor apply batch must tell the orchestrator it may spawn the test-writer, got %q", withNote)
+	}
+	if !strings.Contains(withNote, promptregistry.NameRefactorNotes) {
+		t.Fatalf("the note must point at the refactor notes section, got %q", withNote)
+	}
+
+	without := batchSummary([]string{"task-1 (green)"}, true, false, false)
+	if strings.Contains(without, "tddmaster-test-writer") {
+		t.Fatalf("a batch with no refactor apply round needs no note, got %q", without)
 	}
 }

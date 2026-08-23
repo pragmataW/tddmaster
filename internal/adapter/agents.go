@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pragmataW/tddmaster/internal/errs"
@@ -119,4 +120,15 @@ func injectMarkedDoc(docPath, rendered string) error {
 		return errs.Wrap(errs.KeyAdapterWriteDoc, err, docPath)
 	}
 	return nil
+}
+
+// agentFiles lists the doc plus one file per agent spec, all relative to the
+// project root, in the order Sync writes them.
+func agentFiles(doc, agentDir, ext string) []string {
+	files := make([]string, 0, len(AgentSpecs)+1)
+	files = append(files, doc)
+	for _, spec := range AgentSpecs {
+		files = append(files, filepath.Join(agentDir, spec.File+ext))
+	}
+	return files
 }

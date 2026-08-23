@@ -13,12 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// isTTY reports whether stdin is an interactive terminal. It must not settle for
+// "stdin is a character device" — /dev/null satisfies that too, and the form
+// would then open and die instead of returning the non-interactive error.
 func isTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	return readerIsTTY(os.Stdin)
 }
 
 func commandName() string {

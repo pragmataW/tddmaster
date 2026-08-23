@@ -8,6 +8,7 @@ import (
 
 	"github.com/pragmataW/tddmaster/internal/engine"
 	"github.com/pragmataW/tddmaster/internal/paths"
+	"github.com/pragmataW/tddmaster/internal/phasecatalog"
 	"github.com/pragmataW/tddmaster/internal/spec"
 )
 
@@ -619,5 +620,168 @@ func TestAnalysisDriver_InstructOmitsDependsOn_WhenNone(t *testing.T) {
 	action, _ := AnalysisDriver().Next(ctx, &engine.PhaseDef{ID: "cross-artifact-analysis"})
 	if strings.Contains(action.Instruction, "depends on:") {
 		t.Error("instruction must not contain 'depends on:' when no task declares a dependency")
+	}
+}
+
+func seedAnalysisSpecWithAnswers(t *testing.T, root, slug string, tasks []spec.Task, answers map[string]string) *engine.Context {
+	t.Helper()
+	seedAnalysisSpec(t, root, slug, tasks)
+	ctx := buildAnalysisCtx(t, root, slug)
+	for key, value := range answers {
+		if err := ctx.SetAnswer(key, value); err != nil {
+			t.Fatalf("SetAnswer %s: %v", key, err)
+		}
+	}
+	return buildAnalysisCtx(t, root, slug)
+}
+
+func TestAuditorInstruction_CarriesFullGivenWhenThen(t *testing.T) {
+	root := t.TempDir()
+	tasks := []spec.Task{{
+		ID:    "task-1",
+		Title: "Discount",
+		Criteria: []spec.Criterion{{
+			ID:    "ac-1",
+			Given: "a cart totalling 200 with SAVE10 applied",
+			When:  "DiscountedTotal is called",
+			Then:  "it returns 180",
+		}},
+	}}
+	ctx := seedAnalysisSpecWithAnswers(t, root, "audit-gwt", tasks, nil)
+
+	got := buildAuditorInstruction(ctx, tasks, nil)
+	for _, want := range []string{
+		"a cart totalling 200 with SAVE10 applied",
+		"DiscountedTotal is called",
+		"it returns 180",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("auditor prompt must carry %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestAuditorInstruction_CarriesContextAndRejectedPremises(t *testing.T) {
+	root := t.TempDir()
+	tasks := []spec.Task{{
+		ID:       "task-1",
+		Title:    "Coupons",
+		Criteria: []spec.Criterion{{ID: "ac-1", Then: "it works"}},
+	}}
+	answers := map[string]string{
+		"listen_context": "Add percentage coupons to the cart package only.",
+		"verification":   "go test ./... with table-driven unit tests",
+		"premises":       `{"premises":[{"text":"Coupons may stack","agreed":false},{"text":"Codes come from a map","agreed":true}]}`,
+	}
+	ctx := seedAnalysisSpecWithAnswers(t, root, "audit-context", tasks, answers)
+
+	got := buildAuditorInstruction(ctx, tasks, nil)
+	if !strings.Contains(got, "Add percentage coupons to the cart package only.") {
+		t.Fatalf("auditor prompt must carry the listen-first context, got:\n%s", got)
+	}
+	if !strings.Contains(got, "go test ./... with table-driven unit tests") {
+		t.Fatalf("auditor prompt must carry the verification method, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Coupons may stack -> REJECTED") {
+		t.Fatalf("auditor prompt must carry rejected premises, got:\n%s", got)
+	}
+	if strings.Contains(got, "Codes come from a map") {
+		t.Fatalf("accepted premises must not be listed as challenged, got:\n%s", got)
+	}
+}
+
+func TestAnalysis_InfoOnlyFindings_AreSurfacedWhenThePhaseCloses(t *testing.T) {
+	root := t.TempDir()
+	slug := "audit-info-only"
+	tasks := []spec.Task{{ID: "task-1", Title: "one", Criteria: []spec.Criterion{{ID: "ac-1", Given: "a cart", When: "checkout runs", Then: "it works"}}}}
+	seedAnalysisSpec(t, root, slug, tasks)
+	ctx := buildAnalysisCtx(t, root, slug)
+
+	verdict := `{"verdict":"clean","findings":[{"severity":"info","category":"note","taskId":"task-1","detail":"rounding is pinned by ac-1","suggestion":"none","source":"auditor"}]}`
+	action, err := ctx.Submit([]byte(verdict))
+	if err != nil {
+		t.Fatalf("Submit auditor verdict: %v", err)
+	}
+	if action.Action != engine.ActionNotify {
+		t.Fatalf("advisory findings must be surfaced as a notify, got %q", action.Action)
+	}
+	if !strings.Contains(action.Instruction, "rounding is pinned by ac-1") {
+		t.Fatalf("notify must carry the finding detail, got:\n%s", action.Instruction)
+	}
+}
+
+func TestAnalysis_NoFindings_ClosesSilently(t *testing.T) {
+	root := t.TempDir()
+	slug := "audit-clean"
+	tasks := []spec.Task{{ID: "task-1", Title: "one", Criteria: []spec.Criterion{{ID: "ac-1", Given: "a cart", When: "checkout runs", Then: "it works"}}}}
+	seedAnalysisSpec(t, root, slug, tasks)
+	ctx := buildAnalysisCtx(t, root, slug)
+
+	action, err := ctx.Submit([]byte(`{"verdict":"clean","findings":[]}`))
+	if err != nil {
+		t.Fatalf("Submit auditor verdict: %v", err)
+	}
+	if action.Action == engine.ActionNotify {
+		t.Fatalf("a clean audit must not emit an advisory notify, got %q", action.Instruction)
+	}
+}
+
+func TestAnalysis_ReturnToRefinement_RewindsPhaseAndClearsApproval(t *testing.T) {
+	root := t.TempDir()
+	slug := "r2r"
+	seedAnalysisSpec(t, root, slug, tasksWithCriteria())
+
+	ctx := buildAnalysisCtx(t, root, slug)
+	if err := ctx.SetAnswer(refinementApprovedKey, "approve"); err != nil {
+		t.Fatalf("SetAnswer: %v", err)
+	}
+	d := &analysisDriver{}
+	verdict := `{"verdict":"issues","findings":[{"severity":"warn","category":"scope-gap","taskId":"task-1","detail":"gap"}]}`
+	if _, _, err := d.Submit(ctx, nil, []byte(verdict)); err != nil {
+		t.Fatalf("auditor Submit: %v", err)
+	}
+
+	if _, _, err := d.Submit(ctx, nil, []byte(optReturnToRefinement)); err != nil {
+		t.Fatalf("return-to-refinement Submit: %v", err)
+	}
+
+	state, err := spec.LoadState(root, slug)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.Phase != string(phasecatalog.PhaseRefinement) {
+		t.Fatalf("phase = %q, want refinement", state.Phase)
+	}
+	for _, key := range []string{refinementApprovedKey, answerKeyAudited, answerKeyFindings, answerKeyComplete} {
+		if entries, ok := state.Answers[key]; ok && len(entries) > 0 && entries[0].Value != "" {
+			t.Fatalf("answer %q should be cleared, got %q", key, entries[0].Value)
+		}
+	}
+}
+
+func TestAnalysis_DecisionGate_CarriesExpectedInput(t *testing.T) {
+	root := t.TempDir()
+	slug := "gate-input"
+	seedAnalysisSpec(t, root, slug, tasksWithCriteria())
+
+	ctx := buildAnalysisCtx(t, root, slug)
+	d := &analysisDriver{}
+	verdict := `{"verdict":"issues","findings":[{"severity":"warn","category":"scope-gap","taskId":"task-1","detail":"gap"}]}`
+	if _, _, err := d.Submit(ctx, nil, []byte(verdict)); err != nil {
+		t.Fatalf("auditor Submit: %v", err)
+	}
+
+	action, done := d.Next(ctx, nil)
+	if done {
+		t.Fatal("expected the phase to pause on a warn finding")
+	}
+	if action.ExpectedInput.Format == "" {
+		t.Fatal("decision gate must declare an input format")
+	}
+	if action.ExpectedInput.Example == "" {
+		t.Fatal("decision gate must carry an example answer")
+	}
+	if got := action.CommandMap[optReturnToRefinement]; !strings.Contains(got, "--answer='return-to-refinement'") {
+		t.Fatalf("return-to-refinement command should take no payload, got %q", got)
 	}
 }

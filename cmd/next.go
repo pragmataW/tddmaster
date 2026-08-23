@@ -26,8 +26,8 @@ func newNextCmd() *cobra.Command {
 			if err != nil {
 				return errs.Wrap(errs.KeyResolveRoot, err)
 			}
-			if !spec.Exists(root, slug) {
-				return errs.Newf(errs.KeySpecNotFoundRunStart, slug, slug)
+			if err := requireActiveSpec(root, slug); err != nil {
+				return err
 			}
 			settings, err := spec.LoadSettings(root, slug)
 			if err != nil {
